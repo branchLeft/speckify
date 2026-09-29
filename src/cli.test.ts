@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
-import { resolveToolchainImpactBump } from './cli.js';
+import { getConfigStringValue, resolveToolchainImpactBump } from './cli.js';
+import type { SpeckifyConfig } from './config/index.js';
 import type { RegistryRecordEntry } from './record/index.js';
 import type { ToolchainImpactEntry } from './version/index.js';
 
@@ -41,5 +42,34 @@ describe('resolveToolchainImpactBump', () => {
     };
 
     expect(resolveToolchainImpactBump(previous, toolchainImpactEntries, '0.2.0')).toBe('major');
+  });
+});
+
+// The `config get` command exists so action.yml can read the caller's npm
+// scope through parsed, validated config rather than grep-ing the YAML
+// text -- a naive grep reads an inline comment
+// ("owner: acme # trailing note") as part of the value. getConfigStringValue
+// is the pure lookup that command wraps; src/e2e/built-cli.test.ts proves
+// the actual `config get` subcommand end to end against the built CLI.
+describe('getConfigStringValue', () => {
+  const config: SpeckifyConfig = {
+    contracts: [{ name: 'widgets', spec: './openapi.yaml' }],
+    publish: { githubPackages: { owner: 'acme' } },
+  };
+
+  it('reads a nested string value by dotted path', () => {
+    expect(getConfigStringValue(config, 'publish.githubPackages.owner')).toBe('acme');
+  });
+
+  it('returns undefined for a path that does not exist', () => {
+    expect(getConfigStringValue(config, 'publish.somethingElse')).toBeUndefined();
+  });
+
+  it('returns undefined when a path segment resolves to a non-object before the end', () => {
+    expect(getConfigStringValue(config, 'publish.githubPackages.owner.nested')).toBeUndefined();
+  });
+
+  it('returns undefined when the final value is not a string', () => {
+    expect(getConfigStringValue(config, 'contracts')).toBeUndefined();
   });
 });

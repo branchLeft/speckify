@@ -458,6 +458,49 @@ program
     }
   });
 
+/**
+ * Reads one dotted-path value out of an already-validated config object
+ * (e.g. "publish.githubPackages.owner"), for the `config get` command below.
+ * Exported for its own unit test, independent of the CLI/config-loading
+ * plumbing around it.
+ *
+ * @returns the value at `path` if every segment resolves to a plain
+ * object except the last, and the final value is a string; `undefined`
+ * otherwise (a missing path, or one that resolves to something other than
+ * a string).
+ */
+export function getConfigStringValue(config: SpeckifyConfig, path: string): string | undefined {
+  let current: unknown = config;
+  for (const segment of path.split('.')) {
+    if (current === null || typeof current !== 'object' || Array.isArray(current)) {
+      return undefined;
+    }
+    current = (current as Record<string, unknown>)[segment];
+  }
+  return typeof current === 'string' ? current : undefined;
+}
+
+const configCommand = program.command('config').description('Inspect a speckify.yaml value.');
+
+configCommand
+  .command('get')
+  .description(
+    'Print one dotted-path value from speckify.yaml (e.g. publish.githubPackages.owner). ' +
+      'Exits non-zero, printing nothing, if the path is unset or not a string.',
+  )
+  .argument('<path>', 'dotted path into the loaded config, e.g. publish.githubPackages.owner')
+  .option('-c, --config <path>', 'path to speckify.yaml', 'speckify.yaml')
+  .action(async (path: string, options: { config: string }) => {
+    const config = await loadConfig(resolve(options.config));
+    const value = getConfigStringValue(config, path);
+    if (value === undefined) {
+      console.error(`speckify.yaml has no string value at "${path}"`);
+      process.exitCode = 1;
+      return;
+    }
+    console.log(value);
+  });
+
 // Guarded so this file can be imported (e.g. `resolveToolchainImpactBump`
 // from a unit test) without also parsing the importing process's own argv
 // as a speckify invocation.

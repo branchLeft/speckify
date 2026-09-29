@@ -194,3 +194,75 @@ describe.skipIf(!networkAvailable)('the built CLI (node dist/cli.js build)', () 
     }
   }, 30_000);
 });
+
+/**
+ * `config get` exists so action.yml can read the caller's npm owner through
+ * parsed, validated config instead of grep-ing the YAML text: a naive
+ * `grep 'owner:' | sed ...` reads an inline comment
+ * ("owner: acme  # note to self") straight into the scope, since grep/sed
+ * know nothing about YAML comment syntax. No network needed, so this runs
+ * unconditionally.
+ */
+describe('the built CLI (node dist/cli.js config get)', () => {
+  it('prints the configured owner, ignoring a trailing YAML comment a grep-based reader would have swallowed', async () => {
+    await execFileAsync('npm', ['run', 'build'], { cwd: repoRoot });
+
+    const workDir = await mkdtemp(join(tmpdir(), 'speckify-built-cli-config-get-'));
+    try {
+      const speckifyYaml = [
+        'contracts:',
+        '  - name: pet-shelter',
+        '    spec: ./openapi.yaml',
+        'publish:',
+        '  githubPackages:',
+        '    owner: acme  # trailing comment a grep/sed reader would leak into the scope',
+        '',
+      ].join('\n');
+      await writeFile(join(workDir, 'speckify.yaml'), speckifyYaml, 'utf8');
+
+      const { stdout } = await execFileAsync(process.execPath, [
+        cliPath,
+        'config',
+        'get',
+        'publish.githubPackages.owner',
+        '-c',
+        join(workDir, 'speckify.yaml'),
+      ]);
+
+      expect(stdout.trim()).toBe('acme');
+    } finally {
+      await rm(workDir, { recursive: true, force: true });
+    }
+  }, 30_000);
+
+  it('exits non-zero and prints nothing to stdout for a path with no string value', async () => {
+    await execFileAsync('npm', ['run', 'build'], { cwd: repoRoot });
+
+    const workDir = await mkdtemp(join(tmpdir(), 'speckify-built-cli-config-get-missing-'));
+    try {
+      const speckifyYaml = [
+        'contracts:',
+        '  - name: pet-shelter',
+        '    spec: ./openapi.yaml',
+        'publish:',
+        '  githubPackages:',
+        '    owner: acme',
+        '',
+      ].join('\n');
+      await writeFile(join(workDir, 'speckify.yaml'), speckifyYaml, 'utf8');
+
+      await expect(
+        execFileAsync(process.execPath, [
+          cliPath,
+          'config',
+          'get',
+          'publish.somethingUnset',
+          '-c',
+          join(workDir, 'speckify.yaml'),
+        ]),
+      ).rejects.toMatchObject({ code: 1, stdout: '' });
+    } finally {
+      await rm(workDir, { recursive: true, force: true });
+    }
+  }, 30_000);
+});
