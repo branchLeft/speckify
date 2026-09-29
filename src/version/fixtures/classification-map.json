@@ -1,0 +1,5 @@
+{
+  "response-required-property-removed": "major",
+  "request-property-added": "minor",
+  "description-changed": "patch"
+}

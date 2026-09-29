@@ -1,0 +1,5 @@
+[
+  { "speckifyVersion": "0.1.0", "impact": "none" },
+  { "speckifyVersion": "0.2.0", "impact": "patch" },
+  { "speckifyVersion": "0.3.0", "impact": "major" }
+]
