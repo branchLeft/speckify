@@ -252,8 +252,19 @@ function isOptionalParameterAdded(edit: Edit, context: JudgeContext): boolean {
   );
 }
 
+/** True when `value` is absent or `false`: the object declares no catch-all for other names. */
+const declaresNoCatchAll = (value: unknown): boolean => value === undefined || value === false;
+
 function isRequestOptionalPropertyAdded(edit: Edit, context: JudgeContext): boolean {
-  return newOptionalProperty(edit, context, 'request');
+  if (!newOptionalProperty(edit, context, 'request')) return false;
+  // A declared catch-all (`true` or a schema) is typed in the SDK, so
+  // existing code may already send the new name with another type.
+  const parent = valueAt(context.base, edit.location.slice(0, -2));
+  return (
+    !isPlainObject(parent) ||
+    (declaresNoCatchAll(parent.additionalProperties) &&
+      declaresNoCatchAll(parent.unevaluatedProperties))
+  );
 }
 
 function isRequestConstraintRelaxed(edit: Edit): boolean {

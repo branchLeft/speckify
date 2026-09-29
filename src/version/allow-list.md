@@ -127,7 +127,7 @@ The allow-list (**minor**):
 | ---------------------------------- | --------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------- |
 | `operation-added`                  | none      | a new path, or a new method on an existing path                                                                                                                                                                                                                                                                  | no existing call can reach it                |
 | `optional-parameter-added`         | request   | a new query, header or cookie parameter, `required` absent or false, not shadowing a path-level one                                                                                                                                                                                                              | existing calls omit it and stay valid        |
-| `request-optional-property-added`  | request   | a new property at a plain position, not listed in its object's `required`                                                                                                                                                                                                                                        | existing bodies omit it and stay valid       |
+| `request-optional-property-added`  | request   | a new property at a plain position, not listed in its object's `required`, whose object declared no `additionalProperties` catch-all (absent or `false`)                                                                                                                                                         | existing bodies omit it and stay valid       |
 | `request-constraint-relaxed`       | request   | at a plain position: `maxLength`/`maxItems`/`maximum`/`exclusiveMaximum` raised or removed; `minLength`/`minItems`/`minimum`/`exclusiveMinimum` lowered or removed; `pattern` removed; a value added to an existing `enum`; a member removed from `required`; `additionalProperties` `false` → `true` or removed | every request valid before is still valid    |
 | `parameter-became-optional`        | request   | a query, header or cookie parameter's `required` true → false or removed                                                                                                                                                                                                                                         | existing calls still send it                 |
 | `response-optional-property-added` | response  | a new property at a plain position, not in its object's `required`, whose object did not forbid additional properties                                                                                                                                                                                            | clients ignore a field they do not know      |
@@ -150,7 +150,10 @@ New rules need a test proving the change compatible in both generated SDKs.
 Two rules accept a known edge. A new optional request property constrains a
 name that was previously an unconstrained additional property. A client that
 sent that name with another type is now rejected. Generated SDKs never send
-undeclared properties, so the rule stands as the owner decided it. `deprecated`
+undeclared properties, so the rule stands as the owner decided it. It stops
+at a declared catch-all: when the object has `additionalProperties: true` or
+a schema, the SDK types an index signature, SDK-typed code may already send
+the name, and the new property is major. `deprecated`
 set without a sunset date is minor here; oasdiff's
 `...-deprecated-sunset-missing` rules then raise it to major through the max.
 

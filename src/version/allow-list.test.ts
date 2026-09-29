@@ -188,6 +188,28 @@ describe('request-optional-property-added', () => {
     expect(verdict(base, revision).bump).toBe('major');
   });
 
+  it.each([
+    ['a schema', { type: 'string' }],
+    ['true', true],
+  ])(
+    'is major when the object declares additionalProperties as %s, since SDK code may already send that name',
+    (_label, additionalProperties) => {
+      const [base, revision] = onPost(
+        body(object({ a: S() }, { additionalProperties })),
+        body(object({ a: S(), count: { type: 'integer' } }, { additionalProperties })),
+      );
+      expect(verdict(base, revision).bump).toBe('major');
+    },
+  );
+
+  it('stays minor when the object forbids additional properties', () => {
+    const [base, revision] = onPost(
+      body(object({ a: S() }, { additionalProperties: false })),
+      body(object({ a: S(), b: S() }, { additionalProperties: false })),
+    );
+    expect(verdict(base, revision).bump).toBe('minor');
+  });
+
   it('is major for the same property added to a callback request body (direction test)', () => {
     const [base, revision] = onPost(
       callback(body(object({ a: S() }))),
