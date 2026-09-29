@@ -2,7 +2,12 @@ import { describe, expect, it, vi } from 'vitest';
 
 import type { RegistryRecord } from '../record/index.js';
 import { hasFailures, publishContract } from './contract.js';
+import { publishNpm } from './npm.js';
+import { publishPypi } from './pypi.js';
 import type { NpmPublishTarget, PyPiPublishTarget } from './types.js';
+
+vi.mock('./npm.js', () => ({ publishNpm: vi.fn() }));
+vi.mock('./pypi.js', () => ({ publishPypi: vi.fn() }));
 
 function fakeRegistry(version: string | null): RegistryRecord {
   return {
@@ -102,5 +107,38 @@ describe('publishContract', () => {
     });
     expect(publishNpmFn).toHaveBeenCalledTimes(1);
     expect(outcomes).toEqual([{ target: npmTarget, status: 'published' }]);
+  });
+
+  it('wraps a non-Error rejection from a publish function in the outcome error', async () => {
+    const publishNpmFn = vi.fn().mockRejectedValue('rate limited');
+    const outcomes = await publishContract({
+      targets: [npmTarget],
+      registries: {},
+      publishNpmFn,
+      npmRegistryUrl: 'https://npm.pkg.github.com',
+      npmToken: 'token',
+      npmOwner: 'acme',
+    });
+    expect(outcomes).toEqual([{ target: npmTarget, status: 'failed', error: 'rate limited' }]);
+  });
+
+  it('falls back to the real publishNpm/publishPypi when no override is given', async () => {
+    vi.mocked(publishNpm).mockResolvedValue(undefined);
+    vi.mocked(publishPypi).mockResolvedValue(undefined);
+
+    const outcomes = await publishContract({
+      targets: [npmTarget, pypiTarget],
+      registries: {},
+      npmRegistryUrl: 'https://npm.pkg.github.com',
+      npmToken: 'token',
+      npmOwner: 'acme',
+    });
+
+    expect(publishNpm).toHaveBeenCalledTimes(1);
+    expect(publishPypi).toHaveBeenCalledTimes(1);
+    expect(outcomes).toEqual([
+      { target: npmTarget, status: 'published' },
+      { target: pypiTarget, status: 'published' },
+    ]);
   });
 });

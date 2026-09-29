@@ -48,4 +48,19 @@ describe('checkOperationIds', () => {
   it('returns no findings when the document has no paths', () => {
     expect(checkOperationIds({})).toEqual([]);
   });
+
+  it('skips a path item that is not an object, such as a malformed $ref left unresolved', () => {
+    const doc = {
+      paths: { '/widgets': null, '/gadgets': { get: { operationId: 'listGadgets' } } },
+    };
+    expect(checkOperationIds(doc)).toEqual([]);
+  });
+
+  it('reports a missing operationId when the operation value itself is not an object', () => {
+    const doc = { paths: { '/widgets': { get: 'not-an-operation' } } };
+    const findings = checkOperationIds(doc);
+    expect(findings).toEqual([
+      { ruleId: RULE_ID, pointer: '/paths/~1widgets/get', message: 'operation has no operationId' },
+    ]);
+  });
 });

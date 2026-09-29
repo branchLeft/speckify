@@ -69,4 +69,10 @@ describe('loadOasdiffCheckIds', () => {
   it('throws VersionError for invalid JSON', async () => {
     await expect(loadOasdiffCheckIds(`${fixturesDir}invalid.json`)).rejects.toThrow(VersionError);
   });
+
+  it('throws VersionError for valid JSON that does not match the check catalogue shape', async () => {
+    await expect(loadOasdiffCheckIds(`${fixturesDir}classification-map.json`)).rejects.toThrow(
+      /not a valid oasdiff check catalogue/,
+    );
+  });
 });

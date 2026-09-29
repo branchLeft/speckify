@@ -89,6 +89,28 @@ describe('createNpmRegistryRecord', () => {
     await expect(record.latest('@acme/orders-api')).rejects.toThrow(RecordError);
   });
 
+  it('throws RecordError when the registry returns a malformed (non-object) packument', async () => {
+    const fetchImpl: FetchLike = vi.fn(async () =>
+      Promise.resolve(new Response('null', { status: 200 })),
+    );
+    const record = createNpmRegistryRecord({ registryUrl: 'https://npm.example', fetchImpl });
+
+    await expect(record.latest('@acme/orders-api')).rejects.toThrow(/malformed packument/);
+  });
+
+  it('falls back to the global fetch when no fetchImpl is given', async () => {
+    const fetchSpy = vi
+      .spyOn(globalThis, 'fetch')
+      .mockResolvedValue(new Response('', { status: 404 }));
+    try {
+      const record = createNpmRegistryRecord({ registryUrl: 'https://npm.example' });
+      await expect(record.latest('@acme/orders-api')).resolves.toBeNull();
+      expect(fetchSpy).toHaveBeenCalled();
+    } finally {
+      fetchSpy.mockRestore();
+    }
+  });
+
   it('throws RecordError when the packument has no dist-tags.latest', async () => {
     const fetchImpl: FetchLike = vi.fn(async () => Promise.resolve(jsonResponse({})));
     const record = createNpmRegistryRecord({ registryUrl: 'https://npm.example', fetchImpl });

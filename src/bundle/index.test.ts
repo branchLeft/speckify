@@ -1,3 +1,4 @@
+import { relative } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { describe, expect, it } from 'vitest';
@@ -66,6 +67,13 @@ describe('bundleSpec', () => {
     expect(result).toBe(again);
   });
 
+  it('resolves a relative repoRoot against the current working directory', async () => {
+    const relativeRoot = relative(process.cwd(), repoRoot);
+    const result = await bundleSpec(`${repoRoot}/openapi.yaml`, { repoRoot: relativeRoot });
+    const doc = JSON.parse(result) as BundledWidgetsDoc;
+    expect(doc.info.version).toBe(PLACEHOLDER_VERSION);
+  });
+
   it('refuses a $ref that escapes the repo root', async () => {
     await expect(bundleSpec(`${repoRoot}/escaping.yaml`, { repoRoot })).rejects.toThrow(
       PathTraversalError,
@@ -74,6 +82,15 @@ describe('bundleSpec', () => {
 
   it('throws BundleError for a spec that cannot be parsed', async () => {
     await expect(bundleSpec(`${repoRoot}/does-not-exist.yaml`, { repoRoot })).rejects.toThrow();
+  });
+
+  it('throws BundleError when a $ref points at a file that exists but a JSON pointer within it that does not', async () => {
+    // The file itself resolves fine (no path traversal), but dereferencing
+    // its pointer fails at bundle time, not at the earlier file-resolution
+    // check — this exercises that later, separate failure mode.
+    await expect(bundleSpec(`${repoRoot}/bad-pointer.yaml`, { repoRoot })).rejects.toThrow(
+      BundleError,
+    );
   });
 
   it('throws BundleError when the bundled document has no info section', async () => {

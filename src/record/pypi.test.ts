@@ -100,6 +100,44 @@ describe('createPyPiRegistryRecord', () => {
     await expect(record.latest('orders-api')).rejects.toThrow(RecordError);
   });
 
+  it('throws RecordError when PyPI returns a malformed (non-object) project response', async () => {
+    const fetchImpl: FetchLike = vi.fn(async () =>
+      Promise.resolve(new Response('null', { status: 200 })),
+    );
+    const record = createPyPiRegistryRecord({ fetchImpl });
+
+    await expect(record.latest('orders-api')).rejects.toThrow(/malformed project response/);
+  });
+
+  it('throws RecordError when the project response has no info.version', async () => {
+    const fetchImpl: FetchLike = vi.fn(async () => Promise.resolve(jsonResponse({})));
+    const record = createPyPiRegistryRecord({ fetchImpl });
+
+    await expect(record.latest('orders-api')).rejects.toThrow(/no info\.version/);
+  });
+
+  it('treats a project response with no urls field as having no wheel release', async () => {
+    const fetchImpl: FetchLike = vi.fn(async () =>
+      Promise.resolve(jsonResponse({ info: { version: '2.0.0' } })),
+    );
+    const record = createPyPiRegistryRecord({ fetchImpl });
+
+    await expect(record.latest('orders-api')).rejects.toThrow(/no wheel release/);
+  });
+
+  it('falls back to the global fetch and the default index URL when neither is given', async () => {
+    const fetchSpy = vi
+      .spyOn(globalThis, 'fetch')
+      .mockResolvedValue(new Response('', { status: 404 }));
+    try {
+      const record = createPyPiRegistryRecord();
+      await expect(record.latest('orders-api')).resolves.toBeNull();
+      expect(fetchSpy).toHaveBeenCalledWith('https://pypi.org/pypi/orders-api/json');
+    } finally {
+      fetchSpy.mockRestore();
+    }
+  });
+
   it('throws RecordError when there is no wheel release for the current version', async () => {
     const fetchImpl: FetchLike = vi.fn(async () =>
       Promise.resolve(

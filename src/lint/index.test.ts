@@ -15,6 +15,14 @@ describe('lintDocument', () => {
     expect(lintDocument(validDoc)).toEqual([]);
   });
 
+  it('treats a non-object top-level value as an empty document rather than throwing', () => {
+    // An empty document still fails the openapi-version rule (no `openapi`
+    // field), so this proves the coercion path runs without crashing, not
+    // that a non-object input passes lint.
+    expect(lintDocument('not a document').map((f) => f.ruleId)).toEqual(['openapi-version']);
+    expect(lintDocument(null).map((f) => f.ruleId)).toEqual(['openapi-version']);
+  });
+
   it('aggregates findings from every rule', () => {
     const doc = {
       openapi: '2.0',

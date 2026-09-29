@@ -89,6 +89,22 @@ describe('runOasdiffChangelog', () => {
     ).rejects.toThrow(OasdiffError);
   });
 
+  it('wraps a non-Error rejection (e.g. a plain thrown string) in OasdiffError', async () => {
+    const runProcess: ProcessRunner = vi.fn(() => {
+      // eslint-disable-next-line no-throw-literal, @typescript-eslint/only-throw-error -- deliberately non-Error, to exercise the String(error) fallback
+      throw 'spawn failed, not an Error instance';
+    });
+
+    await expect(
+      runOasdiffChangelog({
+        oasdiffPath: '/bin/oasdiff',
+        baseSpecPath: 'base.json',
+        revisionSpecPath: 'revision.json',
+        runProcess,
+      }),
+    ).rejects.toThrow(/spawn failed, not an Error instance/);
+  });
+
   it('throws OasdiffError when stdout is not valid JSON', async () => {
     const runProcess: ProcessRunner = vi.fn(async () =>
       Promise.resolve({ stdout: 'not json', stderr: '' }),

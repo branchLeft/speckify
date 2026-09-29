@@ -188,6 +188,37 @@ describe('resolveOasdiffBinary', () => {
     ).rejects.toThrow(/oasdiff_1\.32\.1_darwin_all\.tar\.gz/);
   });
 
+  it('resolves the linux arm64 asset name, distinct from amd64', async () => {
+    const checksumsPath = join(dir, 'checksums.json');
+    await writeFile(checksumsPath, JSON.stringify({}));
+
+    await expect(
+      resolveOasdiffBinary({ cacheDir: dir, platform: 'linux', arch: 'arm64', checksumsPath }),
+    ).rejects.toThrow(/oasdiff_1\.32\.1_linux_arm64\.tar\.gz/);
+  });
+
+  it('resolves the windows asset name and binary filename', async () => {
+    const checksumsPath = join(dir, 'checksums.json');
+    await writeFile(checksumsPath, JSON.stringify({}));
+
+    await expect(
+      resolveOasdiffBinary({ cacheDir: dir, platform: 'win32', arch: 'x64', checksumsPath }),
+    ).rejects.toThrow(/oasdiff_1\.32\.1_windows_amd64\.tar\.gz/);
+  });
+
+  it('falls back to the committed checksums.json when no checksumsPath is given', async () => {
+    // No checksumsPath: this exercises the real, shipped checksums.json,
+    // whose committed hash for this fake archive will never match.
+    const tarGz = await makeTarGz({ oasdiff: 'fake-binary-content' });
+    const fetchImpl: FetchLike = vi.fn(async () =>
+      Promise.resolve(new Response(new Uint8Array(tarGz), { status: 200 })),
+    );
+
+    await expect(
+      resolveOasdiffBinary({ cacheDir: dir, platform: 'linux', arch: 'x64', fetchImpl }),
+    ).rejects.toThrow(/checksum mismatch/);
+  });
+
   it('reads the override from the environment variable when no explicit override is given', async () => {
     const previous = process.env[OASDIFF_OVERRIDE_ENV];
     process.env[OASDIFF_OVERRIDE_ENV] = '/env/oasdiff';

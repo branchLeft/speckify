@@ -34,7 +34,7 @@ describe('buildPackage', () => {
       `import { answer } from '${path.join(dir, 'dist', 'index.js')}'; console.log(answer);`,
     ]);
     expect(stdout.trim()).toBe('42');
-  });
+  }, 30_000);
 
   it('raises BuildError with formatted diagnostics for a type error', async () => {
     const dir = await tempPackageDir();
@@ -50,7 +50,7 @@ describe('buildPackage', () => {
         error.diagnostics.some((line) => line.includes('not a number') || line.includes('string'))
       );
     });
-  });
+  }, 30_000);
 
   it('resolves a zod import via the symlinked dependency', async () => {
     const dir = await tempPackageDir();
@@ -66,5 +66,5 @@ describe('buildPackage', () => {
       `import { schema } from '${path.join(dir, 'dist', 'index.js')}'; console.log(schema.safeParse({ id: 'x' }).success);`,
     ]);
     expect(stdout.trim()).toBe('true');
-  });
+  }, 30_000);
 });

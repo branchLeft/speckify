@@ -46,7 +46,12 @@ describe('runInit', () => {
 
   it('throws InitError when no spec is found', async () => {
     await expect(
-      runInit({ cwd, owner: 'acme', speckifyVersion: '1.0.0', speckifyRepo: 'branchLeft/speckify' }),
+      runInit({
+        cwd,
+        owner: 'acme',
+        speckifyVersion: '1.0.0',
+        speckifyRepo: 'branchLeft/speckify',
+      }),
     ).rejects.toThrow(InitError);
   });
 
@@ -54,7 +59,12 @@ describe('runInit', () => {
     await writeFile(join(cwd, 'openapi.yaml'), 'openapi: 3.1.0');
     await writeFile(join(cwd, 'speckify.yaml'), 'existing: true');
     await expect(
-      runInit({ cwd, owner: 'acme', speckifyVersion: '1.0.0', speckifyRepo: 'branchLeft/speckify' }),
+      runInit({
+        cwd,
+        owner: 'acme',
+        speckifyVersion: '1.0.0',
+        speckifyRepo: 'branchLeft/speckify',
+      }),
     ).rejects.toThrow(InitError);
   });
 
@@ -63,7 +73,12 @@ describe('runInit', () => {
     await mkdir(join(cwd, '.github', 'workflows'), { recursive: true });
     await writeFile(join(cwd, '.github', 'workflows', 'speckify.yml'), 'existing: true');
     await expect(
-      runInit({ cwd, owner: 'acme', speckifyVersion: '1.0.0', speckifyRepo: 'branchLeft/speckify' }),
+      runInit({
+        cwd,
+        owner: 'acme',
+        speckifyVersion: '1.0.0',
+        speckifyRepo: 'branchLeft/speckify',
+      }),
     ).rejects.toThrow(InitError);
   });
 

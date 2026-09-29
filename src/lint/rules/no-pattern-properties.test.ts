@@ -41,4 +41,15 @@ describe('checkNoPatternProperties', () => {
       '/b/c/patternProperties',
     ]);
   });
+
+  it('walks into arrays (e.g. anyOf/allOf/oneOf members) and finds patternProperties there', () => {
+    const doc = { anyOf: [{ type: 'string' }, { patternProperties: {} }] };
+    const findings = checkNoPatternProperties(doc);
+    expect(findings.map((f) => f.pointer)).toEqual(['/anyOf/1/patternProperties']);
+  });
+
+  it('ignores a scalar or null value at any node instead of throwing', () => {
+    const doc = { description: 'a plain string node', extra: null, count: 5 };
+    expect(checkNoPatternProperties(doc)).toEqual([]);
+  });
 });

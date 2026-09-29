@@ -18,4 +18,10 @@ describe('checkOpenApiVersion', () => {
     expect(findings).toHaveLength(1);
     expect(findings[0]?.message).toContain('null');
   });
+
+  it('rejects a non-string openapi field rather than throwing on the regex test', () => {
+    const findings = checkOpenApiVersion({ openapi: 3 });
+    expect(findings).toHaveLength(1);
+    expect(findings[0]?.message).toContain('3');
+  });
 });

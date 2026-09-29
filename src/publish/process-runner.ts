@@ -9,7 +9,7 @@ const execFileAsync = promisify(execFile);
 export const defaultProcessRunner: ProcessRunner = async (command, args, options) => {
   return execFileAsync(command, args as string[], {
     cwd: options?.cwd,
-    env: options?.env as NodeJS.ProcessEnv | undefined,
+    env: options?.env,
     maxBuffer: 1024 * 1024 * 64,
   });
 };
