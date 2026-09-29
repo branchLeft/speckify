@@ -40,7 +40,9 @@ describe('extractOperations', () => {
     const getThing = findOperation(operations, 'getThing');
     expect(getThing.method).toBe('GET');
     expect(getThing.path).toBe('/things/{id}');
-    expect(getThing.pathParams).toEqual([{ name: 'id', pyName: 'id', required: true, pyType: 'str' }]);
+    expect(getThing.pathParams).toEqual([
+      { name: 'id', pyName: 'id', required: true, pyType: 'str' },
+    ]);
   });
 
   it('extracts a JSON request body ref as a model name', () => {
@@ -54,8 +56,18 @@ describe('extractOperations', () => {
     expect(uploadBlob.requestBody).toEqual({ kind: 'octet-stream', required: true });
     expect(uploadBlob.headerParams).toEqual(
       expect.arrayContaining([
-        expect.objectContaining({ name: 'X-Signature', pyName: 'signature', required: true, pyType: 'str' }),
-        expect.objectContaining({ name: 'X-Timestamp', pyName: 'timestamp', required: true, pyType: 'str' }),
+        expect.objectContaining({
+          name: 'X-Signature',
+          pyName: 'signature',
+          required: true,
+          pyType: 'str',
+        }),
+        expect.objectContaining({
+          name: 'X-Timestamp',
+          pyName: 'timestamp',
+          required: true,
+          pyType: 'str',
+        }),
       ]),
     );
   });

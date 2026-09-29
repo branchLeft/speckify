@@ -16,7 +16,10 @@ export const TOOLCHAIN_DIR = fileURLToPath(new URL('../../../python', import.met
  * would: canonical, key-sorted JSON with `info.version` stamped. Tests
  * exercise the real shape the driver receives, not the YAML on disk.
  */
-export function loadFixtureAsBundledSpec(fixtureName: string, version: string = PLACEHOLDER_VERSION): string {
+export function loadFixtureAsBundledSpec(
+  fixtureName: string,
+  version: string = PLACEHOLDER_VERSION,
+): string {
   const fixturePath = fileURLToPath(new URL(`./fixtures/${fixtureName}`, import.meta.url));
   const document = parse(readFileSync(fixturePath, 'utf8')) as { info: { version: unknown } };
   document.info.version = version;

@@ -70,7 +70,10 @@ describe('assertClientCompleteness', () => {
       clientDir,
     ).catch((e: unknown) => e);
 
-    expect((error as CompletenessGuardError).missingOperationIds).toEqual(['getThing', 'uploadBlob']);
+    expect((error as CompletenessGuardError).missingOperationIds).toEqual([
+      'getThing',
+      'uploadBlob',
+    ]);
   });
 
   it('treats a missing api/ directory as every operation missing, not a crash', async () => {

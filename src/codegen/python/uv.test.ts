@@ -7,7 +7,12 @@ import { SubprocessError, UvNotFoundError } from './errors.js';
 import { resolveUv, runUv, runUvOrThrow } from './uv.js';
 
 /** A minimal fake of a spawned child process good enough to drive `runUv`. */
-function fakeChildProcess(): { child: ChildProcess; emitClose: (code: number | null) => void; emitStdout: (s: string) => void; emitStderr: (s: string) => void } {
+function fakeChildProcess(): {
+  child: ChildProcess;
+  emitClose: (code: number | null) => void;
+  emitStdout: (s: string) => void;
+  emitStderr: (s: string) => void;
+} {
   const child = new EventEmitter() as unknown as ChildProcess;
   const stdout = new EventEmitter();
   const stderr = new EventEmitter();
@@ -22,7 +27,9 @@ function fakeChildProcess(): { child: ChildProcess; emitClose: (code: number | n
 
 describe('resolveUv', () => {
   it('throws UvNotFoundError when PATH has no executable uv', async () => {
-    await expect(resolveUv({ env: { PATH: '/nonexistent-dir-xyz' } })).rejects.toThrow(UvNotFoundError);
+    await expect(resolveUv({ env: { PATH: '/nonexistent-dir-xyz' } })).rejects.toThrow(
+      UvNotFoundError,
+    );
   });
 
   it('finds the real uv on the actual PATH', async () => {
@@ -56,7 +63,11 @@ describe('runUv', () => {
     const fake = fakeChildProcess();
     const spawnFn = vi.fn(() => fake.child) as unknown as typeof import('node:child_process').spawn;
 
-    const promise = runUv(['broken'], '/work', { env: { PATH: '/usr/bin' }, uvPath: '/usr/bin/uv', spawnFn });
+    const promise = runUv(['broken'], '/work', {
+      env: { PATH: '/usr/bin' },
+      uvPath: '/usr/bin/uv',
+      spawnFn,
+    });
     fake.emitStderr('boom');
     fake.emitClose(1);
 
@@ -67,7 +78,11 @@ describe('runUv', () => {
     const fake = fakeChildProcess();
     const spawnFn = vi.fn(() => fake.child) as unknown as typeof import('node:child_process').spawn;
 
-    const promise = runUv(['whatever'], '/work', { env: { PATH: '/usr/bin' }, uvPath: '/usr/bin/uv', spawnFn });
+    const promise = runUv(['whatever'], '/work', {
+      env: { PATH: '/usr/bin' },
+      uvPath: '/usr/bin/uv',
+      spawnFn,
+    });
     fake.child.emit('error', new Error('ENOENT'));
 
     await expect(promise).rejects.toThrow(SubprocessError);
@@ -79,7 +94,11 @@ describe('runUvOrThrow', () => {
     const fake = fakeChildProcess();
     const spawnFn = vi.fn(() => fake.child) as unknown as typeof import('node:child_process').spawn;
 
-    const promise = runUvOrThrow(['broken'], '/work', { env: { PATH: '/usr/bin' }, uvPath: '/usr/bin/uv', spawnFn });
+    const promise = runUvOrThrow(['broken'], '/work', {
+      env: { PATH: '/usr/bin' },
+      uvPath: '/usr/bin/uv',
+      spawnFn,
+    });
     fake.emitStderr('bad input');
     fake.emitClose(2);
 
@@ -90,7 +109,11 @@ describe('runUvOrThrow', () => {
     const fake = fakeChildProcess();
     const spawnFn = vi.fn(() => fake.child) as unknown as typeof import('node:child_process').spawn;
 
-    const promise = runUvOrThrow(['ok'], '/work', { env: { PATH: '/usr/bin' }, uvPath: '/usr/bin/uv', spawnFn });
+    const promise = runUvOrThrow(['ok'], '/work', {
+      env: { PATH: '/usr/bin' },
+      uvPath: '/usr/bin/uv',
+      spawnFn,
+    });
     fake.emitClose(0);
 
     await expect(promise).resolves.toEqual({ stdout: '', stderr: '', exitCode: 0 });

@@ -46,14 +46,21 @@ async function copyDir(source: string, destination: string): Promise<void> {
  * generated function — openapi-python-client 0.29.1 silently skips endpoints
  * it cannot handle (see completeness-guard.ts) rather than erroring on them.
  */
-export async function generateClient(bundledSpec: string, options: GenerateClientOptions): Promise<void> {
+export async function generateClient(
+  bundledSpec: string,
+  options: GenerateClientOptions,
+): Promise<void> {
   const scratchDir = await mkdtemp(join(tmpdir(), 'speckify-opc-'));
   try {
     const specPath = join(scratchDir, 'spec.json');
     await writeFile(specPath, bundledSpec, 'utf8');
 
     const configPath = join(scratchDir, 'config.yaml');
-    await writeFile(configPath, 'package_name_override: client\nproject_name_override: client\n', 'utf8');
+    await writeFile(
+      configPath,
+      'package_name_override: client\nproject_name_override: client\n',
+      'utf8',
+    );
 
     const outputPath = join(scratchDir, 'out');
 

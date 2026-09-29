@@ -21,7 +21,10 @@ export interface GenerateServerOptions {
  * `create_router()` — from the bundled spec's operations, via the tested
  * Jinja2 templates in `./templates/`.
  */
-export async function generateServer(bundledSpec: string, options: GenerateServerOptions): Promise<void> {
+export async function generateServer(
+  bundledSpec: string,
+  options: GenerateServerOptions,
+): Promise<void> {
   const document: unknown = JSON.parse(bundledSpec);
   const operations = extractOperations(document);
 
@@ -46,7 +49,11 @@ export async function generateServer(bundledSpec: string, options: GenerateServe
     );
 
     const serverDir = join(options.targetDir, 'server');
-    await runUvOrThrow(['python', RENDER_SCRIPT, operationsPath, serverDir], options.toolchainDir, options.uvDeps);
+    await runUvOrThrow(
+      ['python', RENDER_SCRIPT, operationsPath, serverDir],
+      options.toolchainDir,
+      options.uvDeps,
+    );
   } finally {
     await rm(scratchDir, { recursive: true, force: true });
   }

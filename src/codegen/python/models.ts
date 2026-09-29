@@ -20,7 +20,10 @@ export interface GenerateModelsOptions {
  * package (directory-mode output, forced when an inlined external schema
  * still carries its own `$id` — see the spike report).
  */
-export async function generateModels(bundledSpec: string, options: GenerateModelsOptions): Promise<void> {
+export async function generateModels(
+  bundledSpec: string,
+  options: GenerateModelsOptions,
+): Promise<void> {
   const scratchDir = await mkdtemp(join(tmpdir(), 'speckify-dcg-'));
   try {
     const specPath = join(scratchDir, 'spec.json');

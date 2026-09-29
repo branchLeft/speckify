@@ -31,7 +31,10 @@ describe.skipIf(!uvAvailable)(describeTitle, () => {
     const entries = await readdir(join(targetDir, 'client'));
     expect(entries).toContain('api');
     expect(entries).toContain('models');
-    const created = await readFile(join(targetDir, 'client', 'api', 'default', 'create_pet.py'), 'utf8');
+    const created = await readFile(
+      join(targetDir, 'client', 'api', 'default', 'create_pet.py'),
+      'utf8',
+    );
     expect(created).toContain('def sync');
   }, 60_000);
 
@@ -41,9 +44,10 @@ describe.skipIf(!uvAvailable)(describeTitle, () => {
     targetDir = await mkdtemp(join(tmpdir(), 'speckify-client-'));
     const bundledSpec = loadFixtureAsBundledSpec('combined.bundled.yaml');
 
-    const error = await generateClient(bundledSpec, { toolchainDir: TOOLCHAIN_DIR, targetDir }).catch(
-      (e: unknown) => e,
-    );
+    const error = await generateClient(bundledSpec, {
+      toolchainDir: TOOLCHAIN_DIR,
+      targetDir,
+    }).catch((e: unknown) => e);
 
     expect(error).toBeInstanceOf(CompletenessGuardError);
     expect((error as CompletenessGuardError).missingOperationIds).toEqual(['uploadBlob']);
