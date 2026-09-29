@@ -7,8 +7,12 @@ import { fileURLToPath } from 'node:url';
 import { Command } from 'commander';
 
 import { bundleSpec } from './bundle/index.js';
+import { renderPrComment, PR_COMMENT_MARKER } from './comment/index.js';
 import { loadConfig, type Contract, type SpeckifyConfig } from './config/index.js';
+import { createGithubClient, createGithubRelease, createOrUpdateComment } from './github/index.js';
+import { runInit } from './init/index.js';
 import { OASDIFF_CLASSIFICATION_MAP_FILENAME, resolveOasdiffBinary } from './oasdiff/index.js';
+import { hasFailures, publishContract, type PublishTarget } from './publish/index.js';
 import {
   createNpmRegistryRecord,
   createPyPiRegistryRecord,
@@ -25,6 +29,10 @@ import {
   type ToolchainImpactEntry,
 } from './version/index.js';
 
+/** `owner/repo` hosting Speckify itself — where `init` resolves the reusable workflow's pin. */
+const SPECKIFY_REPO = 'speckify/speckify';
+const GITHUB_PACKAGES_REGISTRY = 'https://npm.pkg.github.com';
+
 const packageRoot = join(dirname(fileURLToPath(import.meta.url)), '..');
 
 async function readSpeckifyVersion(): Promise<string> {
@@ -38,7 +46,7 @@ async function resolvePreviousState(contract: Contract): Promise<RegistryRecordE
 
   if (contract.typescript !== undefined) {
     const npmRegistry = createNpmRegistryRecord({
-      registryUrl: 'https://npm.pkg.github.com',
+      registryUrl: GITHUB_PACKAGES_REGISTRY,
       token: process.env.GITHUB_TOKEN,
     });
     targets.push({
@@ -129,14 +137,65 @@ function notImplemented(command: string): never {
 const program = new Command();
 program.name('speckify').description('Bundle, version and publish an OpenAPI contract.');
 
+interface PullRequestEvent {
+  number?: number;
+}
+
+/**
+ * Posts (or updates) the PR comment when running under a `pull_request`
+ * workflow with a token to hand: `GITHUB_TOKEN`, `GITHUB_REPOSITORY`
+ * (`owner/repo`), `GITHUB_EVENT_NAME=pull_request` and `GITHUB_EVENT_PATH`
+ * are the variables Actions sets for every job — the same set `action.yml`
+ * passes through. Outside that context (a local run, `push` to `main`)
+ * this is a no-op; stdout is always printed regardless.
+ */
+async function postPrCommentIfInPrContext(plans: readonly ContractPlan[]): Promise<void> {
+  const token = process.env.GITHUB_TOKEN;
+  const repository = process.env.GITHUB_REPOSITORY;
+  const eventName = process.env.GITHUB_EVENT_NAME;
+  const eventPath = process.env.GITHUB_EVENT_PATH;
+  if (
+    token === undefined ||
+    repository === undefined ||
+    eventName !== 'pull_request' ||
+    eventPath === undefined
+  ) {
+    return;
+  }
+
+  const [owner, repo] = repository.split('/');
+  if (owner === undefined || repo === undefined) {
+    return;
+  }
+
+  try {
+    const event = JSON.parse(await readFile(eventPath, 'utf8')) as PullRequestEvent;
+    if (typeof event.number !== 'number') {
+      return;
+    }
+    const client = createGithubClient({ token });
+    await createOrUpdateComment(
+      client,
+      { owner, repo, prNumber: event.number },
+      PR_COMMENT_MARKER,
+      renderPrComment(plans),
+    );
+  } catch (error) {
+    const reason = error instanceof Error ? error.message : String(error);
+    console.error(`could not post the PR comment: ${reason}`);
+  }
+}
+
 program
   .command('check')
   .description('Bundle every contract, diff it against the registry, and print the proposed bump.')
   .option('-c, --config <path>', 'path to speckify.yaml', 'speckify.yaml')
   .action(async (options: { config: string }) => {
     const context = await buildPlanContext(options.config);
+    const plans: ContractPlan[] = [];
     for (const contract of context.config.contracts) {
       const plan = await planContract(context, contract);
+      plans.push(plan);
       const from = plan.previousVersion ?? '(unpublished)';
       console.log(`## ${plan.contract}: ${from} -> ${plan.version} (${plan.bump})\n`);
       console.log(renderChangelogMarkdown(plan.changes));
@@ -146,6 +205,7 @@ program
         );
       }
     }
+    await postPrCommentIfInPrContext(plans);
   });
 
 program
@@ -164,11 +224,149 @@ program
     console.log(JSON.stringify(plans, null, 2));
   });
 
+/**
+ * Where `speckify publish` looks for a contract's generated package, once
+ * codegen has produced it — an npm package directory for TypeScript, a
+ * `dist/` of wheel + sdist for Python. Both codegen and publish read this
+ * same layout; see `docs/configuration.md`.
+ */
+function targetsForContract(contract: Contract, version: string): PublishTarget[] {
+  const targets: PublishTarget[] = [];
+  if (contract.typescript?.client === true || contract.typescript?.server === true) {
+    targets.push({
+      kind: 'npm',
+      label: `${contract.name}-typescript`,
+      packageDir: join('.speckify', contract.name, 'typescript'),
+      packageName: contract.typescript.package,
+      version,
+    });
+  }
+  if (contract.python?.client === true || contract.python?.server === true) {
+    targets.push({
+      kind: 'pypi',
+      label: `${contract.name}-python`,
+      distDir: join('.speckify', contract.name, 'python', 'dist'),
+      packageName: contract.python.package,
+      version,
+    });
+  }
+  return targets;
+}
+
+/**
+ * Best-effort: tags `<contract>@v<version>` and attaches the bundled spec
+ * and changelog to a GitHub Release. The registry, not this release, is the
+ * record of what got published, so a failure here is a printed warning,
+ * never a non-zero exit.
+ */
+async function createReleaseIfConfigured(contract: string, plan: ContractPlan): Promise<void> {
+  const token = process.env.GITHUB_TOKEN;
+  const repository = process.env.GITHUB_REPOSITORY;
+  if (token === undefined || repository === undefined) {
+    return;
+  }
+  const [owner, repo] = repository.split('/');
+  if (owner === undefined || repo === undefined) {
+    return;
+  }
+
+  const client = createGithubClient({ token });
+  const tagName = `${contract}@v${plan.version}`;
+  const result = await createGithubRelease(client, {
+    owner,
+    repo,
+    tagName,
+    name: tagName,
+    body: renderChangelogMarkdown(plan.changes),
+    assets: [
+      {
+        name: 'openapi.json',
+        contentType: 'application/json',
+        data: Buffer.from(plan.bundledSpec),
+      },
+    ],
+  });
+  if (!result.ok) {
+    console.warn(result.warning);
+  }
+}
+
 program
   .command('publish')
-  .description('Publish generated packages for every contract (not yet implemented).')
-  .action(() => {
-    notImplemented('publish');
+  .description('Publish every contract target whose registry does not already have its version.')
+  .option('-c, --config <path>', 'path to speckify.yaml', 'speckify.yaml')
+  .action(async (options: { config: string }) => {
+    const context = await buildPlanContext(options.config);
+    const npmToken = process.env.NODE_AUTH_TOKEN ?? process.env.GITHUB_TOKEN ?? '';
+    let anyFailed = false;
+
+    for (const contract of context.config.contracts) {
+      const plan = await planContract(context, contract);
+      const targets = targetsForContract(contract, plan.version);
+      if (targets.length === 0) {
+        continue;
+      }
+
+      const outcomes = await publishContract({
+        targets,
+        registries: {
+          npm:
+            contract.typescript !== undefined
+              ? createNpmRegistryRecord({ registryUrl: GITHUB_PACKAGES_REGISTRY, token: npmToken })
+              : undefined,
+          pypi: contract.python !== undefined ? createPyPiRegistryRecord() : undefined,
+        },
+        npmRegistryUrl: GITHUB_PACKAGES_REGISTRY,
+        npmToken,
+        npmOwner: context.config.publish.githubPackages.owner,
+      });
+
+      let contractPublished = false;
+      for (const outcome of outcomes) {
+        console.log(
+          `${outcome.target.label}: ${outcome.status}${outcome.error ? ` (${outcome.error})` : ''}`,
+        );
+        if (outcome.status === 'published') {
+          contractPublished = true;
+        }
+      }
+      if (hasFailures(outcomes)) {
+        anyFailed = true;
+      }
+      if (contractPublished) {
+        await createReleaseIfConfigured(contract.name, plan);
+      }
+    }
+
+    if (anyFailed) {
+      process.exitCode = 1;
+    }
+  });
+
+program
+  .command('init')
+  .description('Detect an OpenAPI document and write a starter speckify.yaml and CI workflow.')
+  .requiredOption(
+    '--owner <owner>',
+    'the GitHub Packages owner (org or user) generated npm packages publish under',
+  )
+  .option('-c, --config <path>', 'path to write speckify.yaml', 'speckify.yaml')
+  .option('--force', 'overwrite an existing speckify.yaml or workflow file')
+  .action(async (options: { owner: string; config: string; force?: boolean }) => {
+    const speckifyVersion = await readSpeckifyVersion();
+    const result = await runInit({
+      cwd: process.cwd(),
+      owner: options.owner,
+      speckifyVersion,
+      speckifyRepo: SPECKIFY_REPO,
+      configPath: options.config,
+      force: options.force,
+    });
+    console.log(`Wrote ${result.configPath}`);
+    console.log(`Wrote ${result.workflowPath}`);
+    if (result.warning !== undefined) {
+      console.warn(result.warning);
+    }
   });
 
 program
