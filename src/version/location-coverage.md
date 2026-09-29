@@ -155,7 +155,9 @@ For oasdiff 1.32.1 the list covers:
   `discriminator`, `prefixItems` and `if`/`then`/`else` inside an `allOf`
   branch.
 - On parameters: a generic `x-*` on the parameter or its schema; a property
-  added to an object parameter schema, or made required.
+  added to an object parameter schema, or made required; and a schema
+  `default` (unreported on path parameters, and a claim cannot tell a path
+  parameter from a query one).
 - On the operation: a generic `x-*`.
 - On security schemes: OAuth flow `scopes`, `tokenUrl` and
   `authorizationUrl`, whether or not the scheme is in use.
@@ -219,15 +221,15 @@ binary. It skips, with a reason, only when the binary is unavailable; CI has
 it. Each fixture sits on its own path, so one oasdiff run judges many
 fixtures, and each report is attributed by path. The test fails if Speckify
 calls any fixture's edits covered but oasdiff reported nothing for that
-fixture. The table crosses six placements (request body, response body, query
-parameter, `deepObject` parameter, response header and callback body) with
-fourteen nestings and every schema change the claims name, in both OpenAPI
-3.0 and 3.1. It adds operation-level and document-level changes. At the
-time of writing that is 13,485 fixtures. Speckify calls 3,191 of them
-covered, and oasdiff reported on every one of those 3,191. The other 10,294
-are uncovered and bump MAJOR; oasdiff reported nothing at all for 8,346 of
-them. A fixture must produce at least one edit, so the table cannot
-silently empty itself.
+fixture. The table crosses nine placements (request body, response body, query,
+`deepObject`, header, path and cookie parameters, response header and
+callback body) with fourteen nestings and every schema change the claims
+name, in both OpenAPI 3.0 and 3.1. It adds operation-level and
+document-level changes. At the time of writing that is 20,205 fixtures.
+Speckify calls 3,386 of them covered, and oasdiff reported on every one of
+those 3,386. The other 16,819 are uncovered and bump MAJOR; oasdiff reported
+nothing at all for 13,454 of them. A fixture must produce at least one edit,
+so the table cannot silently empty itself.
 
 It also runs every reviewer scenario through `computeContractPlan`,
 each paired with an unrelated optional response property, and expects

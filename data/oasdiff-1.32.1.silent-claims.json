@@ -20,6 +20,12 @@
       "reason": "an OAuth flow's tokenUrl change is not reported, whether or not the scheme is in use"
     },
     {
+      "pattern": "paths.*.*.parameters.*.schema.default",
+      "actions": ["change", "set", "unset"],
+      "classes": ["root"],
+      "reason": "a default on a path parameter is not reported; a claim cannot tell a path parameter from a query one, so every parameter default is treated as unjudged"
+    },
+    {
       "pattern": "paths.*.*.parameters.*.schema.properties.*",
       "actions": ["add"],
       "classes": ["root"],

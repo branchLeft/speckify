@@ -172,6 +172,18 @@ const PLACEMENTS: Readonly<Record<string, (schema: Schema) => Doc>> = {
     parameters: [{ name: 'f', in: 'query', style: 'deepObject', explode: true, schema }],
     responses: { '200': { description: 'ok' } },
   }),
+  headerParameter: (schema) => ({
+    parameters: [{ name: 'X-Q', in: 'header', schema }],
+    responses: { '200': { description: 'ok' } },
+  }),
+  pathParameter: (schema) => ({
+    parameters: [{ name: 'id', in: 'path', required: true, schema }],
+    responses: { '200': { description: 'ok' } },
+  }),
+  cookieParameter: (schema) => ({
+    parameters: [{ name: 'c', in: 'cookie', schema }],
+    responses: { '200': { description: 'ok' } },
+  }),
   responseHeader: (schema) => ({
     responses: { '200': { description: 'ok', headers: { 'X-H': { schema } } } },
   }),
@@ -224,7 +236,7 @@ function schemaMatrix(
   for (const [placement, place] of Object.entries(PLACEMENTS)) {
     for (const [nesting, nest] of Object.entries(NESTINGS)) {
       for (const [change, [before, after]] of Object.entries(changes)) {
-        const path = `/${placement}/${nesting}/${change}`;
+        const path = `/${placement}/${nesting}/${change}${placement === 'pathParameter' ? '/{id}' : ''}`;
         fixtures.push({
           name: path,
           base: spec(openapi, { [path]: { post: place(nest(before)) } }),
@@ -565,7 +577,7 @@ describe.skipIf(oasdiffPath === null)(
           reported: changes.length > 0,
         });
       }
-    }, 120_000);
+    }, 300_000);
 
     it('judges a broad table of fixtures, every one a real structural change', () => {
       expect(verdicts.length).toBeGreaterThan(2000);
@@ -584,7 +596,7 @@ describe.skipIf(oasdiffPath === null)(
       const unsafe = verdicts.filter(
         (v) =>
           v.covered &&
-          /^\/(callbackBody\/|(query|deepObject)Parameter\/(?!top\/)|[^/]+\/(oneOf|not)\/)/.test(
+          /^\/(callbackBody\/|(query|deepObject|header|path|cookie)Parameter\/(?!top\/)|[^/]+\/(oneOf|not)\/)/.test(
             v.fixture.name,
           ),
       );
