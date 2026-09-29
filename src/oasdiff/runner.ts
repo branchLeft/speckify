@@ -16,29 +16,14 @@ async function defaultProcessRunner(
   command: string,
   args: readonly string[],
 ): Promise<{ stdout: string; stderr: string }> {
-  try {
-    return await execFileAsync(command, args as string[], { maxBuffer: 1024 * 1024 * 64 });
-  } catch (error) {
-    // oasdiff's changelog command exits non-zero when it finds changes, which
-    // is expected, not a failure; its stdout still carries the JSON we want.
-    // A numeric `code` means the process ran and exited with that status; a
-    // spawn failure (e.g. ENOENT) carries a string code and no real output,
-    // and must still be treated as a failure.
-    if (
-      typeof error === 'object' &&
-      error !== null &&
-      'code' in error &&
-      typeof error.code === 'number' &&
-      'stdout' in error &&
-      typeof (error as { stdout: unknown }).stdout === 'string'
-    ) {
-      return {
-        stdout: (error as { stdout: string }).stdout,
-        stderr: 'stderr' in error ? String((error as { stderr: unknown }).stderr) : '',
-      };
-    }
-    throw error;
-  }
+  // Confirmed against the real oasdiff 1.32.1 binary: `changelog` exits 0
+  // whether or not it found changes, and only exits non-zero on a genuine
+  // failure (e.g. a dangling $ref it cannot resolve), with empty stdout and
+  // the reason on stderr. So exit code 0 is the only success signal; any
+  // other exit -- however it happened to fill stdout -- must abort the plan
+  // rather than be read as "no changes". execFile's own error already
+  // carries stderr in its message, so there is nothing to recover here.
+  return execFileAsync(command, args as string[], { maxBuffer: 1024 * 1024 * 64 });
 }
 
 export interface RunOasdiffOptions {

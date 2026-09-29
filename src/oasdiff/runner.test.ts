@@ -137,6 +137,31 @@ describe('runOasdiffChangelog', () => {
 });
 
 describe('runOasdiffChangelog against the real oasdiff binary', () => {
+  it('throws OasdiffError, never an empty changelog, when the revision spec has a dangling $ref', async () => {
+    let oasdiffPath: string;
+    try {
+      oasdiffPath = await resolveOasdiffBinary({
+        cacheDir: join(homedir(), '.cache', 'speckify', 'oasdiff'),
+      });
+    } catch {
+      // No cached or downloadable binary in this environment (offline CI, a
+      // fresh machine with no network) — nothing further to prove here.
+      return;
+    }
+
+    // oasdiff exits non-zero with empty stdout and the reason on stderr for
+    // a spec it cannot load at all (confirmed against the real 1.32.1
+    // binary: exit code 102). Silently treating that as "no changes" is
+    // exactly the under-bump this test guards against.
+    await expect(
+      runOasdiffChangelog({
+        oasdiffPath,
+        baseSpecPath: `${fixturesDir}allof-nullable-base.json`,
+        revisionSpecPath: `${fixturesDir}dangling-ref-revision.json`,
+      }),
+    ).rejects.toThrow(OasdiffError);
+  });
+
   it('reports the allOf-nullable fixture as ERR (level 3), which --flatten-allof alone makes true', async () => {
     let oasdiffPath: string;
     try {

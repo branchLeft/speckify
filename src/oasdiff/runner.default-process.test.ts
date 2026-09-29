@@ -6,10 +6,12 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { runOasdiffChangelog } from './runner.js';
 
-// Exercises the default process runner (no injected runProcess), including
-// its recovery of stdout from a non-zero exit -- oasdiff's own changelog
-// command exits non-zero when it finds changes, which is expected, not a
-// failure.
+// Exercises the default process runner (no injected runProcess). Confirmed
+// against the real oasdiff 1.32.1 binary: it exits 0 whether or not it
+// found changes, and only exits non-zero on a genuine failure (e.g. a
+// dangling $ref), with empty stdout and the reason on stderr. So any
+// non-zero exit is a hard error here, never "no changes" -- even if the
+// process happened to write something to stdout first.
 describe('runOasdiffChangelog with the default process runner', () => {
   let dir: string;
   let scriptPath: string;
@@ -23,7 +25,7 @@ describe('runOasdiffChangelog with the default process runner', () => {
     await rm(dir, { recursive: true, force: true });
   });
 
-  it('recovers stdout from a real process that exits non-zero', async () => {
+  it('throws, never returning the changelog, for a real process that exits non-zero even with populated stdout', async () => {
     await writeFile(
       scriptPath,
       [
@@ -35,13 +37,13 @@ describe('runOasdiffChangelog with the default process runner', () => {
     );
     await chmod(scriptPath, 0o755);
 
-    const result = await runOasdiffChangelog({
-      oasdiffPath: scriptPath,
-      baseSpecPath: 'base.json',
-      revisionSpecPath: 'revision.json',
-    });
-
-    expect(result).toEqual([{ id: 'endpoint-added', text: 'added /pets', level: 1 }]);
+    await expect(
+      runOasdiffChangelog({
+        oasdiffPath: scriptPath,
+        baseSpecPath: 'base.json',
+        revisionSpecPath: 'revision.json',
+      }),
+    ).rejects.toThrow(/oasdiff failed to run/);
   });
 
   it('throws OasdiffError when the binary does not exist', async () => {
