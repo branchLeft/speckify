@@ -90,8 +90,13 @@ Speckify never asks you to pick a version. On every pull request it:
    which writes the changelog. oasdiff's own verdict, from a reviewed rule
    map, can raise the bump but never lower it. A rule the map has no entry
    for counts as `major`.
-5. Takes the highest bump of the two. Over-bumping is acceptable;
-   under-bumping is not.
+5. Generates both specs with the current toolchain and compares the
+   packages' public surfaces, catching a rename or reshuffle a spec-level
+   diff can't see — see [`src/surface/surface.md`](src/surface/surface.md).
+6. Takes the highest bump of all four inputs — the allow-list, the
+   oasdiff classification, a record of what Speckify's own toolchain
+   changed (`data/toolchain-impact.json`), and the surface diff.
+   Over-bumping is acceptable; under-bumping is not.
 
 The allow-list, and why each entry on it is safe, is in
 [`src/version/allow-list.md`](src/version/allow-list.md). The classification map, and the reasoning behind each judgement call,
