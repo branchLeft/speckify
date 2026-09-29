@@ -6,12 +6,16 @@ export {
 } from './classification-map.js';
 export { classify } from './classify.js';
 export {
-  findUncoveredEdits,
-  loadOasdiffCoverage,
-  type LoadOasdiffCoverageOptions,
-  type OasdiffCoverage,
-  type UncoveredEdit,
-} from './location-coverage.js';
+  ALLOW_LIST,
+  allowListBump,
+  EXTENSION_RULE,
+  judgeEdit,
+  judgeEdits,
+  type AllowRule,
+  type Direction,
+  type EditJudgement,
+  type JudgeContext,
+} from './allow-list.js';
 export { diffDocuments, prepareDocument, type Edit } from './structural-diff.js';
 export { VersionError } from './errors.js';
 export {
@@ -24,8 +28,6 @@ export type {
   ClassificationMap,
   ClassificationRule,
   ClassifyResult,
-  LocationClaimsFile,
-  SilentClaimsFile,
   OasdiffCheck,
   ToolchainImpactEntry,
 } from './types.js';

@@ -6,17 +6,11 @@ import { fileURLToPath } from 'node:url';
 import { beforeAll, describe, expect, it, vi } from 'vitest';
 
 import { toCanonicalJson } from './bundle/canonical-json.js';
-import {
-  OASDIFF_CHECKS_FILENAME,
-  OASDIFF_CLASSIFICATION_MAP_FILENAME,
-  OASDIFF_LOCATION_CLAIMS_FILENAME,
-  OASDIFF_SILENT_CLAIMS_FILENAME,
-} from './oasdiff/version.js';
+import { OASDIFF_CHECKS_FILENAME, OASDIFF_CLASSIFICATION_MAP_FILENAME } from './oasdiff/version.js';
 import { resolveOasdiffBinary } from './oasdiff/binary.js';
 import type { OasdiffChange, ProcessRunner } from './oasdiff/index.js';
 import { computeContractPlan } from './plan.js';
 import { loadClassificationMap } from './version/classification-map.js';
-import { loadOasdiffCoverage, type OasdiffCoverage } from './version/location-coverage.js';
 import type { ClassificationMap } from './version/types.js';
 import type { Bump } from './version/types.js';
 
@@ -39,16 +33,11 @@ async function bundledSpecFor(name: string): Promise<string> {
  */
 describe('the real classify path, against real fixture pairs', () => {
   let classificationMap: ClassificationMap;
-  let coverage: OasdiffCoverage;
   let oasdiffPath: string | null;
 
   beforeAll(async () => {
     classificationMap = await loadClassificationMap(
       join(dataDir, OASDIFF_CLASSIFICATION_MAP_FILENAME),
-    );
-    coverage = await loadOasdiffCoverage(
-      join(dataDir, OASDIFF_LOCATION_CLAIMS_FILENAME),
-      join(dataDir, OASDIFF_SILENT_CLAIMS_FILENAME),
     );
     try {
       oasdiffPath = await resolveOasdiffBinary({
@@ -73,7 +62,6 @@ describe('the real classify path, against real fixture pairs', () => {
       bundledSpec: revision,
       previous: { version: '1.0.0', bundledSpec: base, speckifyVersion: null },
       classificationMap,
-      coverage,
       toolchainImpactBump: 'none',
       oasdiffPath,
     });
@@ -135,15 +123,10 @@ function runProcessReturning(changes: OasdiffChange[]): ProcessRunner {
  */
 describe('the real classify path, against captured real oasdiff output', () => {
   let classificationMap: ClassificationMap;
-  let coverage: OasdiffCoverage;
 
   beforeAll(async () => {
     classificationMap = await loadClassificationMap(
       join(dataDir, OASDIFF_CLASSIFICATION_MAP_FILENAME),
-    );
-    coverage = await loadOasdiffCoverage(
-      join(dataDir, OASDIFF_LOCATION_CLAIMS_FILENAME),
-      join(dataDir, OASDIFF_SILENT_CLAIMS_FILENAME),
     );
   });
 
@@ -158,7 +141,6 @@ describe('the real classify path, against captured real oasdiff output', () => {
       bundledSpec: revision,
       previous: { version: '1.0.0', bundledSpec: base, speckifyVersion: null },
       classificationMap,
-      coverage,
       toolchainImpactBump: 'none',
       oasdiffPath: '/bin/oasdiff',
       runProcess: runProcessReturning(changes),

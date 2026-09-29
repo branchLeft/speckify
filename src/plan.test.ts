@@ -1,16 +1,10 @@
-import { join } from 'node:path';
-import { fileURLToPath } from 'node:url';
-
 import { describe, expect, it, vi } from 'vitest';
 
 import { LintError } from './lint/index.js';
 import { computeContractPlan, renderChangelogMarkdown, type ContractPlan } from './plan.js';
 import type { OasdiffChange, ProcessRunner } from './oasdiff/index.js';
-import {
-  OASDIFF_LOCATION_CLAIMS_FILENAME,
-  OASDIFF_SILENT_CLAIMS_FILENAME,
-} from './oasdiff/version.js';
-import { loadOasdiffCoverage, type ClassificationMap } from './version/index.js';
+import {} from './oasdiff/version.js';
+import type { ClassificationMap } from './version/index.js';
 
 const map: ClassificationMap = {
   'response-required-property-removed': 'major',
@@ -18,14 +12,6 @@ const map: ClassificationMap = {
   'response-optional-property-added': 'minor',
   'request-property-minlength-tightened': 'minor',
 };
-
-const dataDir = fileURLToPath(new URL('../data/', import.meta.url));
-
-/** The real, committed location coverage Speckify ships (see version/location-coverage.md). */
-const coverage = await loadOasdiffCoverage(
-  join(dataDir, OASDIFF_LOCATION_CLAIMS_FILENAME),
-  join(dataDir, OASDIFF_SILENT_CLAIMS_FILENAME),
-);
 
 function runProcessReturning(changes: OasdiffChange[]): ProcessRunner {
   return vi.fn(async () => Promise.resolve({ stdout: JSON.stringify(changes), stderr: '' }));
@@ -63,7 +49,6 @@ describe('computeContractPlan', () => {
         bundledSpec: invalidSpec,
         previous: null,
         classificationMap: map,
-        coverage,
         toolchainImpactBump: 'none',
         oasdiffPath: '/bin/oasdiff',
         runProcess,
@@ -86,7 +71,6 @@ describe('computeContractPlan', () => {
         bundledSpec: invalidSpec,
         previous: { version: '1.2.0', bundledSpec: publishedSpecV1_2_0, speckifyVersion: null },
         classificationMap: map,
-        coverage,
         toolchainImpactBump: 'none',
         oasdiffPath: '/bin/oasdiff',
         runProcess,
@@ -102,7 +86,6 @@ describe('computeContractPlan', () => {
       bundledSpec: bundledSpecV1,
       previous: null,
       classificationMap: map,
-      coverage,
       toolchainImpactBump: 'none',
       oasdiffPath: '/bin/oasdiff',
       runProcess,
@@ -127,7 +110,6 @@ describe('computeContractPlan', () => {
       bundledSpec: bundledSpecV1,
       previous: { version: '1.2.0', bundledSpec: publishedSpecV1_2_0, speckifyVersion: null },
       classificationMap: map,
-      coverage,
       toolchainImpactBump: 'none',
       oasdiffPath: '/bin/oasdiff',
       runProcess: runProcessReturning(changes),
@@ -145,7 +127,6 @@ describe('computeContractPlan', () => {
       bundledSpec: bundledSpecV1,
       previous: { version: '1.2.0', bundledSpec: publishedSpecV1_2_0, speckifyVersion: null },
       classificationMap: map,
-      coverage,
       toolchainImpactBump: 'none',
       oasdiffPath: '/bin/oasdiff',
       runProcess: runProcessReturning(changes),
@@ -166,7 +147,6 @@ describe('computeContractPlan', () => {
       bundledSpec: revisedSpec,
       previous: { version: '1.2.0', bundledSpec: publishedSpecV1_2_0, speckifyVersion: null },
       classificationMap: map,
-      coverage,
       toolchainImpactBump: 'none',
       oasdiffPath: '/bin/oasdiff',
       runProcess: runProcessReturning([]),
@@ -182,7 +162,6 @@ describe('computeContractPlan', () => {
       bundledSpec: bundledSpecV1,
       previous: { version: '1.2.0', bundledSpec: publishedSpecV1_2_0, speckifyVersion: null },
       classificationMap: map,
-      coverage,
       toolchainImpactBump: 'none',
       oasdiffPath: '/bin/oasdiff',
       runProcess: runProcessReturning([]),
@@ -237,7 +216,6 @@ describe('computeContractPlan', () => {
       bundledSpec: currentSpec,
       previous: { version: '1.2.0', bundledSpec: previousSpec, speckifyVersion: null },
       classificationMap: map,
-      coverage,
       toolchainImpactBump: 'none',
       oasdiffPath: '/bin/oasdiff',
       // oasdiff missed the tightened schema, as if the binary had a real gap.
@@ -267,7 +245,6 @@ describe('computeContractPlan', () => {
       bundledSpec: currentSpec,
       previous: { version: '1.2.0', bundledSpec: previousSpec, speckifyVersion: null },
       classificationMap: map,
-      coverage,
       toolchainImpactBump: 'none',
       oasdiffPath: '/bin/oasdiff',
       runProcess: runProcessReturning([]),
@@ -294,7 +271,6 @@ describe('computeContractPlan', () => {
       bundledSpec: currentSpec,
       previous: { version: '1.2.0', bundledSpec: previousSpec, speckifyVersion: null },
       classificationMap: map,
-      coverage,
       toolchainImpactBump: 'none',
       oasdiffPath: '/bin/oasdiff',
       runProcess: runProcessReturning([]),
@@ -321,7 +297,6 @@ describe('computeContractPlan', () => {
       bundledSpec: currentSpec,
       previous: { version: '1.2.0', bundledSpec: previousSpec, speckifyVersion: null },
       classificationMap: map,
-      coverage,
       toolchainImpactBump: 'none',
       oasdiffPath: '/bin/oasdiff',
       runProcess: runProcessReturning([]),
@@ -340,7 +315,6 @@ describe('computeContractPlan', () => {
       bundledSpec: bundledSpecV1,
       previous: { version: '1.2.0', bundledSpec: publishedSpecV1_2_0, speckifyVersion: null },
       classificationMap: map,
-      coverage,
       toolchainImpactBump: 'major',
       oasdiffPath: '/bin/oasdiff',
       runProcess: runProcessReturning(changes),
@@ -428,7 +402,6 @@ describe('computeContractPlan', () => {
       bundledSpec: currentSpec,
       previous: { version: '1.2.0', bundledSpec: previousSpec, speckifyVersion: null },
       classificationMap: map,
-      coverage,
       toolchainImpactBump: 'none',
       // oasdiff sees (and correctly classifies as minor) the new response
       // property, but says nothing about additionalProperties -- it has no
@@ -491,7 +464,7 @@ describe('computeContractPlan', () => {
                   schema: {
                     type: 'object',
                     properties: {
-                      // Only this nested, uncovered location differs -- a
+                      // Only this nested location differs -- a
                       // stripper that deletes the "title" property outright
                       // (rather than only stripping *annotation-position*
                       // doc keys) would make both sides look identical here
@@ -513,7 +486,6 @@ describe('computeContractPlan', () => {
       bundledSpec: currentSpec,
       previous: { version: '1.2.0', bundledSpec: previousSpec, speckifyVersion: null },
       classificationMap: map,
-      coverage,
       toolchainImpactBump: 'none',
       // oasdiff has no rule for additionalProperties, so it stays silent.
       oasdiffPath: '/bin/oasdiff',
@@ -524,7 +496,7 @@ describe('computeContractPlan', () => {
     expect(plan.version).toBe('2.0.0');
   });
 
-  it("trusts oasdiff's own classification when every structural change is at a covered location (N3b)", async () => {
+  it('bumps major for a request minLength tightening even when oasdiff labels it minor', async () => {
     const previousSpec = JSON.stringify({
       openapi: '3.0.3',
       info: { title: 'Widgets', version: '1.2.0' },
@@ -559,9 +531,8 @@ describe('computeContractPlan', () => {
                 'application/json': {
                   schema: {
                     type: 'object',
-                    // minLength tightened: a covered location, so oasdiff's
-                    // own classification (minor, per `map`) stands rather
-                    // than being forced to major.
+                    // minLength tightened: no allow-list rule matches, so
+                    // oasdiff's minor label (per `map`) cannot lower it.
                     properties: { name: { type: 'string', minLength: 5 } },
                   },
                 },
@@ -578,7 +549,6 @@ describe('computeContractPlan', () => {
       bundledSpec: currentSpec,
       previous: { version: '1.2.0', bundledSpec: previousSpec, speckifyVersion: null },
       classificationMap: map,
-      coverage,
       toolchainImpactBump: 'none',
       oasdiffPath: '/bin/oasdiff',
       runProcess: runProcessReturning([
@@ -592,12 +562,12 @@ describe('computeContractPlan', () => {
       ]),
     });
 
-    expect(plan.bump).toBe('minor');
-    expect(plan.version).toBe('1.3.0');
+    expect(plan.bump).toBe('major');
+    expect(plan.version).toBe('2.0.0');
   });
 });
 
-describe('computeContractPlan: location coverage (offline, stubbed oasdiff output)', () => {
+describe('computeContractPlan: the allow-list gate (offline, stubbed oasdiff output)', () => {
   function spec(version: string, itemsMaxLength: number, notes: boolean): string {
     const responseProperties: Record<string, unknown> = { id: { type: 'string' } };
     if (notes) responseProperties.notes = { type: 'string' };
@@ -649,37 +619,78 @@ describe('computeContractPlan: location coverage (offline, stubbed oasdiff outpu
       bundledSpec,
       previous: { version: '1.2.3', bundledSpec: previousSpec, speckifyVersion: null },
       classificationMap: map,
-      coverage,
       toolchainImpactBump: 'none',
       oasdiffPath: '/bin/oasdiff',
       runProcess: runProcessReturning(changes),
     });
   }
 
-  it('forces major for an unjudged parameter items.maxLength beside a judged minor change', async () => {
+  const judged = (plan: ContractPlan): string[][] =>
+    plan.judgements.map((j) => [j.edit.location.join('.'), j.bump, String(j.rule)]);
+
+  it('forces major for a parameter items.maxLength tightening beside an allowed minor change', async () => {
     const plan = await planFor(spec('0.0.0', 5, true), spec('1.2.3', 50, false), [
       optionalPropertyAdded,
     ]);
     expect(plan.version).toBe('2.0.0');
-    expect(plan.uncovered.map((u) => [u.edit.location.join('.'), u.reason])).toEqual([
-      ['paths./things.get.parameters.query:tags.schema.items.maxLength', 'no-claim'],
+    expect(judged(plan)).toEqual([
+      ['paths./things.get.parameters.query:tags.schema.items.maxLength', 'major', 'undefined'],
+      [
+        'paths./things.get.responses.200.content.application/json.schema.properties.notes',
+        'minor',
+        'response-optional-property-added',
+      ],
     ]);
   });
 
-  it('keeps the judged minor when that is the only change', async () => {
+  it('keeps the allowed minor when that is the only change', async () => {
     const plan = await planFor(spec('0.0.0', 50, true), spec('1.2.3', 50, false), [
       optionalPropertyAdded,
     ]);
     expect(plan.version).toBe('1.3.0');
-    expect(plan.uncovered).toEqual([]);
   });
 
-  it('forces major when oasdiff reported nothing for the operation a covered edit is in', async () => {
+  it('keeps the allowed minor even when oasdiff reports nothing at all', async () => {
+    const plan = await planFor(spec('0.0.0', 50, true), spec('1.2.3', 50, false), []);
+    expect(plan.version).toBe('1.3.0');
+  });
+
+  it('lets oasdiff raise an allowed minor to major, never lower it', async () => {
     const plan = await planFor(spec('0.0.0', 50, true), spec('1.2.3', 50, false), [
-      { ...optionalPropertyAdded, path: '/elsewhere' },
+      { ...optionalPropertyAdded, id: 'response-required-property-removed' },
     ]);
     expect(plan.version).toBe('2.0.0');
-    expect(plan.uncovered.map((u) => u.reason)).toEqual(['unreported-operation']);
+  });
+
+  it('bumps major when only an unreadable difference remains (a reordered enum)', async () => {
+    const withEnum = (version: string, values: string[]): string => {
+      const doc = JSON.parse(spec(version, 50, false)) as {
+        paths: Record<string, { get: { parameters: { schema: Record<string, unknown> }[] } }>;
+      };
+      const parameter = doc.paths['/things']?.get.parameters[0];
+      if (parameter !== undefined) parameter.schema.items = { type: 'string', enum: values };
+      return JSON.stringify(doc);
+    };
+    const plan = await planFor(withEnum('0.0.0', ['b', 'a']), withEnum('1.2.3', ['a', 'b']), []);
+    expect(plan.judgements).toEqual([]);
+    expect(plan.version).toBe('2.0.0');
+  });
+
+  it('bumps patch for an extension no generator reads, major for one a generator reads', async () => {
+    const withExtension = (version: string, extension: Record<string, unknown>): string => {
+      const doc = JSON.parse(spec(version, 50, false)) as Record<string, unknown>;
+      return JSON.stringify({ ...doc, ...extension });
+    };
+    const base = withExtension('1.2.3', {});
+    const inert = await planFor(withExtension('0.0.0', { 'x-owner': 'team-a' }), base, []);
+    expect(inert.version).toBe('1.2.4');
+    const read = JSON.parse(spec('0.0.0', 50, false)) as {
+      paths: Record<string, { get: Record<string, unknown> }>;
+    };
+    const operation = read.paths['/things']?.get;
+    if (operation !== undefined) operation['x-enum-varnames'] = ['A'];
+    const sdk = await planFor(JSON.stringify(read), base, []);
+    expect(sdk.version).toBe('2.0.0');
   });
 });
 

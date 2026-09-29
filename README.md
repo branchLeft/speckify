@@ -72,17 +72,22 @@ Speckify never asks you to pick a version. On every pull request it:
 2. Reads back the spec bundled into the **last published** version, from
    the registry itself — not git history, not a changelog file. The
    registry is the record.
-3. Diffs the two with a pinned build of [`oasdiff`](https://github.com/oasdiff/oasdiff),
-   from the perspective of an existing, correctly-written client of the
-   API.
-4. Classifies every change against a reviewed rule map (major / minor /
-   patch / no effect) and takes the highest bump across all of them.
-5. **A change oasdiff reports that the map has no entry for is treated as
-   `major`.** An unclassified rule is not a soft failure — a worse-case
-   guess is the only safe default when nothing has judged the change yet.
+3. Diffs the two itself, structurally, and judges every change against a
+   short allow-list of change shapes known to be safe for an existing,
+   correctly-written client: a new operation, a new optional parameter
+   or property, a relaxed request constraint, and a few more. A change
+   on the list is `minor`, and a documentation-only change is `patch`.
+   **Every other change is `major`**, however small it looks.
+4. Also diffs them with a pinned build of [`oasdiff`](https://github.com/oasdiff/oasdiff),
+   which writes the changelog. oasdiff's own verdict, from a reviewed rule
+   map, can raise the bump but never lower it. A rule the map has no entry
+   for counts as `major`.
+5. Takes the highest bump of the two. Over-bumping is acceptable;
+   under-bumping is not.
 
-The full classification map, and the reasoning behind each judgement
-call, is in [`docs/versioning.md`](docs/versioning.md).
+The allow-list, and why each entry on it is safe, is in
+[`src/version/allow-list.md`](src/version/allow-list.md). The classification map, and the reasoning behind each judgement call,
+is in [`docs/versioning.md`](docs/versioning.md).
 
 ## Publishing setup
 

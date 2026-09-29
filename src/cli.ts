@@ -12,12 +12,7 @@ import { renderPrComment, PR_COMMENT_MARKER } from './comment/index.js';
 import { loadConfig, type Contract, type SpeckifyConfig } from './config/index.js';
 import { createGithubClient, createGithubRelease, createOrUpdateComment } from './github/index.js';
 import { runInit } from './init/index.js';
-import {
-  OASDIFF_CLASSIFICATION_MAP_FILENAME,
-  OASDIFF_LOCATION_CLAIMS_FILENAME,
-  OASDIFF_SILENT_CLAIMS_FILENAME,
-  resolveOasdiffBinary,
-} from './oasdiff/index.js';
+import { OASDIFF_CLASSIFICATION_MAP_FILENAME, resolveOasdiffBinary } from './oasdiff/index.js';
 import { hasFailures, publishContract, type PublishTarget } from './publish/index.js';
 import {
   createNpmRegistryRecord,
@@ -31,12 +26,10 @@ import { buildContract, DEFAULT_BUILD_OUT_DIR, type BuildContractResult } from '
 import { SPECKIFY_REPO } from './constants.js';
 import {
   loadClassificationMap,
-  loadOasdiffCoverage,
   loadToolchainImpact,
   toolchainImpact,
   TOOLCHAIN_IMPACT_FILENAME,
   type ClassificationMap,
-  type OasdiffCoverage,
   type ToolchainImpactEntry,
 } from './version/index.js';
 
@@ -81,7 +74,6 @@ interface PlanContext {
   configDir: string;
   repoRoot: string;
   classificationMap: ClassificationMap;
-  coverage: OasdiffCoverage;
   toolchainImpactEntries: ToolchainImpactEntry[];
   currentSpeckifyVersion: string;
   oasdiffPath: string;
@@ -123,7 +115,6 @@ async function planContract(context: PlanContext, contract: Contract): Promise<C
     bundledSpec,
     previous,
     classificationMap: context.classificationMap,
-    coverage: context.coverage,
     toolchainImpactBump: impactBump,
     oasdiffPath: context.oasdiffPath,
   });
@@ -138,32 +129,22 @@ async function buildPlanContext(configPath: string): Promise<PlanContext> {
   // Speckify's own artifacts, shipped with the package (`data/`), not
   // something a consuming repo provides alongside its speckify.yaml.
   const classificationMapPath = resolve(packageRoot, 'data', OASDIFF_CLASSIFICATION_MAP_FILENAME);
-  const locationClaimsPath = resolve(packageRoot, 'data', OASDIFF_LOCATION_CLAIMS_FILENAME);
-  const silentClaimsPath = resolve(packageRoot, 'data', OASDIFF_SILENT_CLAIMS_FILENAME);
   const toolchainImpactPath = resolve(packageRoot, 'data', TOOLCHAIN_IMPACT_FILENAME);
 
-  const [
-    classificationMap,
-    coverage,
-    toolchainImpactEntries,
-    currentSpeckifyVersion,
-    oasdiffPath,
-    repoRoot,
-  ] = await Promise.all([
-    loadClassificationMap(classificationMapPath),
-    loadOasdiffCoverage(locationClaimsPath, silentClaimsPath),
-    loadToolchainImpact(toolchainImpactPath),
-    readSpeckifyVersion(),
-    resolveOasdiffBinary({ cacheDir: join(homedir(), '.cache', 'speckify', 'oasdiff') }),
-    resolveRepoRoot(configDir),
-  ]);
+  const [classificationMap, toolchainImpactEntries, currentSpeckifyVersion, oasdiffPath, repoRoot] =
+    await Promise.all([
+      loadClassificationMap(classificationMapPath),
+      loadToolchainImpact(toolchainImpactPath),
+      readSpeckifyVersion(),
+      resolveOasdiffBinary({ cacheDir: join(homedir(), '.cache', 'speckify', 'oasdiff') }),
+      resolveRepoRoot(configDir),
+    ]);
 
   return {
     config,
     configDir,
     repoRoot,
     classificationMap,
-    coverage,
     toolchainImpactEntries,
     currentSpeckifyVersion,
     oasdiffPath,

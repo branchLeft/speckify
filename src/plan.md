@@ -26,22 +26,18 @@ sees them, and before the raw-text-equality check below — otherwise a
 version-number difference (or oasdiff's own `api-version-not-bumped`
 check) would show up as a "change" on every single plan, published or not.
 
-## oasdiff reporting nothing is not proof that nothing changed
+## The bump is the allow-list's verdict, raised by oasdiff's
 
-When oasdiff reports zero changes but the spec text still differs once
-`info.version` is normalised, that text difference is only trusted as
-patch-level when it is _entirely_ doc-only: `description`, `summary`,
-`example`/`examples`, `externalDocs` and `title`, stripped from both sides
-recursively (plus root `tags` and `info` contact, licence and terms). Anything else that differs — a schema constraint, a `servers`
-URL, a security requirement — means oasdiff missed something real, and
-under-bumping that is worse than over-bumping, so it bumps MAJOR instead.
+The plan diffs the two specs structurally and judges every edit against the
+allow-list in [`version/allow-list.md`](version/allow-list.md): patch for a
+documentation-only difference, minor for a listed safe change shape, major
+for anything else. Each judgement is returned on the plan as `judgements`.
 
-## Every structural change must be one oasdiff judges
+oasdiff still runs on every plan and its changes become the changelog. Its
+classification joins the allow-list's verdict in a max, so it can raise the
+bump but never lower it. oasdiff failing aborts the plan.
 
-Independently of what oasdiff reports, the plan diffs the two specs
-structurally and checks that every edit sits at a location oasdiff's rules
-actually judge. Any edit that cannot be shown to be judged forces MAJOR,
-even when oasdiff reported other changes. The design, the data files and
-the empirical validation against the real binary are in
-[`version/location-coverage.md`](version/location-coverage.md). The
-uncovered edits are returned on the plan as `uncovered`.
+When no edit is above patch but the text still differs, the difference must
+be annotations or inert vendor extensions alone. Anything else means the
+structural diff missed something, and the bump is major. Identical specs,
+once `info.version` is normalised, publish nothing.

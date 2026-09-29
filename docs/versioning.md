@@ -53,22 +53,32 @@ For each contract, on every `speckify check` or `speckify publish` run:
      as new rule ids are seen; until then, unclassified means "assume the
      worst."
 
-   Two cases sit outside oasdiff's own rule set:
+   The map's verdict is only one input to the bump, and it can only
+   raise it. See the next step.
 
-   - **A change oasdiff does not judge is `major`.** oasdiff only judges
-     each keyword at particular places in a document; nothing under a
-     callback, for example. Speckify diffs the two specs itself. Any change
-     that is not at a location oasdiff's rules are shown to judge forces
-     `major`, even when oasdiff reported other, smaller changes. The rule
-     and its validation against the real binary are in
-     [`src/version/location-coverage.md`](../src/version/location-coverage.md).
-   - **No semantic change, but different text.** If oasdiff reports no
-     changes but the spec's text still differs from what was last
-     published, the difference is `patch` only when it is documentation
-     alone, such as a description tweak. Anything else is `major`.
+6. **Judge every change against the allow-list.** Speckify also diffs the
+   two specs itself, structurally, on dereferenced documents, and judges
+   every edit on its own:
 
-6. **Bump and stamp.** The highest-severity bump found — across every
-   oasdiff rule matched, plus any bump Speckify's own toolchain forces on
+   - a documentation-only difference (a description, summary, title,
+     example, or a vendor extension no pinned generator reads) is
+     **`patch`**;
+   - an edit matching one of a short list of change shapes known to be
+     safe is **`minor`**. Examples are a new operation, a new optional
+     parameter or property, a relaxed request constraint, a new optional
+     response header, and a deprecation;
+   - **every other edit is `major`**, whatever oasdiff calls it.
+
+   This replaced an earlier design that trusted oasdiff's labels and
+   patched each place they were missing or wrong. Every review found
+   another such place. With an allow-list, a change nobody has judged
+   safe over-bumps; it can never under-bump. The list, the reason for
+   each entry, and how direction (request, response, callback) is
+   handled are in
+   [`src/version/allow-list.md`](../src/version/allow-list.md).
+
+7. **Bump and stamp.** The highest-severity bump found — the allow-list's
+   verdict, every oasdiff rule matched, plus any bump Speckify's own toolchain forces on
    every consumer between releases (`src/version/toolchain-impact.ts`,
    for the rare case a Speckify release itself changes what "the same
    contract" means) — is applied to the last published version.

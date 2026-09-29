@@ -10,7 +10,5 @@ export { oasdiffChangeSchema, type OasdiffChange } from './types.js';
 export {
   OASDIFF_CHECKS_FILENAME,
   OASDIFF_CLASSIFICATION_MAP_FILENAME,
-  OASDIFF_LOCATION_CLAIMS_FILENAME,
-  OASDIFF_SILENT_CLAIMS_FILENAME,
   OASDIFF_VERSION,
 } from './version.js';

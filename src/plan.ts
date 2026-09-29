@@ -7,18 +7,18 @@ import { lintBundledSpec } from './lint/index.js';
 import { runOasdiffChangelog, type OasdiffChange, type ProcessRunner } from './oasdiff/index.js';
 import type { RegistryRecordEntry } from './record/index.js';
 import {
+  allowListBump,
   applyBump,
   classify,
   diffDocuments,
-  findUncoveredEdits,
+  judgeEdits,
   maxBump,
   prepareDocument,
   type Bump,
   type ClassificationMap,
-  type OasdiffCoverage,
-  type UncoveredEdit,
+  type EditJudgement,
 } from './version/index.js';
-import { normalizeForComparison } from './version/structural-diff.js';
+import { normalizeForComparison, stripExtensionKeys } from './version/structural-diff.js';
 
 export interface ContractPlanInput {
   /** The contract's name, as declared in speckify.yaml. */
@@ -28,8 +28,6 @@ export interface ContractPlanInput {
   /** The last published state for this contract across its targets, or null if never published. */
   previous: RegistryRecordEntry | null;
   classificationMap: ClassificationMap;
-  /** Where oasdiff 1.x judges changes at all; see `version/location-coverage.md`. */
-  coverage: OasdiffCoverage;
   /** The bump every consumer inherits from Speckify's own toolchain moving forward. */
   toolchainImpactBump: Bump;
   oasdiffPath: string;
@@ -43,8 +41,8 @@ export interface ContractPlan {
   bump: Bump;
   unknownRuleIds: string[];
   changes: OasdiffChange[];
-  /** Structural edits oasdiff cannot be shown to judge; any one forces major. */
-  uncovered: UncoveredEdit[];
+  /** Every structural edit, each judged against the allow-list (`version/allow-list.md`). */
+  judgements: EditJudgement[];
   /** The bundled spec with `version` stamped into its `info.version`. */
   bundledSpec: string;
 }
@@ -75,25 +73,40 @@ function normalizeInfoVersionForComparison(bundledSpecJson: string): string {
   return toCanonicalJson(withPlaceholderVersion(doc));
 }
 
-/** True only when two specs are identical once normalised and annotation-stripped. */
-function isDocOnlyDifference(previousSpecJson: string, currentSpecJson: string): boolean {
-  const previous = normalizeForComparison(JSON.parse(previousSpecJson) as Record<string, unknown>);
-  const current = normalizeForComparison(JSON.parse(currentSpecJson) as Record<string, unknown>);
-  return toCanonicalJson(previous) === toCanonicalJson(current);
+/** True when two specs are identical once annotations and vendor extensions are stripped. */
+function differsOnlyInDocsOrExtensions(previousSpecJson: string, currentSpecJson: string): boolean {
+  const strip = (json: string): string =>
+    toCanonicalJson(
+      stripExtensionKeys(normalizeForComparison(JSON.parse(json) as Record<string, unknown>)),
+    );
+  return strip(previousSpecJson) === strip(currentSpecJson);
 }
 
-/** Every structural edit oasdiff cannot be shown to judge; see version/location-coverage.md. */
-function uncoveredEdits(
+/** The allow-list's verdict on the spec change; see `version/allow-list.md` §5 and §7. */
+function versionGate(
   previousSpecJson: string,
   currentSpecJson: string,
-  coverage: OasdiffCoverage,
-  changes: readonly OasdiffChange[],
-): UncoveredEdit[] {
-  const edits = diffDocuments(
-    prepareDocument(JSON.parse(previousSpecJson) as Record<string, unknown>),
-    prepareDocument(JSON.parse(currentSpecJson) as Record<string, unknown>),
-  );
-  return findUncoveredEdits(edits, coverage, changes);
+): { bump: Bump; judgements: EditJudgement[] } {
+  const base = prepareDocument(JSON.parse(previousSpecJson) as Record<string, unknown>);
+  const revision = prepareDocument(JSON.parse(currentSpecJson) as Record<string, unknown>);
+  const judgements = judgeEdits(diffDocuments(base, revision), {
+    base: base.doc,
+    revision: revision.doc,
+  });
+  const bump = allowListBump(judgements);
+  if (bump === 'minor' || bump === 'major') {
+    return { bump, judgements };
+  }
+  if (
+    normalizeInfoVersionForComparison(previousSpecJson) ===
+    normalizeInfoVersionForComparison(currentSpecJson)
+  ) {
+    return { bump: 'none', judgements };
+  }
+  // No edit above patch, yet the text differs: patch only when nothing but
+  // annotations and extensions differ, else the diff missed something (§7).
+  const residual = differsOnlyInDocsOrExtensions(previousSpecJson, currentSpecJson);
+  return { bump: residual ? 'patch' : 'major', judgements };
 }
 
 /**
@@ -110,7 +123,7 @@ export async function computeContractPlan(input: ContractPlanInput): Promise<Con
 
   let changes: OasdiffChange[] = [];
   let unknownRuleIds: string[] = [];
-  let uncovered: UncoveredEdit[] = [];
+  let judgements: EditJudgement[] = [];
   let specBump: Bump = 'none';
 
   if (input.previous !== null) {
@@ -142,33 +155,10 @@ export async function computeContractPlan(input: ContractPlanInput): Promise<Con
 
     const classified = classify(changes, input.classificationMap);
     unknownRuleIds = classified.unknownRuleIds;
-    const textDiffersOnceVersionIsNormalized =
-      normalizeInfoVersionForComparison(input.previous.bundledSpec) !==
-      normalizeInfoVersionForComparison(input.bundledSpec);
-
-    // Unconditional: an unjudged change must not inherit whatever bump
-    // oasdiff gave the changes it did judge (location-coverage.md §6).
-    uncovered = uncoveredEdits(
-      input.previous.bundledSpec,
-      input.bundledSpec,
-      input.coverage,
-      changes,
-    );
-
-    if (uncovered.length > 0) {
-      specBump = 'major';
-    } else if (changes.length === 0 && textDiffersOnceVersionIsNormalized) {
-      // oasdiff saw no semantic diff, but the spec text differs beyond just
-      // info.version. Only patch-bump when that difference really is
-      // doc-only (e.g. a description); anything else means oasdiff missed a
-      // real change, and under-bumping that is worse than over-bumping, so
-      // fail safe to MAJOR.
-      specBump = isDocOnlyDifference(input.previous.bundledSpec, input.bundledSpec)
-        ? 'patch'
-        : 'major';
-    } else {
-      specBump = classified.bump;
-    }
+    const gate = versionGate(input.previous.bundledSpec, input.bundledSpec);
+    judgements = gate.judgements;
+    // oasdiff can raise the allow-list's verdict, never lower it.
+    specBump = maxBump([gate.bump, classified.bump]);
   }
 
   const bump = maxBump([specBump, input.toolchainImpactBump]);
@@ -181,7 +171,7 @@ export async function computeContractPlan(input: ContractPlanInput): Promise<Con
     bump,
     unknownRuleIds,
     changes,
-    uncovered,
+    judgements,
     bundledSpec: stampVersion(input.bundledSpec, version),
   };
 }

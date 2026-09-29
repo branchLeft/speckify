@@ -9,14 +9,9 @@ import { bundleSpec } from '../bundle/index.js';
 import { buildContract } from '../build.js';
 import { loadConfig } from '../config/index.js';
 import { hasUv, TOOLCHAIN_DIR } from '../codegen/python/test-support.js';
-import {
-  OASDIFF_CLASSIFICATION_MAP_FILENAME,
-  OASDIFF_LOCATION_CLAIMS_FILENAME,
-  OASDIFF_SILENT_CLAIMS_FILENAME,
-  resolveOasdiffBinary,
-} from '../oasdiff/index.js';
+import { OASDIFF_CLASSIFICATION_MAP_FILENAME, resolveOasdiffBinary } from '../oasdiff/index.js';
 import { computeContractPlan } from '../plan.js';
-import { loadClassificationMap, loadOasdiffCoverage } from '../version/index.js';
+import { loadClassificationMap } from '../version/index.js';
 
 const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..', '..');
 const exampleDir = join(repoRoot, 'examples', 'pet-shelter');
@@ -49,10 +44,6 @@ describe('examples/pet-shelter end to end', () => {
     const classificationMap = await loadClassificationMap(
       resolve(repoRoot, 'data', OASDIFF_CLASSIFICATION_MAP_FILENAME),
     );
-    const coverage = await loadOasdiffCoverage(
-      resolve(repoRoot, 'data', OASDIFF_LOCATION_CLAIMS_FILENAME),
-      resolve(repoRoot, 'data', OASDIFF_SILENT_CLAIMS_FILENAME),
-    );
     const oasdiffPath = await resolveOasdiffBinary({
       cacheDir: join(tmpdir(), 'speckify-e2e-oasdiff-cache'),
     });
@@ -65,7 +56,6 @@ describe('examples/pet-shelter end to end', () => {
       bundledSpec,
       previous: null,
       classificationMap,
-      coverage,
       toolchainImpactBump: 'none',
       oasdiffPath,
     });
