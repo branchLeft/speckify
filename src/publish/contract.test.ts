@@ -9,9 +9,9 @@ import type { NpmPublishTarget, PyPiPublishTarget } from './types.js';
 vi.mock('./npm.js', () => ({ publishNpm: vi.fn() }));
 vi.mock('./pypi.js', () => ({ publishPypi: vi.fn() }));
 
-function fakeRegistry(version: string | null): RegistryRecord {
+function fakeRegistry(version: string | null, bundledSpec = '{}'): RegistryRecord {
   return {
-    latest: vi.fn().mockResolvedValue(version === null ? null : { version, bundledSpec: '{}' }),
+    latest: vi.fn().mockResolvedValue(version === null ? null : { version, bundledSpec }),
   };
 }
 
@@ -39,6 +39,7 @@ describe('publishContract', () => {
     const outcomes = await publishContract({
       targets: [npmTarget, pypiTarget],
       registries: { npm: fakeRegistry('1.0.0'), pypi: fakeRegistry(null) },
+      builtBundledSpec: '{"info":{"version":"1.1.0"}}',
       publishNpmFn,
       publishPypiFn,
       npmRegistryUrl: 'https://npm.pkg.github.com',
@@ -55,12 +56,15 @@ describe('publishContract', () => {
     expect(hasFailures(outcomes)).toBe(false);
   });
 
-  it('skips a target whose version the registry already has', async () => {
+  it('skips a target whose version the registry already has with an identical (normalised) spec', async () => {
     const publishNpmFn = vi.fn().mockResolvedValue(undefined);
 
     const outcomes = await publishContract({
       targets: [npmTarget],
-      registries: { npm: fakeRegistry('1.1.0') },
+      // Registry's bundled spec and the just-built spec differ only in key
+      // order and whitespace -- still the same document once normalised.
+      registries: { npm: fakeRegistry('1.1.0', '{"b":2,"a":1}\n') },
+      builtBundledSpec: '{\n  "a": 1,\n  "b": 2\n}',
       publishNpmFn,
       npmRegistryUrl: 'https://npm.pkg.github.com',
       npmToken: 'token',
@@ -69,6 +73,33 @@ describe('publishContract', () => {
 
     expect(publishNpmFn).not.toHaveBeenCalled();
     expect(outcomes).toEqual([{ target: npmTarget, status: 'already-published' }]);
+    expect(hasFailures(outcomes)).toBe(false);
+  });
+
+  it('fails loudly when the registry has the target version already, published with a different spec', async () => {
+    const publishNpmFn = vi.fn().mockResolvedValue(undefined);
+
+    const outcomes = await publishContract({
+      targets: [npmTarget],
+      registries: { npm: fakeRegistry('1.1.0', '{"a":1}') },
+      builtBundledSpec: '{"a":2}',
+      publishNpmFn,
+      npmRegistryUrl: 'https://npm.pkg.github.com',
+      npmToken: 'token',
+      npmOwner: 'acme',
+    });
+
+    expect(publishNpmFn).not.toHaveBeenCalled();
+    expect(outcomes).toEqual([
+      {
+        target: npmTarget,
+        status: 'failed',
+        error: expect.stringContaining(
+          'version 1.1.0 was published with a different spec',
+        ) as unknown,
+      },
+    ]);
+    expect(hasFailures(outcomes)).toBe(true);
   });
 
   it("one target's failure does not stop the others, and is reported with its reason", async () => {
@@ -78,6 +109,7 @@ describe('publishContract', () => {
     const outcomes = await publishContract({
       targets: [npmTarget, pypiTarget],
       registries: {},
+      builtBundledSpec: '{}',
       publishNpmFn,
       publishPypiFn,
       npmRegistryUrl: 'https://npm.pkg.github.com',
@@ -100,6 +132,7 @@ describe('publishContract', () => {
     const outcomes = await publishContract({
       targets: [npmTarget],
       registries: {},
+      builtBundledSpec: '{}',
       publishNpmFn,
       npmRegistryUrl: 'https://npm.pkg.github.com',
       npmToken: 'token',
@@ -114,6 +147,7 @@ describe('publishContract', () => {
     const outcomes = await publishContract({
       targets: [npmTarget],
       registries: {},
+      builtBundledSpec: '{}',
       publishNpmFn,
       npmRegistryUrl: 'https://npm.pkg.github.com',
       npmToken: 'token',
@@ -129,6 +163,7 @@ describe('publishContract', () => {
     const outcomes = await publishContract({
       targets: [npmTarget, pypiTarget],
       registries: {},
+      builtBundledSpec: '{}',
       npmRegistryUrl: 'https://npm.pkg.github.com',
       npmToken: 'token',
       npmOwner: 'acme',

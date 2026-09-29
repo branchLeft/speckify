@@ -345,6 +345,7 @@ program
 
       const outcomes = await publishContract({
         targets,
+        builtBundledSpec: plan.bundledSpec,
         registries: {
           npm:
             contract.typescript !== undefined

@@ -1,3 +1,4 @@
+import { toCanonicalJson } from '../bundle/canonical-json.js';
 import type { RegistryRecord } from '../record/index.js';
 import { publishNpm, type PublishNpmOptions } from './npm.js';
 import { publishPypi, type PublishPypiOptions } from './pypi.js';
@@ -7,6 +8,13 @@ export interface PublishContractOptions {
   targets: readonly PublishTarget[];
   /** Registry readers, keyed the same way `target.kind` is, used for the idempotency check. */
   registries: { npm?: RegistryRecord | undefined; pypi?: RegistryRecord | undefined };
+  /**
+   * The spec Speckify just bundled for this publish run (the same one every
+   * target in this contract carries), used to tell a genuine re-run of an
+   * already-published version apart from a concurrent publish that raced
+   * this one to the same version with a different spec.
+   */
+  builtBundledSpec: string;
   /** Overrides for testing; production callers only need to fill in credentials via these. */
   publishNpmFn?: ((options: PublishNpmOptions) => Promise<void>) | undefined;
   publishPypiFn?: ((options: PublishPypiOptions) => Promise<void>) | undefined;
@@ -16,16 +24,50 @@ export interface PublishContractOptions {
   npmOwner: string;
 }
 
-async function isAlreadyPublished(
+/**
+ * Normalises JSON text for comparison, independent of key order or
+ * incidental whitespace. Both sides are already expected to be
+ * {@link toCanonicalJson} output, but re-normalising here makes the
+ * comparison correct regardless of that -- and cheap, since both documents
+ * are already parsed once per idempotency check.
+ */
+function normalizedJson(json: string): string {
+  return toCanonicalJson(JSON.parse(json));
+}
+
+type PublishedCheck = 'not-published' | 'already-published';
+
+/**
+ * Tells a target that genuinely needs publishing apart from one the
+ * registry already has at the target version. A version match with an
+ * identical (normalised) spec is a safe, idempotent re-run and is skipped;
+ * a version match with a *different* spec means a concurrent publish raced
+ * this one to that version number, and is a loud failure rather than a
+ * silent skip or a silent overwrite -- the registry state and this run's
+ * plan have already diverged.
+ *
+ * @throws {Error} when the registry has this version already, published
+ * with a different spec.
+ */
+async function checkAlreadyPublished(
   registry: RegistryRecord | undefined,
   packageName: string,
   version: string,
-): Promise<boolean> {
+  builtBundledSpec: string,
+): Promise<PublishedCheck> {
   if (registry === undefined) {
-    return false;
+    return 'not-published';
   }
   const entry = await registry.latest(packageName);
-  return entry?.version === version;
+  if (entry?.version !== version) {
+    return 'not-published';
+  }
+  if (normalizedJson(entry.bundledSpec) === normalizedJson(builtBundledSpec)) {
+    return 'already-published';
+  }
+  throw new Error(
+    `version ${version} was published with a different spec — a concurrent publish raced this one; rerun to compute a new version`,
+  );
 }
 
 /**
@@ -43,7 +85,13 @@ export async function publishContract(options: PublishContractOptions): Promise<
   for (const target of options.targets) {
     const registry = target.kind === 'npm' ? options.registries.npm : options.registries.pypi;
     try {
-      if (await isAlreadyPublished(registry, target.packageName, target.version)) {
+      const check = await checkAlreadyPublished(
+        registry,
+        target.packageName,
+        target.version,
+        options.builtBundledSpec,
+      );
+      if (check === 'already-published') {
         outcomes.push({ target, status: 'already-published' });
         continue;
       }
