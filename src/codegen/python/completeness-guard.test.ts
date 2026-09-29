@@ -48,6 +48,20 @@ describe('assertClientCompleteness', () => {
     ).resolves.toBeUndefined();
   });
 
+  it('passes for an operationId with a digit, matching the real generator', async () => {
+    // Sabotage this file previously would have failed: `snakeCase("createThing2")`
+    // gave `create_thing2`, but openapi-python-client actually writes
+    // `create_thing_2.py` (a trailing digit is its own word) — so any
+    // operationId with a digit was wrongly refused as "missing".
+    clientDir = await makeClientDir(['create_thing_2', 'v_2_list', 'get_item_10']);
+    await expect(
+      assertClientCompleteness(
+        [operation('createThing2'), operation('v2List'), operation('getItem10')],
+        clientDir,
+      ),
+    ).resolves.toBeUndefined();
+  });
+
   it('fails, naming the missing operationId, when a module is absent', async () => {
     // Sabotage: openapi-python-client silently dropped uploadBlob (the
     // known date-time-header limitation) — the guard must catch exactly this.
