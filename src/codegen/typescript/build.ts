@@ -79,6 +79,14 @@ export async function buildPackage(packageDir: string): Promise<void> {
     esModuleInterop: true,
     forceConsistentCasingInFileNames: true,
     resolveJsonModule: true,
+    // Without an explicit typeRoots, TypeScript's ambient @types discovery
+    // walks up from the *current working directory*, not from packageDir
+    // -- so the @types/node just symlinked into packageDir/node_modules
+    // above was only ever found by accident, when the caller's cwd
+    // happened to be a parent of packageDir (true of every existing test,
+    // all run from the repo root; false of a real `speckify build`
+    // invoked from an arbitrary working directory).
+    typeRoots: [path.join(packageDir, 'node_modules', '@types')],
   };
 
   const program = ts.createProgram(fileNames, compilerOptions);
