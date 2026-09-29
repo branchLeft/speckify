@@ -18,7 +18,7 @@ known to be safe for an existing, correctly-written client:
 oasdiff still runs. It writes the changelog, and its classification can
 raise the bump, never lower it:
 
-```
+```text
 bump = max(allow-list bump, oasdiff classification bump, toolchain impact)
 ```
 
