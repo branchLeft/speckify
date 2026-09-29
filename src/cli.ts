@@ -7,6 +7,7 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 import { Command } from 'commander';
 
 import { bundleSpec } from './bundle/index.js';
+import { resolveRepoRoot } from './bundle/repo-root.js';
 import { renderPrComment, PR_COMMENT_MARKER } from './comment/index.js';
 import { loadConfig, type Contract, type SpeckifyConfig } from './config/index.js';
 import { createGithubClient, createGithubRelease, createOrUpdateComment } from './github/index.js';
@@ -130,18 +131,19 @@ async function buildPlanContext(configPath: string): Promise<PlanContext> {
   const classificationMapPath = resolve(packageRoot, 'data', OASDIFF_CLASSIFICATION_MAP_FILENAME);
   const toolchainImpactPath = resolve(packageRoot, 'data', TOOLCHAIN_IMPACT_FILENAME);
 
-  const [classificationMap, toolchainImpactEntries, currentSpeckifyVersion, oasdiffPath] =
+  const [classificationMap, toolchainImpactEntries, currentSpeckifyVersion, oasdiffPath, repoRoot] =
     await Promise.all([
       loadClassificationMap(classificationMapPath),
       loadToolchainImpact(toolchainImpactPath),
       readSpeckifyVersion(),
       resolveOasdiffBinary({ cacheDir: join(homedir(), '.cache', 'speckify', 'oasdiff') }),
+      resolveRepoRoot(configDir),
     ]);
 
   return {
     config,
     configDir,
-    repoRoot: configDir,
+    repoRoot,
     classificationMap,
     toolchainImpactEntries,
     currentSpeckifyVersion,
