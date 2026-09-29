@@ -22,6 +22,14 @@ export interface ContractPlanInput {
   /** The last published state for this contract across its targets, or null if never published. */
   previous: RegistryRecordEntry | null;
   classificationMap: ClassificationMap;
+  /**
+   * Every JSON-Schema/OpenAPI keyword oasdiff's own rule catalogue judges
+   * at all (`data/oasdiff-<version>.covered-keywords.json`, loaded via
+   * `version/covered-keywords.ts`). A structural change at a keyword absent
+   * from this set is one oasdiff has no rule for -- see the structural
+   * fallback below.
+   */
+  coveredKeywords: ReadonlySet<string>;
   /** The bump every consumer inherits from Speckify's own toolchain moving forward. */
   toolchainImpactBump: Bump;
   oasdiffPath: string;
@@ -51,8 +59,9 @@ const PLACEHOLDER_VERSION = '0.0.0';
 /**
  * Keys that never carry semantic meaning for a client: prose annotations
  * oasdiff (correctly) does not diff on. Stripped from both sides before
- * the doc-only-difference fallback check in {@link computeContractPlan},
- * never before the real oasdiff diff itself.
+ * the doc-only-difference fallback check and the structural keyword diff
+ * in {@link computeContractPlan}, never before the real oasdiff diff
+ * itself.
  */
 const DOC_ONLY_KEYS = new Set([
   'description',
@@ -63,21 +72,137 @@ const DOC_ONLY_KEYS = new Set([
   'title',
 ]);
 
-function stripDocOnlyKeys(value: unknown): unknown {
+/**
+ * Keys whose *children* are arbitrary, producer-chosen names -- a property
+ * name, a schema name, a path template, a status code, a media type, a
+ * security scheme name, a discriminator mapping key -- never a fixed
+ * JSON-Schema/OpenAPI keyword. `stripDocOnlyKeys` must not treat a child
+ * key here as a doc-only annotation just because it happens to spell
+ * "title" or "description" (a property can be legitimately named either);
+ * `collectChangedKeywords` must not treat a child key here as "the keyword
+ * that changed" (adding or removing a property, a schema, a path, ... is
+ * not a keyword-level edit at all, and is exactly what oasdiff's ordinary
+ * rules already cover).
+ */
+const NAME_MAP_KEYS = new Set([
+  'paths',
+  'properties',
+  'patternProperties',
+  'definitions',
+  '$defs',
+  'schemas',
+  'responses',
+  'content',
+  'parameters',
+  'securitySchemes',
+  'webhooks',
+  'callbacks',
+  'headers',
+  'examples',
+  'requestBodies',
+  'links',
+  'mapping',
+  'dependentRequired',
+  'dependentSchemas',
+  'encoding',
+]);
+
+function isPlainObject(value: unknown): value is Record<string, unknown> {
+  return value !== null && typeof value === 'object' && !Array.isArray(value);
+}
+
+/**
+ * Strips {@link DOC_ONLY_KEYS} only in annotation position: never as a key
+ * of a {@link NAME_MAP_KEYS} container, where the key is an arbitrary name
+ * chosen by the spec's author (a property called "title", a schema called
+ * "Description", ...) rather than the JSON-Schema/OpenAPI `title` or
+ * `description` keyword.
+ */
+function stripDocOnlyKeys(value: unknown, parentIsNameMap = false): unknown {
   if (Array.isArray(value)) {
-    return value.map(stripDocOnlyKeys);
+    return value.map((item) => stripDocOnlyKeys(item, false));
   }
-  if (value !== null && typeof value === 'object') {
+  if (isPlainObject(value)) {
     const result: Record<string, unknown> = {};
-    for (const [key, val] of Object.entries(value as Record<string, unknown>)) {
-      if (DOC_ONLY_KEYS.has(key)) {
+    for (const [key, val] of Object.entries(value)) {
+      if (!parentIsNameMap && DOC_ONLY_KEYS.has(key)) {
         continue;
       }
-      result[key] = stripDocOnlyKeys(val);
+      result[key] = stripDocOnlyKeys(val, NAME_MAP_KEYS.has(key) && isPlainObject(val));
     }
     return result;
   }
   return value;
+}
+
+/**
+ * Walks two doc-stripped, version-normalised spec trees and collects every
+ * JSON-Schema/OpenAPI *keyword* whose value differs between them --
+ * `additionalProperties`, `servers`, `minLength`, `type`, and so on.
+ *
+ * A {@link NAME_MAP_KEYS} container's own children are never reported by
+ * name: adding, removing or renaming a property/schema/path/... is not a
+ * keyword-level edit, and is exactly what oasdiff's ordinary generated
+ * rules already classify. Only a genuine change to a *shared* child's
+ * value recurses further (so a property present on both sides can still
+ * surface a keyword change inside its own schema); a child present on only
+ * one side is a plain addition/removal and is not descended into.
+ *
+ * An array-valued keyword (`servers`, `required`, `enum`, an operation's
+ * `parameters`, ...) is compared as one atomic unit: any element-level
+ * difference reports the keyword itself, not a position inside the array.
+ */
+function collectChangedKeywords(a: unknown, b: unknown, parentIsNameMap = false): Set<string> {
+  const changed = new Set<string>();
+
+  if (parentIsNameMap) {
+    const aObj = isPlainObject(a) ? a : {};
+    const bObj = isPlainObject(b) ? b : {};
+    for (const key of new Set([...Object.keys(aObj), ...Object.keys(bObj)])) {
+      if (!(key in aObj) || !(key in bObj)) {
+        continue; // a pure add/remove under a name map: oasdiff's own business
+      }
+      for (const keyword of collectChangedKeywords(aObj[key], bObj[key], false)) {
+        changed.add(keyword);
+      }
+    }
+    return changed;
+  }
+
+  if (!isPlainObject(a) || !isPlainObject(b)) {
+    return changed;
+  }
+
+  for (const key of new Set([...Object.keys(a), ...Object.keys(b)])) {
+    const av = a[key];
+    const bv = b[key];
+    const bothMapOrMissing =
+      (isPlainObject(av) || av === undefined) && (isPlainObject(bv) || bv === undefined);
+
+    if (NAME_MAP_KEYS.has(key) && bothMapOrMissing) {
+      for (const keyword of collectChangedKeywords(av, bv, true)) {
+        changed.add(keyword);
+      }
+      continue;
+    }
+    if (isPlainObject(av) && isPlainObject(bv)) {
+      // A structural container this key's own name doesn't classify
+      // (an Operation, Schema, Response, RequestBody, MediaType object,
+      // ...): recurse to find the actual keyword that differs inside it,
+      // rather than reporting the container's own key.
+      for (const keyword of collectChangedKeywords(av, bv, false)) {
+        changed.add(keyword);
+      }
+      continue;
+    }
+    // A scalar, an array (compared as one atomic unit -- see the doc
+    // comment above), or the container itself appearing/disappearing
+    // wholesale: this key is the keyword that changed.
+    if (toCanonicalJson(av) !== toCanonicalJson(bv)) {
+      changed.add(key);
+    }
+  }
+  return changed;
 }
 
 function withPlaceholderVersion(doc: Record<string, unknown>): Record<string, unknown> {
@@ -162,7 +287,29 @@ export async function computeContractPlan(input: ContractPlanInput): Promise<Con
     const textDiffersOnceVersionIsNormalized =
       normalizeInfoVersionForComparison(input.previous.bundledSpec) !==
       normalizeInfoVersionForComparison(input.bundledSpec);
-    if (changes.length === 0 && textDiffersOnceVersionIsNormalized) {
+
+    // Structural fallback: a real difference at a keyword oasdiff's own
+    // rule catalogue never looks at (see coveredKeywords) carries no
+    // information from oasdiff's silence about it, no matter what oasdiff
+    // *did* report elsewhere -- e.g. a tightened additionalProperties
+    // alongside an unrelated, correctly-classified new response property
+    // must still force major, not inherit the minor oasdiff gave the part
+    // it does understand. Runs on doc-stripped, version-normalised specs,
+    // same as the doc-only fallback below.
+    const strippedPrevious = stripDocOnlyKeys(
+      withPlaceholderVersion(JSON.parse(input.previous.bundledSpec) as Record<string, unknown>),
+    );
+    const strippedCurrent = stripDocOnlyKeys(
+      withPlaceholderVersion(JSON.parse(input.bundledSpec) as Record<string, unknown>),
+    );
+    const changedKeywords = collectChangedKeywords(strippedPrevious, strippedCurrent);
+    const uncoveredKeywords = [...changedKeywords].filter(
+      (keyword) => !input.coveredKeywords.has(keyword),
+    );
+
+    if (uncoveredKeywords.length > 0) {
+      specBump = 'major';
+    } else if (changes.length === 0 && textDiffersOnceVersionIsNormalized) {
       // oasdiff saw no semantic diff, but the spec text differs beyond just
       // info.version. Only patch-bump when that difference really is
       // doc-only (e.g. a description); anything else means oasdiff missed a

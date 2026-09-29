@@ -127,6 +127,7 @@ describe('buildContract (end-to-end: plan through a mocked first-publish registr
       bundledSpec: loadPlaceholderBundledSpec(),
       previous: null,
       classificationMap: {},
+      coveredKeywords: new Set<string>(),
       toolchainImpactBump: 'none',
       oasdiffPath: '',
     });
@@ -194,6 +195,7 @@ describe('buildContract (end-to-end: plan through a mocked first-publish registr
         bundledSpec: loadPlaceholderBundledSpec(),
         previous: null,
         classificationMap: {},
+        coveredKeywords: new Set<string>(),
         toolchainImpactBump: 'none',
         oasdiffPath: '',
       });
@@ -239,6 +241,7 @@ describe('buildContract (end-to-end: plan through a mocked first-publish registr
       bundledSpec: loadPlaceholderBundledSpec(),
       previous: null,
       classificationMap: {},
+      coveredKeywords: new Set<string>(),
       toolchainImpactBump: 'none',
       oasdiffPath: '',
     });

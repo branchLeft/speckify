@@ -61,3 +61,16 @@ export const toolchainImpactEntrySchema = z.object({
 export type ToolchainImpactEntry = z.infer<typeof toolchainImpactEntrySchema>;
 
 export const toolchainImpactFileSchema = z.array(toolchainImpactEntrySchema);
+
+/**
+ * The committed covered-keywords file's shape:
+ * `data/oasdiff-<version>.covered-keywords.json` -- every JSON-Schema/
+ * OpenAPI keyword oasdiff's own rule catalogue judges at all, derived from
+ * the rule catalogue's own `locations` claims (see
+ * `scripts/generate-oasdiff-covered-keywords.mjs`).
+ */
+export const coveredKeywordsFileSchema = z.object({
+  oasdiffVersion: z.string(),
+  keywords: z.array(z.string()),
+});
+export type CoveredKeywordsFile = z.infer<typeof coveredKeywordsFileSchema>;

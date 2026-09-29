@@ -12,7 +12,11 @@ import { renderPrComment, PR_COMMENT_MARKER } from './comment/index.js';
 import { loadConfig, type Contract, type SpeckifyConfig } from './config/index.js';
 import { createGithubClient, createGithubRelease, createOrUpdateComment } from './github/index.js';
 import { runInit } from './init/index.js';
-import { OASDIFF_CLASSIFICATION_MAP_FILENAME, resolveOasdiffBinary } from './oasdiff/index.js';
+import {
+  OASDIFF_CLASSIFICATION_MAP_FILENAME,
+  OASDIFF_COVERED_KEYWORDS_FILENAME,
+  resolveOasdiffBinary,
+} from './oasdiff/index.js';
 import { hasFailures, publishContract, type PublishTarget } from './publish/index.js';
 import {
   createNpmRegistryRecord,
@@ -26,6 +30,7 @@ import { buildContract, DEFAULT_BUILD_OUT_DIR, type BuildContractResult } from '
 import { SPECKIFY_REPO } from './constants.js';
 import {
   loadClassificationMap,
+  loadCoveredKeywords,
   loadToolchainImpact,
   toolchainImpact,
   TOOLCHAIN_IMPACT_FILENAME,
@@ -74,6 +79,7 @@ interface PlanContext {
   configDir: string;
   repoRoot: string;
   classificationMap: ClassificationMap;
+  coveredKeywords: ReadonlySet<string>;
   toolchainImpactEntries: ToolchainImpactEntry[];
   currentSpeckifyVersion: string;
   oasdiffPath: string;
@@ -115,6 +121,7 @@ async function planContract(context: PlanContext, contract: Contract): Promise<C
     bundledSpec,
     previous,
     classificationMap: context.classificationMap,
+    coveredKeywords: context.coveredKeywords,
     toolchainImpactBump: impactBump,
     oasdiffPath: context.oasdiffPath,
   });
@@ -129,22 +136,31 @@ async function buildPlanContext(configPath: string): Promise<PlanContext> {
   // Speckify's own artifacts, shipped with the package (`data/`), not
   // something a consuming repo provides alongside its speckify.yaml.
   const classificationMapPath = resolve(packageRoot, 'data', OASDIFF_CLASSIFICATION_MAP_FILENAME);
+  const coveredKeywordsPath = resolve(packageRoot, 'data', OASDIFF_COVERED_KEYWORDS_FILENAME);
   const toolchainImpactPath = resolve(packageRoot, 'data', TOOLCHAIN_IMPACT_FILENAME);
 
-  const [classificationMap, toolchainImpactEntries, currentSpeckifyVersion, oasdiffPath, repoRoot] =
-    await Promise.all([
-      loadClassificationMap(classificationMapPath),
-      loadToolchainImpact(toolchainImpactPath),
-      readSpeckifyVersion(),
-      resolveOasdiffBinary({ cacheDir: join(homedir(), '.cache', 'speckify', 'oasdiff') }),
-      resolveRepoRoot(configDir),
-    ]);
+  const [
+    classificationMap,
+    coveredKeywords,
+    toolchainImpactEntries,
+    currentSpeckifyVersion,
+    oasdiffPath,
+    repoRoot,
+  ] = await Promise.all([
+    loadClassificationMap(classificationMapPath),
+    loadCoveredKeywords(coveredKeywordsPath),
+    loadToolchainImpact(toolchainImpactPath),
+    readSpeckifyVersion(),
+    resolveOasdiffBinary({ cacheDir: join(homedir(), '.cache', 'speckify', 'oasdiff') }),
+    resolveRepoRoot(configDir),
+  ]);
 
   return {
     config,
     configDir,
     repoRoot,
     classificationMap,
+    coveredKeywords,
     toolchainImpactEntries,
     currentSpeckifyVersion,
     oasdiffPath,
@@ -456,10 +472,11 @@ program
 // this branch silently never runs and the CLI exits 0 having parsed
 // nothing.
 async function isRunningAsMain(): Promise<boolean> {
-  if (process.argv[1] === undefined) {
+  const argvPath = process.argv[1];
+  if (argvPath === undefined) {
     return false;
   }
-  const invokedPath = await realpath(process.argv[1]).catch(() => process.argv[1] as string);
+  const invokedPath = await realpath(argvPath).catch(() => argvPath);
   return import.meta.url === pathToFileURL(invokedPath).href;
 }
 

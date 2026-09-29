@@ -171,7 +171,7 @@ describe.skipIf(!networkAvailable)('the built CLI (node dist/cli.js build)', () 
     180_000,
   );
 
-  it('runs when invoked through a symlink, as npm\'s own node_modules/.bin entry always is', async () => {
+  it("runs when invoked through a symlink, as npm's own node_modules/.bin entry always is", async () => {
     await execFileAsync('npm', ['run', 'build'], { cwd: repoRoot });
 
     const binDir = await mkdtemp(join(tmpdir(), 'speckify-built-cli-symlink-'));

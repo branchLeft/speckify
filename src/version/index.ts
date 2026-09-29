@@ -5,6 +5,7 @@ export {
   type LoadClassificationMapOptions,
 } from './classification-map.js';
 export { classify } from './classify.js';
+export { loadCoveredKeywords, type LoadCoveredKeywordsOptions } from './covered-keywords.js';
 export { VersionError } from './errors.js';
 export {
   loadToolchainImpact,
@@ -16,6 +17,7 @@ export type {
   ClassificationMap,
   ClassificationRule,
   ClassifyResult,
+  CoveredKeywordsFile,
   OasdiffCheck,
   ToolchainImpactEntry,
 } from './types.js';

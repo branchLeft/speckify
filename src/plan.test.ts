@@ -8,7 +8,21 @@ import type { ClassificationMap } from './version/index.js';
 const map: ClassificationMap = {
   'response-required-property-removed': 'major',
   'request-property-added': 'minor',
+  'response-optional-property-added': 'minor',
+  'request-property-minlength-tightened': 'minor',
 };
+
+/**
+ * A small, self-contained stand-in for the real
+ * `data/oasdiff-<version>.covered-keywords.json` -- oasdiff genuinely has
+ * rules that look at `type`/`properties`/`minLength`/`parameters` (and
+ * many more; see the committed data file), and genuinely has none that
+ * look at `additionalProperties` or `servers`/`url` (confirmed by
+ * `scripts/generate-oasdiff-covered-keywords.mjs` against the real 1.32.1
+ * rule catalogue). Kept minimal and hand-rolled here, like `map` above, so
+ * this file's expectations don't drift with the real data file.
+ */
+const coveredKeywords = new Set(['type', 'properties', 'minLength', 'parameters', 'required']);
 
 function runProcessReturning(changes: OasdiffChange[]): ProcessRunner {
   return vi.fn(async () => Promise.resolve({ stdout: JSON.stringify(changes), stderr: '' }));
@@ -46,6 +60,7 @@ describe('computeContractPlan', () => {
         bundledSpec: invalidSpec,
         previous: null,
         classificationMap: map,
+        coveredKeywords: new Set<string>(),
         toolchainImpactBump: 'none',
         oasdiffPath: '/bin/oasdiff',
         runProcess,
@@ -68,6 +83,7 @@ describe('computeContractPlan', () => {
         bundledSpec: invalidSpec,
         previous: { version: '1.2.0', bundledSpec: publishedSpecV1_2_0, speckifyVersion: null },
         classificationMap: map,
+        coveredKeywords: new Set<string>(),
         toolchainImpactBump: 'none',
         oasdiffPath: '/bin/oasdiff',
         runProcess,
@@ -83,6 +99,7 @@ describe('computeContractPlan', () => {
       bundledSpec: bundledSpecV1,
       previous: null,
       classificationMap: map,
+      coveredKeywords: new Set<string>(),
       toolchainImpactBump: 'none',
       oasdiffPath: '/bin/oasdiff',
       runProcess,
@@ -107,6 +124,7 @@ describe('computeContractPlan', () => {
       bundledSpec: bundledSpecV1,
       previous: { version: '1.2.0', bundledSpec: publishedSpecV1_2_0, speckifyVersion: null },
       classificationMap: map,
+      coveredKeywords: new Set<string>(),
       toolchainImpactBump: 'none',
       oasdiffPath: '/bin/oasdiff',
       runProcess: runProcessReturning(changes),
@@ -124,6 +142,7 @@ describe('computeContractPlan', () => {
       bundledSpec: bundledSpecV1,
       previous: { version: '1.2.0', bundledSpec: publishedSpecV1_2_0, speckifyVersion: null },
       classificationMap: map,
+      coveredKeywords: new Set<string>(),
       toolchainImpactBump: 'none',
       oasdiffPath: '/bin/oasdiff',
       runProcess: runProcessReturning(changes),
@@ -144,6 +163,7 @@ describe('computeContractPlan', () => {
       bundledSpec: revisedSpec,
       previous: { version: '1.2.0', bundledSpec: publishedSpecV1_2_0, speckifyVersion: null },
       classificationMap: map,
+      coveredKeywords: new Set<string>(),
       toolchainImpactBump: 'none',
       oasdiffPath: '/bin/oasdiff',
       runProcess: runProcessReturning([]),
@@ -159,6 +179,7 @@ describe('computeContractPlan', () => {
       bundledSpec: bundledSpecV1,
       previous: { version: '1.2.0', bundledSpec: publishedSpecV1_2_0, speckifyVersion: null },
       classificationMap: map,
+      coveredKeywords: new Set<string>(),
       toolchainImpactBump: 'none',
       oasdiffPath: '/bin/oasdiff',
       runProcess: runProcessReturning([]),
@@ -213,6 +234,7 @@ describe('computeContractPlan', () => {
       bundledSpec: currentSpec,
       previous: { version: '1.2.0', bundledSpec: previousSpec, speckifyVersion: null },
       classificationMap: map,
+      coveredKeywords: new Set<string>(),
       toolchainImpactBump: 'none',
       oasdiffPath: '/bin/oasdiff',
       // oasdiff missed the tightened schema, as if the binary had a real gap.
@@ -242,6 +264,7 @@ describe('computeContractPlan', () => {
       bundledSpec: currentSpec,
       previous: { version: '1.2.0', bundledSpec: previousSpec, speckifyVersion: null },
       classificationMap: map,
+      coveredKeywords: new Set<string>(),
       toolchainImpactBump: 'none',
       oasdiffPath: '/bin/oasdiff',
       runProcess: runProcessReturning([]),
@@ -268,6 +291,7 @@ describe('computeContractPlan', () => {
       bundledSpec: currentSpec,
       previous: { version: '1.2.0', bundledSpec: previousSpec, speckifyVersion: null },
       classificationMap: map,
+      coveredKeywords: new Set<string>(),
       toolchainImpactBump: 'none',
       oasdiffPath: '/bin/oasdiff',
       runProcess: runProcessReturning([]),
@@ -294,6 +318,7 @@ describe('computeContractPlan', () => {
       bundledSpec: currentSpec,
       previous: { version: '1.2.0', bundledSpec: previousSpec, speckifyVersion: null },
       classificationMap: map,
+      coveredKeywords: new Set<string>(),
       toolchainImpactBump: 'none',
       oasdiffPath: '/bin/oasdiff',
       runProcess: runProcessReturning([]),
@@ -312,6 +337,7 @@ describe('computeContractPlan', () => {
       bundledSpec: bundledSpecV1,
       previous: { version: '1.2.0', bundledSpec: publishedSpecV1_2_0, speckifyVersion: null },
       classificationMap: map,
+      coveredKeywords: new Set<string>(),
       toolchainImpactBump: 'major',
       oasdiffPath: '/bin/oasdiff',
       runProcess: runProcessReturning(changes),
@@ -319,6 +345,252 @@ describe('computeContractPlan', () => {
 
     expect(plan.bump).toBe('major');
     expect(plan.version).toBe('2.0.0');
+  });
+
+  it('forces major for a structural change at a keyword oasdiff has no rule for, even alongside a real, correctly-classified change oasdiff DOES report (N3b)', async () => {
+    const previousSpec = JSON.stringify({
+      openapi: '3.0.3',
+      info: { title: 'Widgets', version: '1.2.0' },
+      paths: {
+        '/widgets': {
+          post: {
+            operationId: 'createWidget',
+            requestBody: {
+              content: {
+                'application/json': {
+                  schema: { type: 'object', additionalProperties: true },
+                },
+              },
+            },
+            responses: {
+              '200': {
+                description: 'ok',
+                content: {
+                  'application/json': {
+                    schema: {
+                      type: 'object',
+                      properties: { id: { type: 'string' } },
+                    },
+                  },
+                },
+              },
+            },
+          },
+        },
+      },
+    });
+    const currentSpec = JSON.stringify({
+      openapi: '3.0.3',
+      info: { title: 'Widgets', version: '0.0.0' },
+      paths: {
+        '/widgets': {
+          post: {
+            operationId: 'createWidget',
+            requestBody: {
+              content: {
+                'application/json': {
+                  // additionalProperties tightened: oasdiff has no rule
+                  // for this keyword at all (confirmed against the real
+                  // 1.32.1 rule catalogue), so it stays silent about it.
+                  schema: { type: 'object', additionalProperties: false },
+                },
+              },
+            },
+            responses: {
+              '200': {
+                description: 'ok',
+                content: {
+                  'application/json': {
+                    schema: {
+                      type: 'object',
+                      // An unrelated, genuinely additive response
+                      // property -- the kind oasdiff correctly classifies
+                      // as minor on its own.
+                      properties: {
+                        id: { type: 'string' },
+                        notes: { type: 'string' },
+                      },
+                    },
+                  },
+                },
+              },
+            },
+          },
+        },
+      },
+    });
+
+    const plan = await computeContractPlan({
+      contract: 'orders-api',
+      bundledSpec: currentSpec,
+      previous: { version: '1.2.0', bundledSpec: previousSpec, speckifyVersion: null },
+      classificationMap: map,
+      coveredKeywords,
+      toolchainImpactBump: 'none',
+      // oasdiff sees (and correctly classifies as minor) the new response
+      // property, but says nothing about additionalProperties -- it has no
+      // rule for it. Trusting this minor bump would under-bump.
+      oasdiffPath: '/bin/oasdiff',
+      runProcess: runProcessReturning([
+        {
+          id: 'response-optional-property-added',
+          text: "added the optional property 'notes'",
+          level: 1,
+          operation: 'POST',
+          path: '/widgets',
+        },
+      ]),
+    });
+
+    expect(plan.bump).toBe('major');
+    expect(plan.version).toBe('2.0.0');
+  });
+
+  it('does not lose a real change nested inside a property literally named "title": the doc-key stripper is position-aware (N3a)', async () => {
+    const previousSpec = JSON.stringify({
+      openapi: '3.0.3',
+      info: { title: 'Widgets', version: '1.2.0' },
+      paths: {
+        '/widgets': {
+          post: {
+            operationId: 'createWidget',
+            requestBody: {
+              content: {
+                'application/json': {
+                  schema: {
+                    type: 'object',
+                    properties: {
+                      // A property that happens to be named exactly like
+                      // one of DOC_ONLY_KEYS. Its own nested schema must
+                      // survive stripping intact -- it is data, not an
+                      // annotation.
+                      title: { type: 'object', additionalProperties: true },
+                    },
+                  },
+                },
+              },
+            },
+            responses: { '200': { description: 'ok' } },
+          },
+        },
+      },
+    });
+    const currentSpec = JSON.stringify({
+      openapi: '3.0.3',
+      info: { title: 'Widgets', version: '0.0.0' },
+      paths: {
+        '/widgets': {
+          post: {
+            operationId: 'createWidget',
+            requestBody: {
+              content: {
+                'application/json': {
+                  schema: {
+                    type: 'object',
+                    properties: {
+                      // Only this nested, uncovered keyword differs -- a
+                      // stripper that deletes the "title" property outright
+                      // (rather than only stripping *annotation-position*
+                      // doc keys) would make both sides look identical here
+                      // and under-bump to patch.
+                      title: { type: 'object', additionalProperties: false },
+                    },
+                  },
+                },
+              },
+            },
+            responses: { '200': { description: 'ok' } },
+          },
+        },
+      },
+    });
+
+    const plan = await computeContractPlan({
+      contract: 'orders-api',
+      bundledSpec: currentSpec,
+      previous: { version: '1.2.0', bundledSpec: previousSpec, speckifyVersion: null },
+      classificationMap: map,
+      coveredKeywords,
+      toolchainImpactBump: 'none',
+      // oasdiff has no rule for additionalProperties, so it stays silent.
+      oasdiffPath: '/bin/oasdiff',
+      runProcess: runProcessReturning([]),
+    });
+
+    expect(plan.bump).toBe('major');
+    expect(plan.version).toBe('2.0.0');
+  });
+
+  it("trusts oasdiff's own classification when every structural change is at a covered keyword (N3b)", async () => {
+    const previousSpec = JSON.stringify({
+      openapi: '3.0.3',
+      info: { title: 'Widgets', version: '1.2.0' },
+      paths: {
+        '/widgets': {
+          post: {
+            operationId: 'createWidget',
+            requestBody: {
+              content: {
+                'application/json': {
+                  schema: {
+                    type: 'object',
+                    properties: { name: { type: 'string', minLength: 1 } },
+                  },
+                },
+              },
+            },
+            responses: { '200': { description: 'ok' } },
+          },
+        },
+      },
+    });
+    const currentSpec = JSON.stringify({
+      openapi: '3.0.3',
+      info: { title: 'Widgets', version: '0.0.0' },
+      paths: {
+        '/widgets': {
+          post: {
+            operationId: 'createWidget',
+            requestBody: {
+              content: {
+                'application/json': {
+                  schema: {
+                    type: 'object',
+                    // minLength tightened: a covered keyword, so oasdiff's
+                    // own classification (minor, per `map`) stands rather
+                    // than being forced to major.
+                    properties: { name: { type: 'string', minLength: 5 } },
+                  },
+                },
+              },
+            },
+            responses: { '200': { description: 'ok' } },
+          },
+        },
+      },
+    });
+
+    const plan = await computeContractPlan({
+      contract: 'orders-api',
+      bundledSpec: currentSpec,
+      previous: { version: '1.2.0', bundledSpec: previousSpec, speckifyVersion: null },
+      classificationMap: map,
+      coveredKeywords,
+      toolchainImpactBump: 'none',
+      oasdiffPath: '/bin/oasdiff',
+      runProcess: runProcessReturning([
+        {
+          id: 'request-property-minlength-tightened',
+          text: "tightened 'minLength' on request property 'name'",
+          level: 1,
+          operation: 'POST',
+          path: '/widgets',
+        },
+      ]),
+    });
+
+    expect(plan.bump).toBe('minor');
+    expect(plan.version).toBe('1.3.0');
   });
 });
 

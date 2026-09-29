@@ -15,3 +15,10 @@ export const OASDIFF_CLASSIFICATION_MAP_FILENAME = `oasdiff-${OASDIFF_VERSION}.c
 
 /** The full oasdiff rule catalogue's file name for {@link OASDIFF_VERSION}, inside `data/`. */
 export const OASDIFF_CHECKS_FILENAME = `oasdiff-${OASDIFF_VERSION}.checks.json`;
+
+/**
+ * The covered-keywords file's name for {@link OASDIFF_VERSION}, inside
+ * `data/` -- see `scripts/generate-oasdiff-covered-keywords.mjs` and
+ * `version/covered-keywords.ts`.
+ */
+export const OASDIFF_COVERED_KEYWORDS_FILENAME = `oasdiff-${OASDIFF_VERSION}.covered-keywords.json`;

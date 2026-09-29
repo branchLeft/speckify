@@ -43,84 +43,80 @@ const networkAvailable = await reachable('https://registry.npmjs.org');
  * silently skipped there, while staying skippable offline.
  */
 describe.skipIf(!networkAvailable)('the published npm package, installed from a tarball', () => {
-  it(
-    'starts and builds both languages after a clean `npm install` of the packed tarball',
-    async () => {
-      await execFileAsync('npm', ['run', 'build'], { cwd: repoRoot });
+  it('starts and builds both languages after a clean `npm install` of the packed tarball', async () => {
+    await execFileAsync('npm', ['run', 'build'], { cwd: repoRoot });
 
-      const packDir = await mkdtemp(join(tmpdir(), 'speckify-npm-pack-'));
-      const installDir = await mkdtemp(join(tmpdir(), 'speckify-npm-pack-install-'));
-      try {
-        const { stdout: packOut } = await execFileAsync(
-          'npm',
-          ['pack', '--pack-destination', packDir, '--json'],
-          { cwd: repoRoot },
-        );
-        const [packResult] = JSON.parse(packOut) as Array<{ filename: string }>;
-        if (packResult === undefined) {
-          throw new Error('npm pack produced no tarball');
-        }
-        const tarballPath = join(packDir, packResult.filename);
-
-        await writeFile(join(installDir, 'package.json'), '{"private": true}\n', 'utf8');
-        // Real network install: this is the one place a devDependency
-        // wrongly imported at runtime, or a broken `files` list, actually
-        // shows up -- `npm install <tgz>` resolves only what the tarball's
-        // own package.json declares as (transitive) dependencies.
-        await execFileAsync('npm', ['install', tarballPath], { cwd: installDir, timeout: 180_000 });
-
-        const speckifyBin = join(installDir, 'node_modules', '.bin', 'speckify');
-
-        const help = await execFileAsync(speckifyBin, ['--help']);
-        expect(help.stdout).toContain('speckify');
-
-        await cp(join(exampleDir, 'openapi.yaml'), join(installDir, 'openapi.yaml'));
-        const speckifyYaml = [
-          'contracts:',
-          '  - name: pet-shelter-npm-pack-e2e',
-          '    spec: ./openapi.yaml',
-          '    typescript:',
-          '      package: "@speckify-npm-pack-e2e/pet-shelter"',
-          '      client: true',
-          '      server: true',
-          ...(uvAvailable
-            ? [
-                '    python:',
-                '      package: speckify-npm-pack-e2e-pet-shelter',
-                '      client: true',
-                '      server: true',
-                '',
-              ]
-            : ['']),
-          'publish:',
-          '  githubPackages:',
-          '    owner: speckify-npm-pack-e2e',
-          '',
-        ].join('\n');
-        await writeFile(join(installDir, 'speckify.yaml'), speckifyYaml, 'utf8');
-
-        await execFileAsync(speckifyBin, ['build', '-c', 'speckify.yaml'], {
-          cwd: installDir,
-          env: { ...process.env, GITHUB_TOKEN: '' },
-        });
-
-        const tsDist = await readdir(
-          join(installDir, '.speckify', 'out', 'pet-shelter-npm-pack-e2e', 'typescript', 'dist'),
-        );
-        expect(tsDist.length).toBeGreaterThan(0);
-
-        if (uvAvailable) {
-          const pyDist = await readdir(
-            join(installDir, '.speckify', 'out', 'pet-shelter-npm-pack-e2e', 'python', 'dist'),
-          );
-          expect(pyDist.some((name) => name.endsWith('.whl'))).toBe(true);
-          expect(pyDist.some((name) => name.endsWith('.tar.gz'))).toBe(true);
-        }
-      } finally {
-        await rm(packDir, { recursive: true, force: true });
-        await rm(installDir, { recursive: true, force: true });
+    const packDir = await mkdtemp(join(tmpdir(), 'speckify-npm-pack-'));
+    const installDir = await mkdtemp(join(tmpdir(), 'speckify-npm-pack-install-'));
+    try {
+      const { stdout: packOut } = await execFileAsync(
+        'npm',
+        ['pack', '--pack-destination', packDir, '--json'],
+        { cwd: repoRoot },
+      );
+      const [packResult] = JSON.parse(packOut) as { filename: string }[];
+      if (packResult === undefined) {
+        throw new Error('npm pack produced no tarball');
       }
-    },
-    300_000,
-  );
+      const tarballPath = join(packDir, packResult.filename);
+
+      await writeFile(join(installDir, 'package.json'), '{"private": true}\n', 'utf8');
+      // Real network install: this is the one place a devDependency
+      // wrongly imported at runtime, or a broken `files` list, actually
+      // shows up -- `npm install <tgz>` resolves only what the tarball's
+      // own package.json declares as (transitive) dependencies.
+      await execFileAsync('npm', ['install', tarballPath], { cwd: installDir, timeout: 180_000 });
+
+      const speckifyBin = join(installDir, 'node_modules', '.bin', 'speckify');
+
+      const help = await execFileAsync(speckifyBin, ['--help']);
+      expect(help.stdout).toContain('speckify');
+
+      await cp(join(exampleDir, 'openapi.yaml'), join(installDir, 'openapi.yaml'));
+      const speckifyYaml = [
+        'contracts:',
+        '  - name: pet-shelter-npm-pack-e2e',
+        '    spec: ./openapi.yaml',
+        '    typescript:',
+        '      package: "@speckify-npm-pack-e2e/pet-shelter"',
+        '      client: true',
+        '      server: true',
+        ...(uvAvailable
+          ? [
+              '    python:',
+              '      package: speckify-npm-pack-e2e-pet-shelter',
+              '      client: true',
+              '      server: true',
+              '',
+            ]
+          : ['']),
+        'publish:',
+        '  githubPackages:',
+        '    owner: speckify-npm-pack-e2e',
+        '',
+      ].join('\n');
+      await writeFile(join(installDir, 'speckify.yaml'), speckifyYaml, 'utf8');
+
+      await execFileAsync(speckifyBin, ['build', '-c', 'speckify.yaml'], {
+        cwd: installDir,
+        env: { ...process.env, GITHUB_TOKEN: '' },
+      });
+
+      const tsDist = await readdir(
+        join(installDir, '.speckify', 'out', 'pet-shelter-npm-pack-e2e', 'typescript', 'dist'),
+      );
+      expect(tsDist.length).toBeGreaterThan(0);
+
+      if (uvAvailable) {
+        const pyDist = await readdir(
+          join(installDir, '.speckify', 'out', 'pet-shelter-npm-pack-e2e', 'python', 'dist'),
+        );
+        expect(pyDist.some((name) => name.endsWith('.whl'))).toBe(true);
+        expect(pyDist.some((name) => name.endsWith('.tar.gz'))).toBe(true);
+      }
+    } finally {
+      await rm(packDir, { recursive: true, force: true });
+      await rm(installDir, { recursive: true, force: true });
+    }
+  }, 300_000);
 });
