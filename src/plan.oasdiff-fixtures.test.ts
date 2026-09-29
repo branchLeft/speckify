@@ -60,7 +60,7 @@ describe('the real classify path, against real fixture pairs', () => {
     const plan = await computeContractPlan({
       contract: 'widgets-api',
       bundledSpec: revision,
-      previous: { version: '1.0.0', bundledSpec: base },
+      previous: { version: '1.0.0', bundledSpec: base, speckifyVersion: null },
       classificationMap,
       toolchainImpactBump: 'none',
       oasdiffPath,
@@ -139,7 +139,7 @@ describe('the real classify path, against captured real oasdiff output', () => {
     const plan = await computeContractPlan({
       contract: 'widgets-api',
       bundledSpec: revision,
-      previous: { version: '1.0.0', bundledSpec: base },
+      previous: { version: '1.0.0', bundledSpec: base, speckifyVersion: null },
       classificationMap,
       toolchainImpactBump: 'none',
       oasdiffPath: '/bin/oasdiff',

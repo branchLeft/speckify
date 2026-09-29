@@ -78,6 +78,15 @@ export async function writeProjectFiles(
   await writeFile(join(projectDir, 'CHANGELOG.md'), input.changelog, 'utf8');
   await writeFile(join(packageDir, 'py.typed'), '', 'utf8');
   await writeFile(join(packageDir, 'openapi.json'), input.bundledSpec, 'utf8');
+  // pyproject.toml's [tool.speckify] is not packaged into the built wheel's
+  // METADATA, so the generating Speckify version is embedded here too, as
+  // package data readable straight out of the wheel (record/pypi.ts reads
+  // this back to compute each release's toolchain impact).
+  await writeFile(
+    join(packageDir, 'speckify.json'),
+    `${JSON.stringify({ speckifyVersion: input.speckifyVersion })}\n`,
+    'utf8',
+  );
   await writeFile(join(packageDir, '__init__.py'), '', 'utf8');
 
   return packageDir;

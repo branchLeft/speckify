@@ -66,7 +66,7 @@ describe('computeContractPlan', () => {
       computeContractPlan({
         contract: 'orders-api',
         bundledSpec: invalidSpec,
-        previous: { version: '1.2.0', bundledSpec: publishedSpecV1_2_0 },
+        previous: { version: '1.2.0', bundledSpec: publishedSpecV1_2_0, speckifyVersion: null },
         classificationMap: map,
         toolchainImpactBump: 'none',
         oasdiffPath: '/bin/oasdiff',
@@ -105,7 +105,7 @@ describe('computeContractPlan', () => {
     const plan = await computeContractPlan({
       contract: 'orders-api',
       bundledSpec: bundledSpecV1,
-      previous: { version: '1.2.0', bundledSpec: publishedSpecV1_2_0 },
+      previous: { version: '1.2.0', bundledSpec: publishedSpecV1_2_0, speckifyVersion: null },
       classificationMap: map,
       toolchainImpactBump: 'none',
       oasdiffPath: '/bin/oasdiff',
@@ -122,7 +122,7 @@ describe('computeContractPlan', () => {
     const plan = await computeContractPlan({
       contract: 'orders-api',
       bundledSpec: bundledSpecV1,
-      previous: { version: '1.2.0', bundledSpec: publishedSpecV1_2_0 },
+      previous: { version: '1.2.0', bundledSpec: publishedSpecV1_2_0, speckifyVersion: null },
       classificationMap: map,
       toolchainImpactBump: 'none',
       oasdiffPath: '/bin/oasdiff',
@@ -142,7 +142,7 @@ describe('computeContractPlan', () => {
     const plan = await computeContractPlan({
       contract: 'orders-api',
       bundledSpec: revisedSpec,
-      previous: { version: '1.2.0', bundledSpec: publishedSpecV1_2_0 },
+      previous: { version: '1.2.0', bundledSpec: publishedSpecV1_2_0, speckifyVersion: null },
       classificationMap: map,
       toolchainImpactBump: 'none',
       oasdiffPath: '/bin/oasdiff',
@@ -157,7 +157,7 @@ describe('computeContractPlan', () => {
     const plan = await computeContractPlan({
       contract: 'orders-api',
       bundledSpec: bundledSpecV1,
-      previous: { version: '1.2.0', bundledSpec: publishedSpecV1_2_0 },
+      previous: { version: '1.2.0', bundledSpec: publishedSpecV1_2_0, speckifyVersion: null },
       classificationMap: map,
       toolchainImpactBump: 'none',
       oasdiffPath: '/bin/oasdiff',
@@ -211,7 +211,7 @@ describe('computeContractPlan', () => {
     const plan = await computeContractPlan({
       contract: 'orders-api',
       bundledSpec: currentSpec,
-      previous: { version: '1.2.0', bundledSpec: previousSpec },
+      previous: { version: '1.2.0', bundledSpec: previousSpec, speckifyVersion: null },
       classificationMap: map,
       toolchainImpactBump: 'none',
       oasdiffPath: '/bin/oasdiff',
@@ -240,7 +240,7 @@ describe('computeContractPlan', () => {
     const plan = await computeContractPlan({
       contract: 'orders-api',
       bundledSpec: currentSpec,
-      previous: { version: '1.2.0', bundledSpec: previousSpec },
+      previous: { version: '1.2.0', bundledSpec: previousSpec, speckifyVersion: null },
       classificationMap: map,
       toolchainImpactBump: 'none',
       oasdiffPath: '/bin/oasdiff',
@@ -266,7 +266,7 @@ describe('computeContractPlan', () => {
     const plan = await computeContractPlan({
       contract: 'orders-api',
       bundledSpec: currentSpec,
-      previous: { version: '1.2.0', bundledSpec: previousSpec },
+      previous: { version: '1.2.0', bundledSpec: previousSpec, speckifyVersion: null },
       classificationMap: map,
       toolchainImpactBump: 'none',
       oasdiffPath: '/bin/oasdiff',
@@ -292,7 +292,7 @@ describe('computeContractPlan', () => {
     const plan = await computeContractPlan({
       contract: 'orders-api',
       bundledSpec: currentSpec,
-      previous: { version: '1.2.0', bundledSpec: previousSpec },
+      previous: { version: '1.2.0', bundledSpec: previousSpec, speckifyVersion: null },
       classificationMap: map,
       toolchainImpactBump: 'none',
       oasdiffPath: '/bin/oasdiff',
@@ -310,7 +310,7 @@ describe('computeContractPlan', () => {
     const plan = await computeContractPlan({
       contract: 'orders-api',
       bundledSpec: bundledSpecV1,
-      previous: { version: '1.2.0', bundledSpec: publishedSpecV1_2_0 },
+      previous: { version: '1.2.0', bundledSpec: publishedSpecV1_2_0, speckifyVersion: null },
       classificationMap: map,
       toolchainImpactBump: 'major',
       oasdiffPath: '/bin/oasdiff',

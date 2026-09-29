@@ -20,24 +20,33 @@ export const TOOLCHAIN_IMPACT_FILENAME = 'toolchain-impact.json';
  * fix that changes emitted code shape is a break even when the spec it
  * generates from did not move.
  *
- * `previousSpeckifyVersion` of `null` means the contract has never been
- * generated before, in which case there is no prior toolchain state to have
- * drifted from, so the impact is `none`.
+ * `previous` of `null` means the contract has never been published before at
+ * all, in which case there is no prior toolchain state to have drifted from,
+ * so the impact is `none`.
+ *
+ * `previous.speckifyVersion` of `null` is a *different* case: the contract
+ * has been published, but the version that generated it could not be read
+ * back (an old package predating the embedded version field, or a
+ * corrupted/incomplete one). That generating version is unknown, not
+ * absent -- so it fails safe as though it predates every recorded release,
+ * taking the max impact across the whole table up to `currentSpeckifyVersion`,
+ * rather than silently reading back as `none`.
  */
 export function toolchainImpact(
   entries: readonly ToolchainImpactEntry[],
-  previousSpeckifyVersion: string | null,
+  previous: { speckifyVersion: string | null } | null,
   currentSpeckifyVersion: string,
 ): Bump {
-  if (previousSpeckifyVersion === null) {
+  if (previous === null) {
     return 'none';
   }
 
-  const relevant = entries.filter(
-    (entry) =>
-      gt(entry.speckifyVersion, previousSpeckifyVersion) &&
-      lte(entry.speckifyVersion, currentSpeckifyVersion),
-  );
+  const previousSpeckifyVersion = previous.speckifyVersion;
+  const relevant = entries.filter((entry) => {
+    const afterPrevious =
+      previousSpeckifyVersion === null || gt(entry.speckifyVersion, previousSpeckifyVersion);
+    return afterPrevious && lte(entry.speckifyVersion, currentSpeckifyVersion);
+  });
 
   return maxBump(relevant.map((entry) => entry.impact));
 }

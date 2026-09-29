@@ -30,7 +30,7 @@ check) would show up as a "change" on every single plan, published or not.
 
 When oasdiff reports zero changes but the spec text still differs once
 `info.version` is normalised, that text difference is only trusted as
-patch-level when it is *entirely* doc-only: `description`, `summary`,
+patch-level when it is _entirely_ doc-only: `description`, `summary`,
 `example`/`examples`, `externalDocs` and `title`, stripped from both sides
 recursively. Anything else that differs — a schema constraint, a `servers`
 URL, a security requirement — means oasdiff missed something real, and

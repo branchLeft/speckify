@@ -2,7 +2,7 @@
 import { readFile } from 'node:fs/promises';
 import { homedir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 
 import { Command } from 'commander';
 
@@ -78,14 +78,34 @@ interface PlanContext {
   oasdiffPath: string;
 }
 
+/**
+ * The bump every consumer inherits from the toolchain moving forward
+ * depends on which Speckify version last *generated* the published package
+ * (`previous.speckifyVersion`), never the contract's own semver
+ * (`previous.version`) -- those are different axes entirely (B3). Exported
+ * and pulled out of {@link planContract} so that distinction has its own
+ * test, independent of the registry I/O the rest of that function does.
+ */
+export function resolveToolchainImpactBump(
+  previous: RegistryRecordEntry | null,
+  toolchainImpactEntries: readonly ToolchainImpactEntry[],
+  currentSpeckifyVersion: string,
+): ReturnType<typeof toolchainImpact> {
+  return toolchainImpact(
+    toolchainImpactEntries,
+    previous === null ? null : { speckifyVersion: previous.speckifyVersion },
+    currentSpeckifyVersion,
+  );
+}
+
 async function planContract(context: PlanContext, contract: Contract): Promise<ContractPlan> {
   const specPath = resolve(context.configDir, contract.spec);
   const bundledSpec = await bundleSpec(specPath, { repoRoot: context.repoRoot });
   const previous = await resolvePreviousState(contract);
 
-  const impactBump = toolchainImpact(
+  const impactBump = resolveToolchainImpactBump(
+    previous,
     context.toolchainImpactEntries,
-    previous?.version ?? null,
     context.currentSpeckifyVersion,
   );
 
@@ -409,8 +429,15 @@ program
     }
   });
 
-program.parseAsync(process.argv).catch((error: unknown) => {
-  const message = error instanceof Error ? error.message : String(error);
-  console.error(message);
-  process.exitCode = 1;
-});
+// Guarded so this file can be imported (e.g. `resolveToolchainImpactBump`
+// from a unit test) without also parsing the importing process's own argv
+// as a speckify invocation.
+const isMainModule =
+  process.argv[1] !== undefined && import.meta.url === pathToFileURL(process.argv[1]).href;
+if (isMainModule) {
+  program.parseAsync(process.argv).catch((error: unknown) => {
+    const message = error instanceof Error ? error.message : String(error);
+    console.error(message);
+    process.exitCode = 1;
+  });
+}

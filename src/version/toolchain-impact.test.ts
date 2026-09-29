@@ -21,21 +21,41 @@ const entries: ToolchainImpactEntry[] = [
 ];
 
 describe('toolchainImpact', () => {
-  it('returns none when there is no previous speckify version', () => {
+  it('returns none when the contract has never been published before (no previous state at all)', () => {
     expect(toolchainImpact(entries, null, '0.3.0')).toBe('none');
   });
 
   it('takes the max impact of releases strictly after the previous version', () => {
-    expect(toolchainImpact(entries, '0.1.0', '0.3.0')).toBe('major');
+    expect(toolchainImpact(entries, { speckifyVersion: '0.1.0' }, '0.3.0')).toBe('major');
   });
 
   it('excludes releases at or before the previous version', () => {
-    expect(toolchainImpact(entries, '0.2.0', '0.3.0')).toBe('major');
-    expect(toolchainImpact(entries, '0.3.0', '0.3.0')).toBe('none');
+    expect(toolchainImpact(entries, { speckifyVersion: '0.2.0' }, '0.3.0')).toBe('major');
+    expect(toolchainImpact(entries, { speckifyVersion: '0.3.0' }, '0.3.0')).toBe('none');
   });
 
   it('excludes releases after the current version', () => {
-    expect(toolchainImpact(entries, '0.1.0', '0.2.0')).toBe('patch');
+    expect(toolchainImpact(entries, { speckifyVersion: '0.1.0' }, '0.2.0')).toBe('patch');
+  });
+
+  // B3: a published package that predates the embedded speckifyVersion field
+  // (or, for a wheel/tarball, is missing it for any other reason) has an
+  // *unknown* generating version -- not "never generated before". Reading
+  // that as "no prior state" (impact: none) would silently under-bump every
+  // consumer of an old, un-tracked package the moment a toolchain fix
+  // ships. Fail safe: treat it as though it predates every recorded release.
+  it('fail-safes to the max impact of every recorded release when the previous speckifyVersion is unknown', () => {
+    expect(toolchainImpact(entries, { speckifyVersion: null }, '0.3.0')).toBe('major');
+  });
+
+  it('an unknown previous speckifyVersion still respects the current-version ceiling', () => {
+    const entriesWithHigherLater: ToolchainImpactEntry[] = [
+      { speckifyVersion: '0.1.0', impact: 'patch' },
+      { speckifyVersion: '0.9.0', impact: 'major' },
+    ];
+    expect(toolchainImpact(entriesWithHigherLater, { speckifyVersion: null }, '0.1.0')).toBe(
+      'patch',
+    );
   });
 });
 

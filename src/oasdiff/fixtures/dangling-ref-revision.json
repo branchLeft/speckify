@@ -42,9 +42,7 @@
             "type": "string"
           }
         },
-        "required": [
-          "id"
-        ]
+        "required": ["id"]
       },
       "Account": {
         "allOf": [
@@ -59,9 +57,7 @@
                 "nullable": true
               }
             },
-            "required": [
-              "balance"
-            ]
+            "required": ["balance"]
           }
         ]
       }

@@ -20,6 +20,31 @@ function isNpmPackument(value: unknown): value is NpmPackument {
   return typeof value === 'object' && value !== null;
 }
 
+/** Reads the generating Speckify version back from a downloaded package.json's `speckify.speckifyVersion`. */
+function speckifyVersionFromPackageJson(raw: Buffer | null): string | null {
+  if (raw === null) {
+    return null;
+  }
+  try {
+    const parsed: unknown = JSON.parse(raw.toString('utf8'));
+    if (typeof parsed !== 'object' || parsed === null) {
+      return null;
+    }
+    const speckify = (parsed as { speckify?: unknown }).speckify;
+    if (typeof speckify !== 'object' || speckify === null) {
+      return null;
+    }
+    const version = (speckify as { speckifyVersion?: unknown }).speckifyVersion;
+    return typeof version === 'string' ? version : null;
+  } catch {
+    // A package predating this field, or one whose package.json cannot be
+    // parsed for any other reason, has an unknown generating version -- not
+    // an absent one. Callers must fail safe on `null` here, never read it
+    // as "never generated before".
+    return null;
+  }
+}
+
 /**
  * A {@link RegistryRecord} backed by an npm-compatible registry: reads the
  * package's packument for `dist-tags.latest`, then downloads that version's
@@ -84,8 +109,17 @@ export function createNpmRegistryRecord(options: NpmRegistryOptions): RegistryRe
       );
     }
 
+    const packageJsonBuffer = await extractTarGzEntry(
+      tarballBuffer,
+      (entryName) => entryName === 'package/package.json',
+    );
+
     const spec: unknown = JSON.parse(specBuffer.toString('utf8'));
-    return { version, bundledSpec: toCanonicalJson(spec) };
+    return {
+      version,
+      bundledSpec: toCanonicalJson(spec),
+      speckifyVersion: speckifyVersionFromPackageJson(packageJsonBuffer),
+    };
   }
 
   return { latest };

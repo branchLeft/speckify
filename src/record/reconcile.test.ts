@@ -17,8 +17,14 @@ describe('reconcileVersions', () => {
 
   it('takes the max version across targets and reports the ones lagging behind', () => {
     const result = reconcileVersions([
-      { target: 'typescript-client', entry: { version: '1.2.0', bundledSpec: '{}' } },
-      { target: 'python-client', entry: { version: '1.3.0', bundledSpec: '{}' } },
+      {
+        target: 'typescript-client',
+        entry: { version: '1.2.0', bundledSpec: '{}', speckifyVersion: null },
+      },
+      {
+        target: 'python-client',
+        entry: { version: '1.3.0', bundledSpec: '{}', speckifyVersion: null },
+      },
       { target: 'python-server', entry: null },
     ]);
 
@@ -28,8 +34,14 @@ describe('reconcileVersions', () => {
 
   it('reports no missing targets when every target is at the max version', () => {
     const result = reconcileVersions([
-      { target: 'typescript-client', entry: { version: '1.3.0', bundledSpec: '{}' } },
-      { target: 'python-client', entry: { version: '1.3.0', bundledSpec: '{}' } },
+      {
+        target: 'typescript-client',
+        entry: { version: '1.3.0', bundledSpec: '{}', speckifyVersion: null },
+      },
+      {
+        target: 'python-client',
+        entry: { version: '1.3.0', bundledSpec: '{}', speckifyVersion: null },
+      },
     ]);
 
     expect(result).toEqual({ maxVersion: '1.3.0', missingTargets: [] });
@@ -37,8 +49,14 @@ describe('reconcileVersions', () => {
 
   it('ignores an entry whose version is not valid semver when computing the max', () => {
     const result = reconcileVersions([
-      { target: 'typescript-client', entry: { version: 'not-a-version', bundledSpec: '{}' } },
-      { target: 'python-client', entry: { version: '1.0.0', bundledSpec: '{}' } },
+      {
+        target: 'typescript-client',
+        entry: { version: 'not-a-version', bundledSpec: '{}', speckifyVersion: null },
+      },
+      {
+        target: 'python-client',
+        entry: { version: '1.0.0', bundledSpec: '{}', speckifyVersion: null },
+      },
     ]);
 
     expect(result.maxVersion).toBe('1.0.0');

@@ -23,6 +23,27 @@ function isPyPiProjectResponse(value: unknown): value is PyPiProjectResponse {
   return typeof value === 'object' && value !== null;
 }
 
+/** Reads the generating Speckify version back from a downloaded wheel's `speckify.json` package-data file. */
+function speckifyVersionFromSpeckifyJson(raw: Buffer | null): string | null {
+  if (raw === null) {
+    return null;
+  }
+  try {
+    const parsed: unknown = JSON.parse(raw.toString('utf8'));
+    if (typeof parsed !== 'object' || parsed === null) {
+      return null;
+    }
+    const version = (parsed as { speckifyVersion?: unknown }).speckifyVersion;
+    return typeof version === 'string' ? version : null;
+  } catch {
+    // A wheel predating this file, or one whose speckify.json cannot be
+    // parsed for any other reason, has an unknown generating version -- not
+    // an absent one. Callers must fail safe on `null` here, never read it
+    // as "never generated before".
+    return null;
+  }
+}
+
 /**
  * A {@link RegistryRecord} backed by PyPI's JSON API: reads the project's
  * current version, then downloads that version's wheel and extracts the
@@ -75,8 +96,17 @@ export function createPyPiRegistryRecord(options: PyPiRegistryOptions = {}): Reg
       throw new RecordError(`published wheel for "${packageName}"@${version} has no openapi.json`);
     }
 
+    const speckifyJsonBuffer = await extractZipEntry(
+      wheelBuffer,
+      (entryName) => entryName === 'speckify.json' || entryName.endsWith('/speckify.json'),
+    );
+
     const spec: unknown = JSON.parse(specBuffer.toString('utf8'));
-    return { version, bundledSpec: toCanonicalJson(spec) };
+    return {
+      version,
+      bundledSpec: toCanonicalJson(spec),
+      speckifyVersion: speckifyVersionFromSpeckifyJson(speckifyJsonBuffer),
+    };
   }
 
   return { latest };

@@ -7,9 +7,12 @@ import { RecordError } from './errors.js';
 import { createNpmRegistryRecord } from './npm.js';
 import type { FetchLike } from './types.js';
 
-async function makeTarballWithSpec(spec: unknown): Promise<Buffer> {
+async function makeTarballWithSpec(
+  spec: unknown,
+  packageJson: unknown = { name: 'orders-api' },
+): Promise<Buffer> {
   const packer = pack();
-  packer.entry({ name: 'package/package.json' }, '{"name":"orders-api"}');
+  packer.entry({ name: 'package/package.json' }, JSON.stringify(packageJson));
   packer.entry({ name: 'package/openapi.json' }, JSON.stringify(spec));
   packer.finalize();
 
@@ -78,6 +81,52 @@ describe('createNpmRegistryRecord', () => {
     expect(packumentCall[0]).toBe('https://npm.example/%40acme%2Forders-api');
     const headers = packumentCall[1].headers as Record<string, string>;
     expect(headers.Authorization).toBe('Bearer a-token');
+  });
+
+  it('reads the generating speckifyVersion back from package/package.json (B3)', async () => {
+    const tarball = await makeTarballWithSpec(
+      { openapi: '3.0.3', info: { version: '0.0.0' } },
+      { name: 'orders-api', speckify: { speckifyVersion: '0.4.1' } },
+    );
+
+    const fetchImpl: FetchLike = vi.fn(async (url: string) => {
+      if (url.endsWith('.tgz')) {
+        return Promise.resolve(new Response(new Uint8Array(tarball), { status: 200 }));
+      }
+      return Promise.resolve(
+        jsonResponse({
+          'dist-tags': { latest: '1.2.3' },
+          versions: { '1.2.3': { dist: { tarball: 'https://npm.example/x.tgz' } } },
+        }),
+      );
+    });
+    const record = createNpmRegistryRecord({ registryUrl: 'https://npm.example', fetchImpl });
+
+    const result = await record.latest('@acme/orders-api');
+    expect(result?.speckifyVersion).toBe('0.4.1');
+  });
+
+  it('treats a package.json with no speckify.speckifyVersion as an unknown generating version, not none (B3 fail-safe)', async () => {
+    const tarball = await makeTarballWithSpec(
+      { openapi: '3.0.3', info: { version: '0.0.0' } },
+      { name: 'orders-api' },
+    );
+
+    const fetchImpl: FetchLike = vi.fn(async (url: string) => {
+      if (url.endsWith('.tgz')) {
+        return Promise.resolve(new Response(new Uint8Array(tarball), { status: 200 }));
+      }
+      return Promise.resolve(
+        jsonResponse({
+          'dist-tags': { latest: '1.2.3' },
+          versions: { '1.2.3': { dist: { tarball: 'https://npm.example/x.tgz' } } },
+        }),
+      );
+    });
+    const record = createNpmRegistryRecord({ registryUrl: 'https://npm.example', fetchImpl });
+
+    const result = await record.latest('@acme/orders-api');
+    expect(result?.speckifyVersion).toBeNull();
   });
 
   it('throws RecordError when the registry responds with a non-404 error', async () => {
