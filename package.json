@@ -14,7 +14,7 @@
     "dist"
   ],
   "scripts": {
-    "build": "tsc -p tsconfig.build.json",
+    "build": "tsc -p tsconfig.build.json && cp src/oasdiff/checksums.json dist/oasdiff/checksums.json",
     "lint": "eslint .",
     "format": "prettier --check .",
     "format:write": "prettier --write .",
