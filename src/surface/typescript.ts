@@ -53,6 +53,64 @@ function importSpecifier(fromDir: string, typesFile: string): string {
 }
 
 /**
+ * Symlinks Speckify's own installed `zod` into `dir/node_modules/zod`, so a
+ * generated package's `import * as z from 'zod'` resolves through the
+ * program's own `moduleResolution: NodeNext` walk-up regardless of where
+ * `dir` sits on disk — a fixture directory, a real generated package that
+ * `build.ts` already linked this way, or a downloaded previous package that
+ * never went through `build.ts` at all. Idempotent: a link `build.ts` (or an
+ * earlier call) already placed there is left alone.
+ */
+async function linkZod(dir: string, zodDir: string): Promise<void> {
+  const target = path.join(dir, 'node_modules', 'zod');
+  await mkdir(path.dirname(target), { recursive: true });
+  await symlink(zodDir, target, 'dir').catch((error: unknown) => {
+    if ((error as NodeJS.ErrnoException).code !== 'EEXIST') throw error;
+  });
+}
+
+/**
+ * The module specifier of an import or re-export declaration — the only
+ * import forms a generator emits under `module: NodeNext` — or `undefined`
+ * for a declaration with none (a local `export { x }`).
+ */
+function moduleSpecifierOf(node: ts.Node): ts.Expression | undefined {
+  return ts.isImportDeclaration(node) || ts.isExportDeclaration(node)
+    ? node.moduleSpecifier
+    : undefined;
+}
+
+/**
+ * Throws when one of `files` imports a module the checker could not
+ * resolve, rather than let it silently type-check as `any` — mutually
+ * assignable with everything, so the real edit compares as "no change".
+ * `getPreEmitDiagnostics` alone misses this on a `.d.ts` entry point under
+ * `skipLibCheck`; see surface.md §3.
+ */
+function assertModulesResolved(program: ts.Program, files: readonly string[], label: string): void {
+  const checker = program.getTypeChecker();
+  const missing: string[] = [];
+  for (const fileName of files) {
+    const source = program.getSourceFile(fileName);
+    if (source === undefined) continue;
+    const visit = (node: ts.Node): void => {
+      const specifier = moduleSpecifierOf(node);
+      if (specifier !== undefined && checker.getSymbolAtLocation(specifier) === undefined) {
+        missing.push(`${fileName}: cannot find module ${specifier.getText()}`);
+      }
+      ts.forEachChild(node, visit);
+    };
+    ts.forEachChild(source, visit);
+  }
+  if (missing.length > 0) {
+    throw new Error(
+      `surface diff (${label}): could not resolve every import — each would silently ` +
+        `compare as \`any\` instead of reporting a real change:\n${missing.join('\n')}`,
+    );
+  }
+}
+
+/**
  * The synthesised module: `z.output<typeof schema>` for each zod schema the
  * first pass found. See surface.md §3.
  */
@@ -132,10 +190,12 @@ async function buildModels(
     previous: empty(previousDir, await readEntryPoints(previousDir)),
     current: empty(currentDir, await readEntryPoints(currentDir)),
   };
+  const zodDir = await realpath(path.dirname(require.resolve('zod/package.json')));
+  await Promise.all([linkZod(previousDir, zodDir), linkZod(currentDir, zodDir)]);
   const entryFiles = [...sides.previous.entries.values(), ...sides.current.entries.values()];
   const options = compilerOptions(currentDir);
   const first = ts.createProgram(entryFiles, options);
-  const zodDir = await realpath(path.dirname(require.resolve('zod/package.json')));
+  assertModulesResolved(first, entryFiles, 'first pass');
   const fromZod = (type: ts.Type): boolean =>
     (type.aliasSymbol ?? type.getSymbol())?.declarations?.some((declaration) =>
       declaration.getSourceFile().fileName.startsWith(zodDir + path.sep),
@@ -159,6 +219,7 @@ async function buildModels(
   const synthPath = path.join(synthDir, SYNTH_FILE);
   await writeFile(synthPath, synthesise(synthDir, sides, zodExports));
   const program = ts.createProgram([...entryFiles, synthPath], options, undefined, first);
+  assertModulesResolved(program, [synthPath], 'zod second pass');
   finishModels(program, sides, synthExports(program, synthPath), zodExports);
   return { program, sides };
 }
@@ -318,12 +379,7 @@ export async function compareTypeScriptPackages(
   const synthDir = await realpath(await mkdtemp(path.join(tmpdir(), 'speckify-surface-ts-')));
   try {
     await writeFile(path.join(synthDir, 'package.json'), '{ "type": "module" }\n');
-    await mkdir(path.join(synthDir, 'node_modules'), { recursive: true });
-    await symlink(
-      path.dirname(require.resolve('zod/package.json')),
-      path.join(synthDir, 'node_modules', 'zod'),
-      'dir',
-    );
+    await linkZod(synthDir, await realpath(path.dirname(require.resolve('zod/package.json'))));
     const { program, sides } = await buildModels(
       await realpath(previousDir),
       await realpath(currentDir),

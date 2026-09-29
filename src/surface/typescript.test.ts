@@ -187,6 +187,15 @@ describe('compareTypeScriptPackages', { timeout: 60_000 }, () => {
     );
     expect(majors(changes)).toEqual(['.#f: changed so that existing uses no longer compile']);
   });
+
+  it('fails loudly, never as "no change", when a package references an unresolvable module', async () => {
+    const broken = sdk(
+      '{ a: string }',
+      '{ id: string }',
+      "import type { Ghost } from 'speckify-does-not-exist';\nexport declare const haunted: Ghost;",
+    );
+    await expect(compare(broken, broken)).rejects.toThrow(/could not resolve every import/);
+  });
 });
 
 describe('removedProperties', () => {
