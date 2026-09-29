@@ -90,6 +90,22 @@ describe('speckifyConfigSchema', () => {
     expect(result.success).toBe(false);
   });
 
+  it('rejects a typescript package scope that does not match publish.githubPackages.owner', () => {
+    const result = speckifyConfigSchema.safeParse({
+      ...validConfig,
+      contracts: [{ ...validConfig.contracts[0], typescript: { package: '@other/orders-api' } }],
+    });
+    expect(result.success).toBe(false);
+  });
+
+  it('accepts a typescript package scope matching the owner case-insensitively', () => {
+    const result = speckifyConfigSchema.safeParse({
+      ...validConfig,
+      publish: { githubPackages: { owner: 'ACME' } },
+    });
+    expect(result.success).toBe(true);
+  });
+
   it('allows a contract with neither typescript nor python targets', () => {
     const result = speckifyConfigSchema.safeParse({
       contracts: [{ name: 'orders-api', spec: './openapi.yaml' }],
