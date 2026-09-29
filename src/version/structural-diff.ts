@@ -1,7 +1,15 @@
 import { toCanonicalJson } from '../bundle/canonical-json.js';
 
-/** oasdiff's syntactic edit actions (`checker/metaschema/action.go`). */
-export type EditAction = 'add' | 'remove' | 'set' | 'unset' | 'change' | 'increase' | 'decrease';
+/** Syntactic edit actions; see allow-list.md §2. */
+export type EditAction =
+  | 'add'
+  | 'remove'
+  | 'set'
+  | 'unset'
+  | 'change'
+  | 'increase'
+  | 'decrease'
+  | 'reorder';
 
 /** One structural change: a concrete location (segments, never a dotted string) and an action. */
 export interface Edit {
@@ -11,6 +19,8 @@ export interface Edit {
   readonly before: unknown;
   /** The value at `location` in the revision (undefined when absent). */
   readonly after: unknown;
+  /** True when the last segment is a vendor extension key, never a member name. */
+  readonly extension?: true;
 }
 
 /** A document ready to diff: normalised, doc-stripped, and dereferenced outside `components`. */
@@ -76,7 +86,7 @@ const REUSE_COMPONENT_KINDS = new Set([
   'examples',
 ]);
 
-const HTTP_METHODS = new Set([
+export const HTTP_METHODS: ReadonlySet<string> = new Set([
   'get',
   'put',
   'post',
@@ -91,6 +101,16 @@ const HTTP_METHODS = new Set([
 /** Keys compared as one opaque value, whatever their JSON type. */
 const ATOMIC_KEYS = new Set(['default', 'const', '$ref']);
 
+/** Keys whose value is instance data, never annotated schema: stripping stops at them. */
+const VALUE_KEYS = new Set(['default', 'const', 'enum']);
+
+/** Marks an inlined component schema with the component it came from; see allow-list.md §1. */
+export const REF_TARGET_KEY = '$refTarget';
+
+function isExtensionKey(key: string, parentIsNameMap: boolean): boolean {
+  return !parentIsNameMap && key.startsWith('x-');
+}
+
 function isPlainObject(value: unknown): value is Record<string, unknown> {
   return value !== null && typeof value === 'object' && !Array.isArray(value);
 }
@@ -101,7 +121,7 @@ function same(a: unknown, b: unknown): boolean {
 
 /**
  * Removes annotation keys, except where a key is a member name of a name
- * map (a property called `title` is data). See location-coverage.md §1.
+ * map (a property called `title` is data) or inside a value. See allow-list.md §1.
  */
 export function stripDocOnlyKeys(value: unknown, parentIsNameMap = false): unknown {
   if (Array.isArray(value)) {
@@ -115,7 +135,30 @@ export function stripDocOnlyKeys(value: unknown, parentIsNameMap = false): unkno
     if (!parentIsNameMap && DOC_ONLY_KEYS.has(key)) {
       continue;
     }
+    if (!parentIsNameMap && VALUE_KEYS.has(key)) {
+      result[key] = val;
+      continue;
+    }
     result[key] = stripDocOnlyKeys(val, NAME_MAP_KEYS.has(key) && isPlainObject(val));
+  }
+  return result;
+}
+
+/** Removes vendor extension keys in keyword position, leaving member names and values alone. */
+export function stripExtensionKeys(value: unknown, parentIsNameMap = false): unknown {
+  if (Array.isArray(value)) {
+    return value.map((item) => stripExtensionKeys(item, false));
+  }
+  if (!isPlainObject(value)) {
+    return value;
+  }
+  const result: Record<string, unknown> = {};
+  for (const [key, val] of Object.entries(value)) {
+    if (isExtensionKey(key, parentIsNameMap)) continue;
+    result[key] =
+      !parentIsNameMap && VALUE_KEYS.has(key)
+        ? val
+        : stripExtensionKeys(val, NAME_MAP_KEYS.has(key) && isPlainObject(val));
   }
   return result;
 }
@@ -182,18 +225,20 @@ class Dereferencer {
 
   constructor(private readonly root: Record<string, unknown>) {}
 
-  inline(value: unknown, stack: readonly string[]): unknown {
+  inline(value: unknown, stack: readonly string[], parentIsNameMap = false): unknown {
     if (Array.isArray(value)) {
       return value.map((item) => this.inline(item, stack));
     }
     if (!isPlainObject(value)) {
       return value;
     }
-    const ref = value.$ref;
+    const ref = parentIsNameMap ? undefined : value.$ref;
     if (typeof ref !== 'string') {
       const result: Record<string, unknown> = {};
       for (const [key, val] of Object.entries(value)) {
-        result[key] = this.inline(val, stack);
+        result[key] = isExtensionKey(key, parentIsNameMap)
+          ? val
+          : this.inline(val, stack, NAME_MAP_KEYS.has(key) && isPlainObject(val));
       }
       return result;
     }
@@ -202,12 +247,16 @@ class Dereferencer {
       if (key !== '$ref') siblings[key] = val;
     }
     const resolved = this.resolve(ref, stack);
+    const marked =
+      isPlainObject(resolved) && ref.startsWith('#/components/schemas/') && !('$ref' in resolved)
+        ? { ...resolved, [REF_TARGET_KEY]: ref }
+        : resolved;
     if (Object.keys(siblings).length === 0) {
-      return resolved;
+      return marked;
     }
     const inlinedSiblings = this.inline(siblings, stack);
-    return isPlainObject(resolved)
-      ? { ...resolved, $refSiblings: inlinedSiblings }
+    return isPlainObject(marked)
+      ? { ...marked, $refSiblings: inlinedSiblings }
       : { $ref: ref, $refSiblings: inlinedSiblings };
   }
 
@@ -243,13 +292,16 @@ class Dereferencer {
   }
 }
 
-/** Normalises, strips and dereferences a parsed spec. See location-coverage.md §1. */
+/** Normalises, strips and dereferences a parsed spec. See allow-list.md §1. */
 export function prepareDocument(raw: Record<string, unknown>): PreparedDocument {
   const normalized = normalizeForComparison(raw);
   const dereferencer = new Dereferencer(normalized);
   const doc: Record<string, unknown> = {};
   for (const [key, value] of Object.entries(normalized)) {
-    doc[key] = key === 'components' ? value : dereferencer.inline(value, []);
+    doc[key] =
+      key === 'components' || isExtensionKey(key, false)
+        ? value
+        : dereferencer.inline(value, [], NAME_MAP_KEYS.has(key) && isPlainObject(value));
   }
   return { doc, referenced: dereferencer.referenced, cyclic: dereferencer.cyclic };
 }
@@ -269,6 +321,11 @@ class Differ {
     after: unknown,
   ): void {
     this.edits.push({ location, action, before, after });
+  }
+
+  private emitExtension(location: readonly string[], before: unknown, after: unknown): void {
+    const action = before === undefined ? 'add' : after === undefined ? 'remove' : 'change';
+    this.edits.push({ location, action, before, after, extension: true });
   }
 
   diffRoot(): void {
@@ -339,7 +396,7 @@ class Differ {
     }
     const here = [...location, key];
     if (key.startsWith('x-')) {
-      this.emitMembership(here, av, bv, 'change');
+      this.emitExtension(here, av, bv);
       return;
     }
     if (ATOMIC_KEYS.has(key)) {
@@ -352,6 +409,7 @@ class Differ {
     }
     if (key === 'parameters' && (Array.isArray(av) || Array.isArray(bv))) {
       this.diffKeyedList(here, av, bv, parameterKey);
+      this.diffOrder(here, av, bv, parameterKey);
       return;
     }
     if (key === 'security' && (Array.isArray(av) || Array.isArray(bv))) {
@@ -424,6 +482,24 @@ class Differ {
     this.diffNameMap(location, toMap(av), toMap(bv), membersAreNameMaps);
   }
 
+  /** A reorder of the members both lists share: SDK signatures can follow list order. */
+  private diffOrder(
+    location: readonly string[],
+    av: unknown,
+    bv: unknown,
+    keyOf: (item: unknown, index: number) => string,
+  ): void {
+    const keys = (list: unknown): string[] =>
+      Array.isArray(list) ? list.map((item, index) => keyOf(item, index)) : [];
+    const aKeys = keys(av);
+    const bKeys = keys(bv);
+    const aShared = aKeys.filter((key) => bKeys.includes(key));
+    const bShared = bKeys.filter((key) => aKeys.includes(key));
+    if (aShared.join('\n') !== bShared.join('\n')) {
+      this.emit(location, 'reorder', av, bv);
+    }
+  }
+
   private diffArray(location: readonly string[], av: unknown, bv: unknown): void {
     const aList: unknown[] | undefined = Array.isArray(av) ? (av as unknown[]) : undefined;
     const bList: unknown[] | undefined = Array.isArray(bv) ? (bv as unknown[]) : undefined;
@@ -489,7 +565,8 @@ function toTypeList(value: unknown): unknown[] {
   return Array.isArray(value) ? value : [value];
 }
 
-function parameterKey(item: unknown, index: number): string {
+/** How an operation parameter is addressed in an edit's location: `in:name`. */
+export function parameterKey(item: unknown, index: number): string {
   if (isPlainObject(item) && typeof item.in === 'string' && typeof item.name === 'string') {
     return `${item.in}:${item.name}`;
   }
@@ -500,7 +577,7 @@ function securityRequirementKey(item: unknown): string {
   return isPlainObject(item) ? Object.keys(item).sort().join('&') : toCanonicalJson(item);
 }
 
-/** Every structural edit between two prepared documents. See location-coverage.md §2-3. */
+/** Every structural edit between two prepared documents. See allow-list.md §2. */
 export function diffDocuments(base: PreparedDocument, revision: PreparedDocument): Edit[] {
   const differ = new Differ(base, revision);
   differ.diffRoot();

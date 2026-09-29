@@ -79,6 +79,18 @@ describe('diffDocuments: scalar and list actions', () => {
       `${BODY}.x-b:remove`,
       `${BODY}.x-c:add`,
     ]);
+    const flagged = diffDocuments(prepareDocument(base), prepareDocument(revision));
+    expect(flagged.every((edit) => edit.extension === true)).toBe(true);
+  });
+
+  it('does not flag a member name that merely starts with x- as an extension', () => {
+    const withHeader = (headers: Doc): Doc =>
+      doc({ '/t': { get: { responses: { '200': { description: 'ok', headers } } } } });
+    const base = withHeader({ 'x-request-id': { schema: { type: 'string' } } });
+    const [edit] = diffDocuments(prepareDocument(base), prepareDocument(withHeader({})));
+    expect(edit?.location.at(-1)).toBe('x-request-id');
+    expect(edit?.action).toBe('remove');
+    expect(edit?.extension).toBeUndefined();
   });
 });
 
@@ -102,12 +114,16 @@ describe('diffDocuments: members of name maps and keyed lists', () => {
     ]);
   });
 
-  it('addresses parameters by in:name, so reordering them is not a change', () => {
+  it('addresses parameters by in:name, so a reorder is one reorder edit, not member edits', () => {
     const a = { name: 'a', in: 'query', schema: { type: 'string' } };
     const b = { name: 'b', in: 'header', schema: { type: 'string' } };
     const base = doc({ '/t': { get: { parameters: [a, b], responses: {} } } });
     const reordered = doc({ '/t': { get: { parameters: [b, a], responses: {} } } });
-    expect(edits(base, reordered)).toEqual([]);
+    expect(edits(base, reordered)).toEqual(['paths./t.get.parameters:reorder']);
+    const inserted = doc({
+      '/t': { get: { parameters: [a, { ...a, name: 'c' }, b], responses: {} } },
+    });
+    expect(edits(base, inserted)).toEqual(['paths./t.get.parameters.query:c:add']);
     const tightened = doc({
       '/t': {
         get: { parameters: [{ ...a, schema: { type: 'string', maxLength: 3 } }, b], responses: {} },
@@ -171,6 +187,46 @@ describe('prepareDocument: dereferencing', () => {
       'components.headers.Unused:remove',
       'paths./t.get.responses.200.headers.X-Used:add',
     ]);
+  });
+
+  it('marks an inlined component schema with its target, so a retarget is an edit', () => {
+    const schemas = { Name: { type: 'string' }, Loose: { type: 'string' } };
+    const at = (target: string): Doc =>
+      doc(
+        { '/things': { post: op({ $ref: `#/components/schemas/${target}` }) } },
+        {
+          components: { schemas },
+        },
+      );
+    expect(edits(at('Name'), at('Loose'))).toEqual([`${BODY}.$refTarget:change`]);
+    const inline = doc(
+      { '/things': { post: op({ type: 'string' }) } },
+      { components: { schemas } },
+    );
+    expect(edits(inline, at('Name'))).toEqual([`${BODY}.$refTarget:set`]);
+  });
+
+  it('leaves a $ref inside a vendor extension alone, so it references nothing', () => {
+    const schemas = { Hidden: { type: 'string' } };
+    const extended = doc(
+      {
+        '/things': {
+          post: { ...op({ type: 'string' }), 'x-model': { $ref: '#/components/schemas/Hidden' } },
+        },
+      },
+      { components: { schemas } },
+    );
+    const prepared = prepareDocument(extended);
+    expect(prepared.referenced.has('schemas/Hidden')).toBe(false);
+    const changed = doc(
+      {
+        '/things': {
+          post: { ...op({ type: 'string' }), 'x-model': { $ref: '#/components/schemas/Hidden' } },
+        },
+      },
+      { components: { schemas: { Hidden: { type: 'string', maxLength: 3 } } } },
+    );
+    expect(edits(extended, changed)).toEqual(['components.schemas.Hidden:change']);
   });
 
   it('marks a recursive schema cyclic, so its change is reported at the component', () => {
@@ -242,6 +298,15 @@ describe('prepareDocument: normalisation', () => {
     const base = doc({ '/things': { post: op(schema(9)) } });
     const revision = doc({ '/things': { post: op(schema(3)) } });
     expect(edits(base, revision)).toEqual([`${BODY}.properties.title.maxLength:decrease`]);
+  });
+
+  it('never strips inside a default, const or enum value', () => {
+    const withDefault = (title: string): Doc =>
+      doc({ '/things': { post: op({ type: 'object', default: { title } }) } });
+    expect(edits(withDefault('a'), withDefault('b'))).toEqual([`${BODY}.default:change`]);
+    expect(stripDocOnlyKeys({ enum: [{ description: 'x' }] })).toEqual({
+      enum: [{ description: 'x' }],
+    });
   });
 
   it('strips annotations only in annotation position', () => {

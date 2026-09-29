@@ -41,7 +41,7 @@ Both documents are prepared the same way before diffing
 3. Every local `$ref` outside `components` is inlined in place. Each edit then
    surfaces at its full concrete location, at every place the component is
    used. Operation parameters are addressed as `in:name`.
-4. An inlined component carries a `$refTarget` marker naming it. Pointing a
+4. An inlined component schema carries a `$refTarget` marker naming it. Pointing a
    `$ref` at a different component, or replacing an inline schema with a
    `$ref`, renames a generated SDK type. It shows up as an edit to that
    marker, which no rule allows.
@@ -67,6 +67,8 @@ list of segments), an action, and the before and after values.
 
 A vendor extension key (`x-...` in keyword position, not a name such as a
 header called `x-request-id`) is one opaque edit flagged as an extension.
+An extension edit is judged by the `extension` rule alone, so it is patch
+or major, never minor.
 
 Components are judged where they are used. A content change to a component
 that is referenced on both sides, and is not cyclic, emits nothing itself:
