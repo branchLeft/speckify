@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-import { readFile } from 'node:fs/promises';
+import { readFile, realpath } from 'node:fs/promises';
 import { homedir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
@@ -445,9 +445,25 @@ program
 // Guarded so this file can be imported (e.g. `resolveToolchainImpactBump`
 // from a unit test) without also parsing the importing process's own argv
 // as a speckify invocation.
-const isMainModule =
-  process.argv[1] !== undefined && import.meta.url === pathToFileURL(process.argv[1]).href;
-if (isMainModule) {
+//
+// process.argv[1] is compared through its realpath, not raw: npm always
+// installs a package's `bin` entry as a symlink
+// (node_modules/.bin/speckify -> ../speckify/dist/cli.js), so a real
+// install invokes this file via that symlink. Node resolves import.meta.url
+// through the symlink to this file's real path, but leaves process.argv[1]
+// as the symlink path the shell actually ran -- comparing the two without
+// resolving both the same way never matches for an installed package, so
+// this branch silently never runs and the CLI exits 0 having parsed
+// nothing.
+async function isRunningAsMain(): Promise<boolean> {
+  if (process.argv[1] === undefined) {
+    return false;
+  }
+  const invokedPath = await realpath(process.argv[1]).catch(() => process.argv[1] as string);
+  return import.meta.url === pathToFileURL(invokedPath).href;
+}
+
+if (await isRunningAsMain()) {
   program.parseAsync(process.argv).catch((error: unknown) => {
     const message = error instanceof Error ? error.message : String(error);
     console.error(message);

@@ -1,5 +1,5 @@
 import { execFile } from 'node:child_process';
-import { cp, mkdtemp, readdir, readFile, rm, writeFile } from 'node:fs/promises';
+import { cp, mkdtemp, readdir, readFile, rm, symlink, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -170,4 +170,27 @@ describe.skipIf(!networkAvailable)('the built CLI (node dist/cli.js build)', () 
     },
     180_000,
   );
+
+  it('runs when invoked through a symlink, as npm\'s own node_modules/.bin entry always is', async () => {
+    await execFileAsync('npm', ['run', 'build'], { cwd: repoRoot });
+
+    const binDir = await mkdtemp(join(tmpdir(), 'speckify-built-cli-symlink-'));
+    try {
+      const linkPath = join(binDir, 'speckify');
+      // Mirrors exactly how npm links a package's `bin` entry:
+      // node_modules/.bin/speckify -> ../speckify/dist/cli.js. Node
+      // resolves import.meta.url through the symlink to the real file, but
+      // process.argv[1] stays the symlink path the user (or npm) invoked --
+      // comparing them without resolving both the same way makes the
+      // "am I the entry point" check fail silently, so the CLI parses no
+      // args and exits 0 having done nothing.
+      await symlink(cliPath, linkPath);
+
+      const { stdout } = await execFileAsync(process.execPath, [linkPath, '--help']);
+      expect(stdout).toContain('speckify');
+      expect(stdout).toContain('Bundle, version and publish an OpenAPI contract.');
+    } finally {
+      await rm(binDir, { recursive: true, force: true });
+    }
+  }, 30_000);
 });
