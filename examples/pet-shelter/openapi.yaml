@@ -1,0 +1,56 @@
+openapi: 3.1.0
+info:
+  title: Pet Shelter
+  version: 0.0.0
+  description: >
+    A small contract used by Speckify's own docs and end-to-end test: a
+    shelter's public list of animals available for adoption.
+paths:
+  /animals:
+    get:
+      operationId: listAnimals
+      summary: List animals currently available for adoption.
+      responses:
+        '200':
+          description: A page of animals.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Animal'
+  /animals/{animalId}:
+    get:
+      operationId: getAnimal
+      summary: Get one animal by id.
+      parameters:
+        - name: animalId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: The animal.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Animal'
+        '404':
+          description: No animal with that id.
+components:
+  schemas:
+    Animal:
+      type: object
+      required: [id, name, species]
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        species:
+          type: string
+          enum: [dog, cat, rabbit, other]
+        adopted:
+          type: boolean
+          default: false

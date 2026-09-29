@@ -9,3 +9,9 @@ python/.pytest_cache/
 __pycache__/
 .mypy_cache/
 
+launcher/.venv/
+launcher/.pytest_cache/
+launcher/dist/
+launcher/build/
+examples/**/.speckify/
+*.egg-info/

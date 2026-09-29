@@ -3,6 +3,10 @@
   "version": "0.0.0",
   "description": "Bundle an OpenAPI spec, compute its semver bump from the registry's last published version, and publish generated client/server packages.",
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/branchLeft/speckify.git"
+  },
   "type": "module",
   "bin": {
     "speckify": "./dist/cli.js"
