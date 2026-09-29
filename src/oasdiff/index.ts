@@ -1,5 +1,6 @@
 export {
   OASDIFF_OVERRIDE_ENV,
+  OASDIFF_OVERRIDE_UNVERIFIED_ENV,
   resolveOasdiffBinary,
   type ResolveOasdiffOptions,
 } from './binary.js';
