@@ -231,6 +231,63 @@ describe('buildContract (end-to-end: plan through a mocked first-publish registr
     120_000,
   );
 
+  it.skipIf(!uvAvailable)(
+    'builds both languages for a spec with no components.schemas at all: datamodel-code-generator ' +
+      'used to exit 2 ("Models not found in the input data") and fail the whole build for this',
+    async () => {
+      const outDir = await mkdtemp(path.join(os.tmpdir(), 'speckify-build-e2e-no-schemas-'));
+      outDirs.push(outDir);
+
+      const contract: Contract = {
+        name: 'e2e-fixture-no-schemas',
+        spec: 'unused.yaml',
+        typescript: { package: '@speckify-fixtures/e2e-no-schemas', client: true, server: false },
+        python: { package: 'speckify-fixture-e2e-no-schemas', client: true, server: false },
+      };
+      const bundledSpec = toCanonicalJson({
+        openapi: '3.0.3',
+        info: { title: 'No Schemas', version: PLACEHOLDER_VERSION },
+        paths: {
+          '/ping': { get: { operationId: 'ping', responses: { '200': { description: 'ok' } } } },
+        },
+      });
+
+      const plan = await computeContractPlan({
+        contract: contract.name,
+        bundledSpec,
+        previous: null,
+        classificationMap: {},
+        toolchainImpactBump: 'none',
+        surfaceDiff: unchangedSurface,
+        oasdiffPath: '',
+      });
+
+      const result = await buildContract(plan, {
+        contract,
+        speckifyVersion: '0.0.0-test',
+        toolchainDir: TOOLCHAIN_DIR,
+        outDir,
+      });
+
+      if (!result.typescript || !result.python) {
+        throw new Error('expected both a typescript and a python build result');
+      }
+
+      const wheelPath = await findWheel(result.python.distDir);
+      const output = await runPythonWithWheel(
+        wheelPath,
+        [
+          'import speckify_fixture_e2e_no_schemas',
+          'import speckify_fixture_e2e_no_schemas.models as models',
+          'import speckify_fixture_e2e_no_schemas.client as client',
+          'print("IMPORT_OK")',
+        ].join('\n'),
+      );
+      expect(output).toContain('IMPORT_OK');
+    },
+    120_000,
+  );
+
   it('refuses a python target with no toolchain directory provided, rather than failing deep inside the generators', async () => {
     const contract: Contract = {
       name: 'e2e-fixture-no-toolchain',

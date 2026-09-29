@@ -48,6 +48,32 @@ describe.skipIf(!uvAvailable)(describeTitle, () => {
     expect(entries).toContain('models');
   }, 60_000);
 
+  it('writes an empty models.py rather than failing when the spec has no components.schemas', async () => {
+    // datamodel-code-generator exits 2 with "Models not found in the input
+    // data" for a spec with nothing in components/schemas (it only looks
+    // there by default) — that used to surface as ModelGenerationError and
+    // fail the whole build for a perfectly valid spec.
+    targetDir = await mkdtemp(join(tmpdir(), 'speckify-models-'));
+    const bundledSpec = loadFixtureAsBundledSpec('no-schemas.bundled.yaml');
+
+    await generateModels(bundledSpec, { toolchainDir: TOOLCHAIN_DIR, targetDir });
+
+    const entries = await readdir(targetDir);
+    expect(entries).toContain('models.py');
+    const contents = await readFile(join(targetDir, 'models.py'), 'utf8');
+    expect(contents.trim()).not.toBe('');
+  }, 60_000);
+
+  it('writes an empty models.py for a spec with only inline (never components.schemas) schemas', async () => {
+    targetDir = await mkdtemp(join(tmpdir(), 'speckify-models-'));
+    const bundledSpec = loadFixtureAsBundledSpec('inline-only.bundled.yaml');
+
+    await generateModels(bundledSpec, { toolchainDir: TOOLCHAIN_DIR, targetDir });
+
+    const entries = await readdir(targetDir);
+    expect(entries).toContain('models.py');
+  }, 60_000);
+
   it('falls back to a models/ package when the bundle keeps $id on an inlined external schema', async () => {
     targetDir = await mkdtemp(join(tmpdir(), 'speckify-models-'));
     // This fixture is bundled by Redocly with $id/$schema still on the inlined
