@@ -1,0 +1,299 @@
+openapi: 3.1.0
+info:
+  title: Combined Fixture
+  version: 1.0.0
+paths:
+  /things/{id}:
+    get:
+      operationId: getThing
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: A thing
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/thing.schema'
+        '404':
+          description: Not found
+  /pets:
+    post:
+      operationId: createPet
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Pet'
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Pet'
+  /notes/{id}:
+    get:
+      operationId: getNote
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: A note
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Note'
+  /configs/{id}:
+    get:
+      operationId: getConfig
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: A config
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Config'
+  /version:
+    get:
+      operationId: getVersion
+      responses:
+        '200':
+          description: Version info
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/VersionInfo'
+  /uploads:
+    post:
+      operationId: uploadBlob
+      parameters:
+        - name: X-Signature
+          in: header
+          required: true
+          schema:
+            type: string
+        - name: X-Timestamp
+          in: header
+          required: true
+          schema:
+            type: string
+            format: date-time
+      requestBody:
+        required: true
+        content:
+          application/octet-stream:
+            schema:
+              type: string
+              format: binary
+      responses:
+        '201':
+          description: Stored
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - id
+                properties:
+                  id:
+                    type: string
+  /events/{id}:
+    get:
+      operationId: getEvent
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: An event
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Event'
+  /accounts/{id}:
+    get:
+      operationId: getAccount
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: An account
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Account'
+components:
+  schemas:
+    Pet:
+      oneOf:
+        - $ref: '#/components/schemas/Cat'
+        - $ref: '#/components/schemas/Dog'
+      discriminator:
+        propertyName: petType
+        mapping:
+          cat: '#/components/schemas/Cat'
+          dog: '#/components/schemas/Dog'
+    Cat:
+      type: object
+      required:
+        - petType
+        - meowVolume
+      properties:
+        petType:
+          type: string
+          enum:
+            - cat
+        meowVolume:
+          type: integer
+    Dog:
+      type: object
+      required:
+        - petType
+        - barkVolume
+      properties:
+        petType:
+          type: string
+          enum:
+            - dog
+        barkVolume:
+          type: integer
+    Note:
+      type: object
+      required:
+        - id
+        - body
+      properties:
+        id:
+          type: string
+        body:
+          type:
+            - string
+            - 'null'
+        archivedAt:
+          type:
+            - string
+            - 'null'
+          format: date-time
+    Config:
+      type: object
+      required:
+        - id
+      properties:
+        id:
+          type: string
+      patternProperties:
+        ^x-[a-z]+$:
+          type: string
+      additionalProperties: false
+    VersionInfo:
+      type: object
+      required:
+        - schemaVersion
+        - apiName
+      properties:
+        schemaVersion:
+          const: 1
+        apiName:
+          const: speckify
+    Event:
+      type: object
+      required:
+        - id
+        - status
+        - priority
+        - occurredAt
+      properties:
+        id:
+          type: string
+        status:
+          type: string
+          enum:
+            - pending
+            - active
+            - closed
+        priority:
+          type: integer
+          format: int32
+        occurredAt:
+          type: string
+          format: date-time
+        retries:
+          type: integer
+          format: int64
+    BaseEntity:
+      type: object
+      required:
+        - id
+        - createdAt
+      properties:
+        id:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+    Account:
+      allOf:
+        - $ref: '#/components/schemas/BaseEntity'
+        - type: object
+          required:
+            - owner
+            - balance
+          properties:
+            owner:
+              type: string
+            balance:
+              type: number
+              format: double
+    ThingKind:
+      type: string
+      enum:
+        - widget
+        - gadget
+    thing.schema:
+      $schema: https://json-schema.org/draft/2020-12/schema
+      $id: https://example.com/schemas/thing.schema.json
+      title: Thing
+      type: object
+      $defs:
+        ThingKind:
+          type: string
+          enum:
+            - widget
+            - gadget
+      required:
+        - id
+        - kind
+      properties:
+        id:
+          type: string
+          format: uuid
+        kind:
+          $ref: '#/components/schemas/ThingKind'
+        label:
+          type:
+            - string
+            - 'null'
+      additionalProperties: false
