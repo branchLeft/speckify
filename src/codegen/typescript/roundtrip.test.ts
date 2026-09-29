@@ -156,4 +156,63 @@ describe('generated server round-trip', () => {
     expect(results.okBody).toEqual({ id: 'blob-3' });
     expect(results.missingHeaderStatus).toBe(400);
   }, 30_000);
+
+  // B7: path and query values arrive off node:http as plain strings, but
+  // the generated zod schemas type them per the OpenAPI schema (z.int(),
+  // z.boolean(), z.array(...)) with no coercion of their own -- so every
+  // typed path/query parameter failed validation (400) before this fix,
+  // and even where it happened to pass, handlers received raw strings, not
+  // the parsed values their own generated types promise.
+  it('coerces path/query values by schema type and passes the parsed data to handlers', async () => {
+    const outDir = await generateFixture(
+      'i-param-coercion.bundled.yaml',
+      '@speckify-fixtures/param-coercion-rt',
+    );
+
+    const results = await runAgainstServer<{
+      status: number;
+      body: unknown;
+      receivedPathIdType: string;
+      receivedTag: unknown;
+      receivedVerboseType: string;
+    }>(
+      outDir,
+      `
+        import http from 'node:http';
+        import { createServer } from '${path.join(outDir, 'dist', 'server.js')}';
+
+        let captured;
+        const handlers = {
+          async getThing(request) {
+            captured = request;
+            return {
+              status: 200,
+              body: { id: request.path.id, tags: request.query.tag ?? [], verbose: request.query.verbose ?? null },
+            };
+          },
+        };
+        const server = http.createServer(createServer(handlers));
+        await new Promise((resolve) => server.listen(0, resolve));
+        const port = server.address().port;
+
+        const response = await fetch(
+          \`http://127.0.0.1:\${port}/things/42?tag=a&tag=b&verbose=true\`,
+        );
+        console.log(JSON.stringify({
+          status: response.status,
+          body: await response.json(),
+          receivedPathIdType: typeof captured.path.id,
+          receivedTag: captured.query.tag,
+          receivedVerboseType: typeof captured.query.verbose,
+        }));
+        server.close();
+        `,
+    );
+
+    expect(results.status).toBe(200);
+    expect(results.body).toEqual({ id: 42, tags: ['a', 'b'], verbose: true });
+    expect(results.receivedPathIdType).toBe('number');
+    expect(results.receivedTag).toEqual(['a', 'b']);
+    expect(results.receivedVerboseType).toBe('boolean');
+  }, 30_000);
 });

@@ -146,6 +146,119 @@ function withLowercasedHeaderKeys(schema: ZodType): ZodType {
   );
 }
 
+/**
+ * Path, query and header values all arrive off node:http as plain strings
+ * (or, for a repeated query key, several of them) -- but the generated zod
+ * schemas type each one by the spec's declared schema (z.int(), z.boolean(),
+ * z.array(...)), with no coercion of their own. Left alone, any typed
+ * path/query/header parameter fails validation outright (a raw "42" is not
+ * a `number` to zod), so every such value is coerced by its field's schema
+ * type *before* validation, and the handler is always given the validated,
+ * parsed result -- never the raw strings -- exactly as the body already is.
+ */
+function shapeOf(schema: ZodType | undefined): Record<string, ZodType> | undefined {
+  return schema && (schema as unknown as { shape?: Record<string, ZodType> }).shape;
+}
+
+/** Zod 4's own type discriminator, after peeling optional/nullable/default/readonly wrappers. */
+function baseTypeOf(schema: ZodType): { typeName: string | undefined; base: ZodType } {
+  let current = schema;
+  for (;;) {
+    const def = (current as unknown as { def?: { type?: string; innerType?: ZodType } }).def;
+    const isWrapper =
+      def?.type === 'optional' ||
+      def?.type === 'nullable' ||
+      def?.type === 'default' ||
+      def?.type === 'readonly';
+    if (isWrapper && def.innerType) {
+      current = def.innerType;
+      continue;
+    }
+    return { typeName: def?.type, base: current };
+  }
+}
+
+function elementSchemaOf(schema: ZodType): ZodType | undefined {
+  return (schema as unknown as { def?: { element?: ZodType } }).def?.element;
+}
+
+/** Coerces one raw string by a (possibly wrapped) scalar schema's declared type; anything else is left untouched. */
+function coerceScalar(schema: ZodType, raw: string): unknown {
+  const { typeName } = baseTypeOf(schema);
+  if (typeName === 'number') {
+    if (raw.trim() === '') return raw;
+    const parsed = Number(raw);
+    return Number.isNaN(parsed) ? raw : parsed;
+  }
+  if (typeName === 'boolean') {
+    if (raw.toLowerCase() === 'true') return true;
+    if (raw.toLowerCase() === 'false') return false;
+    return raw;
+  }
+  return raw;
+}
+
+/** Coerces a path or header record (each value always a single raw string) by `schema`'s field types. */
+function coerceSingleValuedByShape(
+  schema: ZodType | undefined,
+  record: Record<string, string>,
+): Record<string, unknown> {
+  const shape = shapeOf(schema);
+  if (!shape) return record;
+  const result: Record<string, unknown> = { ...record };
+  for (const [key, fieldSchema] of Object.entries(shape)) {
+    const raw = record[key];
+    if (raw === undefined) continue;
+    const { typeName, base } = baseTypeOf(fieldSchema);
+    if (typeName === 'array') {
+      const element = elementSchemaOf(base);
+      result[key] = [element ? coerceScalar(element, raw) : raw];
+    } else {
+      result[key] = coerceScalar(fieldSchema, raw);
+    }
+  }
+  return result;
+}
+
+/** Groups a URL's query string into `{ key: string[] }`, preserving every repeated occurrence of a key. */
+function multiValuedQuery(url: URL): Record<string, string[]> {
+  const result: Record<string, string[]> = {};
+  for (const [key, value] of url.searchParams.entries()) {
+    (result[key] ??= []).push(value);
+  }
+  return result;
+}
+
+/**
+ * Coerces a multi-valued query record by `schema`'s field types: a field
+ * typed as an array keeps every repeated value (coerced item by item); any
+ * other field takes its first occurrence, coerced as a scalar. A key with
+ * no matching schema field (or no schema at all) falls back to the same
+ * "single value, or an array if repeated" shape the adapter always used.
+ */
+function coerceQueryByShape(
+  schema: ZodType | undefined,
+  multiValued: Record<string, string[]>,
+): Record<string, unknown> {
+  const shape = shapeOf(schema);
+  const result: Record<string, unknown> = {};
+  for (const [key, values] of Object.entries(multiValued)) {
+    const fieldSchema = shape?.[key];
+    if (!fieldSchema) {
+      result[key] = values.length > 1 ? values : values[0];
+      continue;
+    }
+    const { typeName, base } = baseTypeOf(fieldSchema);
+    if (typeName === 'array') {
+      const element = elementSchemaOf(base);
+      result[key] = element ? values.map((value) => coerceScalar(element, value)) : values;
+    } else {
+      result[key] = coerceScalar(fieldSchema, values[0] ?? '');
+    }
+  }
+  return result;
+}
+
 async function handleRequest(
   req: IncomingMessage,
   res: ServerResponse,
@@ -164,32 +277,41 @@ async function handleRequest(
     sendProblem(res, 404, 'Not Found');
     return;
   }
-  const pathParams = matchPath(route.path, url.pathname) ?? {};
-
+  const rawPathParams = matchPath(route.path, url.pathname) ?? {};
+  let pathParams: Record<string, unknown> = coerceSingleValuedByShape(
+    route.pathSchema,
+    rawPathParams,
+  );
   if (route.pathSchema) {
     const result = route.pathSchema.safeParse(pathParams);
     if (!result.success) {
       sendProblem(res, 400, 'Invalid path parameters', result.error.issues);
       return;
     }
+    pathParams = result.data as Record<string, unknown>;
   }
 
-  const query = Object.fromEntries(url.searchParams.entries());
+  let query: Record<string, unknown> = coerceQueryByShape(route.querySchema, multiValuedQuery(url));
   if (route.querySchema) {
     const result = route.querySchema.safeParse(query);
     if (!result.success) {
       sendProblem(res, 400, 'Invalid query parameters', result.error.issues);
       return;
     }
+    query = result.data as Record<string, unknown>;
   }
 
-  const headers = headersToRecord(req);
+  const rawHeaders = headersToRecord(req);
+  let headers: Record<string, unknown> = rawHeaders;
   if (route.headersSchema) {
-    const result = withLowercasedHeaderKeys(route.headersSchema).safeParse(headers);
+    const lowercasedSchema = withLowercasedHeaderKeys(route.headersSchema);
+    const coercedHeaders = coerceSingleValuedByShape(lowercasedSchema, rawHeaders);
+    const result = lowercasedSchema.safeParse(coercedHeaders);
     if (!result.success) {
       sendProblem(res, 400, 'Invalid headers', result.error.issues);
       return;
     }
+    headers = result.data as Record<string, unknown>;
   }
 
   let body: unknown;
