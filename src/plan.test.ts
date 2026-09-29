@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 
+import { LintError } from './lint/index.js';
 import { computeContractPlan, renderChangelogMarkdown } from './plan.js';
 import type { OasdiffChange, ProcessRunner } from './oasdiff/index.js';
 import type { ClassificationMap } from './version/index.js';
@@ -20,6 +21,50 @@ const bundledSpecV1 = JSON.stringify({
 });
 
 describe('computeContractPlan', () => {
+  it('fails lint before ever running oasdiff, for a first publish', async () => {
+    const runProcess = vi.fn();
+    const invalidSpec = JSON.stringify({
+      openapi: '2.0',
+      info: { title: 'Widgets', version: '0.0.0' },
+      paths: {},
+    });
+
+    await expect(
+      computeContractPlan({
+        contract: 'orders-api',
+        bundledSpec: invalidSpec,
+        previous: null,
+        classificationMap: map,
+        toolchainImpactBump: 'none',
+        oasdiffPath: '/bin/oasdiff',
+        runProcess,
+      }),
+    ).rejects.toThrow(LintError);
+    expect(runProcess).not.toHaveBeenCalled();
+  });
+
+  it('fails lint before diffing against a previous version', async () => {
+    const runProcess = vi.fn();
+    const invalidSpec = JSON.stringify({
+      openapi: '3.0.3',
+      info: { title: 'Widgets', version: '0.0.0' },
+      paths: { '/widgets': { get: {} } },
+    });
+
+    await expect(
+      computeContractPlan({
+        contract: 'orders-api',
+        bundledSpec: invalidSpec,
+        previous: { version: '1.2.0', bundledSpec: bundledSpecV1 },
+        classificationMap: map,
+        toolchainImpactBump: 'none',
+        oasdiffPath: '/bin/oasdiff',
+        runProcess,
+      }),
+    ).rejects.toThrow(LintError);
+    expect(runProcess).not.toHaveBeenCalled();
+  });
+
   it('is a first publish when there is no previous record: always 1.0.0, no oasdiff run', async () => {
     const runProcess = vi.fn();
     const plan = await computeContractPlan({

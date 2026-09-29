@@ -3,6 +3,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
 import { toCanonicalJson } from './bundle/canonical-json.js';
+import { lintBundledSpec } from './lint/index.js';
 import { runOasdiffChangelog, type OasdiffChange, type ProcessRunner } from './oasdiff/index.js';
 import type { RegistryRecordEntry } from './record/index.js';
 import {
@@ -53,8 +54,15 @@ function stampVersion(bundledSpecJson: string, version: string): string {
  * A contract that has never been published diffs against nothing and
  * always resolves to the first published version, regardless of bump —
  * there is nothing to compare its spec to yet.
+ *
+ * The bundled spec is linted before any of that: a lint failure (an
+ * unsupported openapi version, a missing/duplicate operationId, a
+ * patternProperties schema) throws {@link LintError} and never reaches
+ * oasdiff, so a spec codegen can't handle never gets a version at all.
  */
 export async function computeContractPlan(input: ContractPlanInput): Promise<ContractPlan> {
+  lintBundledSpec(input.bundledSpec);
+
   const previousVersion = input.previous?.version ?? null;
 
   let changes: OasdiffChange[] = [];
