@@ -9,7 +9,7 @@ export default defineConfig({
       // already imports, so an untested file is absent rather than present
       // at zero — see standards/docs/testing.md, COV-1.
       include: ['src/**/*.ts'],
-      exclude: ['src/**/*.test.ts', 'src/cli.ts'],
+      exclude: ['src/**/*.test.ts', 'src/cli.ts', 'src/**/fixtures/**'],
       reporter: ['text', 'json', 'html'],
     },
   },

@@ -1,0 +1,15 @@
+openapi: 3.0.3
+info:
+  title: Widgets API
+  version: 9.9.9
+paths:
+  /widgets:
+    get:
+      operationId: listWidgets
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: './schemas/widget.schema.json'
