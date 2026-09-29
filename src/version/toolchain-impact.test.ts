@@ -1,12 +1,18 @@
+import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { describe, expect, it } from 'vitest';
 
 import { VersionError } from './errors.js';
-import { loadToolchainImpact, toolchainImpact } from './toolchain-impact.js';
+import {
+  loadToolchainImpact,
+  toolchainImpact,
+  TOOLCHAIN_IMPACT_FILENAME,
+} from './toolchain-impact.js';
 import type { ToolchainImpactEntry } from './types.js';
 
 const fixturesDir = fileURLToPath(new URL('./fixtures/', import.meta.url));
+const dataDir = fileURLToPath(new URL('../../data/', import.meta.url));
 
 const entries: ToolchainImpactEntry[] = [
   { speckifyVersion: '0.1.0', impact: 'none' },
@@ -47,5 +53,12 @@ describe('loadToolchainImpact', () => {
     await expect(loadToolchainImpact(`${fixturesDir}classification-map.json`)).rejects.toThrow(
       VersionError,
     );
+  });
+});
+
+describe('the committed data/toolchain-impact.json', () => {
+  it('ships in data/, resolved like the classification map (package root, not the consumer config dir)', async () => {
+    const result = await loadToolchainImpact(join(dataDir, TOOLCHAIN_IMPACT_FILENAME));
+    expect(result).toEqual([{ speckifyVersion: '0.1.0', impact: 'none' }]);
   });
 });

@@ -6,7 +6,11 @@ export {
 } from './classification-map.js';
 export { classify } from './classify.js';
 export { VersionError } from './errors.js';
-export { loadToolchainImpact, toolchainImpact } from './toolchain-impact.js';
+export {
+  loadToolchainImpact,
+  toolchainImpact,
+  TOOLCHAIN_IMPACT_FILENAME,
+} from './toolchain-impact.js';
 export type {
   Bump,
   ClassificationMap,

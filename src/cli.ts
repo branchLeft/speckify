@@ -21,6 +21,7 @@ import {
   loadClassificationMap,
   loadToolchainImpact,
   toolchainImpact,
+  TOOLCHAIN_IMPACT_FILENAME,
   type ClassificationMap,
   type ToolchainImpactEntry,
 } from './version/index.js';
@@ -95,11 +96,11 @@ async function buildPlanContext(configPath: string): Promise<PlanContext> {
   const config = await loadConfig(resolvedConfigPath);
   const configDir = dirname(resolvedConfigPath);
 
-  // The classification map is Speckify's own artifact, shipped with the
-  // package (`data/`), not something a consuming repo provides alongside
-  // its speckify.yaml.
+  // The classification map and the toolchain-impact file are both
+  // Speckify's own artifacts, shipped with the package (`data/`), not
+  // something a consuming repo provides alongside its speckify.yaml.
   const classificationMapPath = resolve(packageRoot, 'data', OASDIFF_CLASSIFICATION_MAP_FILENAME);
-  const toolchainImpactPath = resolve(configDir, 'toolchain-impact.json');
+  const toolchainImpactPath = resolve(packageRoot, 'data', TOOLCHAIN_IMPACT_FILENAME);
 
   const [classificationMap, toolchainImpactEntries, currentSpeckifyVersion, oasdiffPath] =
     await Promise.all([

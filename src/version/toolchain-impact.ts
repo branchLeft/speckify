@@ -7,6 +7,14 @@ import { toolchainImpactFileSchema, type ToolchainImpactEntry } from './types.js
 import type { Bump } from './types.js';
 
 /**
+ * `toolchain-impact.json`'s file name inside `data/`. Like the classification
+ * map, this is Speckify's own artifact — shipped with the package, not
+ * something a consuming repo provides alongside its speckify.yaml — so it
+ * resolves relative to the package root, not the caller's config directory.
+ */
+export const TOOLCHAIN_IMPACT_FILENAME = 'toolchain-impact.json';
+
+/**
  * The bump every consumer inherits purely from moving Speckify's own
  * toolchain forward, independent of any change to their spec: a generator
  * fix that changes emitted code shape is a break even when the spec it
