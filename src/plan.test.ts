@@ -1,0 +1,157 @@
+import { describe, expect, it, vi } from 'vitest';
+
+import { computeContractPlan, renderChangelogMarkdown } from './plan.js';
+import type { OasdiffChange, ProcessRunner } from './oasdiff/index.js';
+import type { ClassificationMap } from './version/index.js';
+
+const map: ClassificationMap = {
+  'response-required-property-removed': 'major',
+  'request-property-added': 'minor',
+};
+
+function runProcessReturning(changes: OasdiffChange[]): ProcessRunner {
+  return vi.fn(async () => Promise.resolve({ stdout: JSON.stringify(changes), stderr: '' }));
+}
+
+const bundledSpecV1 = JSON.stringify({
+  openapi: '3.0.3',
+  info: { title: 'Widgets', version: '0.0.0' },
+  paths: {},
+});
+
+describe('computeContractPlan', () => {
+  it('is a first publish when there is no previous record: always 1.0.0, no oasdiff run', async () => {
+    const runProcess = vi.fn();
+    const plan = await computeContractPlan({
+      contract: 'orders-api',
+      bundledSpec: bundledSpecV1,
+      previous: null,
+      classificationMap: map,
+      toolchainImpactBump: 'none',
+      oasdiffPath: '/bin/oasdiff',
+      runProcess,
+    });
+
+    expect(plan.previousVersion).toBeNull();
+    expect(plan.version).toBe('1.0.0');
+    expect(plan.bump).toBe('none');
+    expect(plan.changes).toEqual([]);
+    expect(runProcess).not.toHaveBeenCalled();
+
+    const stamped = JSON.parse(plan.bundledSpec) as { info: { version: string } };
+    expect(stamped.info.version).toBe('1.0.0');
+  });
+
+  it('bumps minor for an additive change against a published version', async () => {
+    const changes: OasdiffChange[] = [
+      { id: 'request-property-added', text: 'added an optional request property', level: 1 },
+    ];
+    const plan = await computeContractPlan({
+      contract: 'orders-api',
+      bundledSpec: bundledSpecV1,
+      previous: { version: '1.2.0', bundledSpec: bundledSpecV1 },
+      classificationMap: map,
+      toolchainImpactBump: 'none',
+      oasdiffPath: '/bin/oasdiff',
+      runProcess: runProcessReturning(changes),
+    });
+
+    expect(plan.version).toBe('1.3.0');
+    expect(plan.bump).toBe('minor');
+    expect(plan.unknownRuleIds).toEqual([]);
+  });
+
+  it('treats an unmapped rule id as major and reports it', async () => {
+    const changes: OasdiffChange[] = [{ id: 'some-new-rule', text: 'something changed', level: 2 }];
+    const plan = await computeContractPlan({
+      contract: 'orders-api',
+      bundledSpec: bundledSpecV1,
+      previous: { version: '1.2.0', bundledSpec: bundledSpecV1 },
+      classificationMap: map,
+      toolchainImpactBump: 'none',
+      oasdiffPath: '/bin/oasdiff',
+      runProcess: runProcessReturning(changes),
+    });
+
+    expect(plan.bump).toBe('major');
+    expect(plan.unknownRuleIds).toEqual(['some-new-rule']);
+  });
+
+  it('bumps patch when the spec text changed but oasdiff reports no semantic change', async () => {
+    const revisedSpec = JSON.stringify({
+      openapi: '3.0.3',
+      info: { title: 'Widgets API', version: '0.0.0' },
+      paths: {},
+    });
+    const plan = await computeContractPlan({
+      contract: 'orders-api',
+      bundledSpec: revisedSpec,
+      previous: { version: '1.2.0', bundledSpec: bundledSpecV1 },
+      classificationMap: map,
+      toolchainImpactBump: 'none',
+      oasdiffPath: '/bin/oasdiff',
+      runProcess: runProcessReturning([]),
+    });
+
+    expect(plan.bump).toBe('patch');
+    expect(plan.version).toBe('1.2.1');
+  });
+
+  it('leaves the version unchanged when the spec text and semantics are both unchanged', async () => {
+    const plan = await computeContractPlan({
+      contract: 'orders-api',
+      bundledSpec: bundledSpecV1,
+      previous: { version: '1.2.0', bundledSpec: bundledSpecV1 },
+      classificationMap: map,
+      toolchainImpactBump: 'none',
+      oasdiffPath: '/bin/oasdiff',
+      runProcess: runProcessReturning([]),
+    });
+
+    expect(plan.bump).toBe('none');
+    expect(plan.version).toBe('1.2.0');
+  });
+
+  it('takes the max of the spec bump and the toolchain impact bump', async () => {
+    const changes: OasdiffChange[] = [
+      { id: 'request-property-added', text: 'added an optional request property', level: 1 },
+    ];
+    const plan = await computeContractPlan({
+      contract: 'orders-api',
+      bundledSpec: bundledSpecV1,
+      previous: { version: '1.2.0', bundledSpec: bundledSpecV1 },
+      classificationMap: map,
+      toolchainImpactBump: 'major',
+      oasdiffPath: '/bin/oasdiff',
+      runProcess: runProcessReturning(changes),
+    });
+
+    expect(plan.bump).toBe('major');
+    expect(plan.version).toBe('2.0.0');
+  });
+});
+
+describe('renderChangelogMarkdown', () => {
+  it('renders "No changes." for an empty list', () => {
+    expect(renderChangelogMarkdown([])).toBe('No changes.\n');
+  });
+
+  it('renders each change as a bullet, highest level first', () => {
+    const changes: OasdiffChange[] = [
+      { id: 'description-changed', text: 'description changed', level: 1 },
+      {
+        id: 'response-required-property-removed',
+        text: "removed the required property 'name'",
+        level: 3,
+        operation: 'GET',
+        path: '/widgets',
+      },
+    ];
+
+    const markdown = renderChangelogMarkdown(changes);
+    const lines = markdown.trim().split('\n');
+    expect(lines[0]).toContain('response-required-property-removed');
+    expect(lines[0]).toContain('(GET /widgets)');
+    expect(lines[1]).toContain('description-changed');
+  });
+});

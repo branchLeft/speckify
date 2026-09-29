@@ -45,7 +45,7 @@ export interface RunOasdiffOptions {
   oasdiffPath: string;
   baseSpecPath: string;
   revisionSpecPath: string;
-  runProcess?: ProcessRunner;
+  runProcess?: ProcessRunner | undefined;
 }
 
 /**

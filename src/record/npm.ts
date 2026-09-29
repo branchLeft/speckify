@@ -7,8 +7,8 @@ export interface NpmRegistryOptions {
   /** The npm-compatible registry base URL, e.g. GitHub Packages' `https://npm.pkg.github.com`. */
   registryUrl: string;
   /** A bearer token for a registry that requires auth, such as GitHub Packages. */
-  token?: string;
-  fetchImpl?: FetchLike;
+  token?: string | undefined;
+  fetchImpl?: FetchLike | undefined;
 }
 
 interface NpmPackument {

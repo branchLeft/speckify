@@ -5,8 +5,8 @@ import type { FetchLike, RegistryRecord, RegistryRecordEntry } from './types.js'
 
 export interface PyPiRegistryOptions {
   /** The PyPI-compatible index base URL. Defaults to `https://pypi.org`. */
-  indexUrl?: string;
-  fetchImpl?: FetchLike;
+  indexUrl?: string | undefined;
+  fetchImpl?: FetchLike | undefined;
 }
 
 interface PyPiRelease {
