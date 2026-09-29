@@ -96,10 +96,10 @@ For each contract, on every `speckify check` or `speckify publish` run:
 
 Read purely as a wire contract, renaming an `operationId` or a tag
 changes nothing a client sends or receives. But the generators Speckify
-targets (`openapi-typescript`/`hey-api`-style clients, `openapi-python-client`,
-`oazapfts`) turn `operationId` and tag groupings directly into the
-_names_ of generated methods and modules. A rename there breaks every
-generated call site at compile time, even though the HTTP traffic is
+targets (`@hey-api/openapi-ts`, `openapi-python-client`,
+`datamodel-code-generator`) turn `operationId` and tag groupings directly
+into the _names_ of generated methods and modules. A rename there breaks
+every generated call site at compile time, even though the HTTP traffic is
 identical — so the classification map judges both as `major`, deliberately
 departing from what a pure protocol-level reading would say.
 
