@@ -1,5 +1,4 @@
 {
-  "extends": "@branchleft/tsconfig/strict-2.json",
   "compilerOptions": {
     "target": "ES2023",
     "module": "NodeNext",
@@ -9,6 +8,18 @@
     "rootDir": ".",
     "declaration": true,
     "sourceMap": true,
+    "strict": true,
+    "exactOptionalPropertyTypes": true,
+    "noUncheckedIndexedAccess": true,
+    "noImplicitOverride": true,
+    "noFallthroughCasesInSwitch": true,
+    "noImplicitReturns": true,
+    "noUnusedLocals": true,
+    "noUnusedParameters": true,
+    "forceConsistentCasingInFileNames": true,
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "resolveJsonModule": true,
     "verbatimModuleSyntax": true
   },
   "include": ["src", "test", "vitest.config.ts", "scripts"]

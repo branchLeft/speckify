@@ -15,3 +15,4 @@ launcher/dist/
 launcher/build/
 examples/**/.speckify/
 *.egg-info/
+.pytest_cache/

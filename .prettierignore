@@ -2,3 +2,4 @@ dist/
 coverage/
 pnpm-lock.yaml
 src/version/fixtures/invalid.json
+.pytest_cache/

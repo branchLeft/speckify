@@ -30,9 +30,6 @@ importers:
         specifier: 4.6.5
         version: 4.6.5
     devDependencies:
-      '@branchleft/tsconfig':
-        specifier: 0.8.3
-        version: 0.8.3
       '@eslint/js':
         specifier: 9.20.0
         version: 9.20.0
@@ -108,9 +105,6 @@ packages:
   '@bcoe/v8-coverage@1.0.2':
     resolution: {integrity: sha512-6zABk/ECA/QYSCQ1NGiVwwbQerUCZ+TQbp64Q3AgmfNvurHH0j8TtXa1qbShXA6qqkpAj4V5W8pP6mLe1mcMqA==}
     engines: {node: '>=18'}
-
-  '@branchleft/tsconfig@0.8.3':
-    resolution: {integrity: sha512-0Xb9bk/CLdPGfWU34aShos8Bm0eS0hSqSLrQsy+folkmQvGI6CfVlw3oReBziMoXppdwU52IOMjP8LL7Kk1xRg==, tarball: https://npm.pkg.github.com/download/@branchleft/tsconfig/0.8.3/c5912d89dc913beb2c3dff73320e58b4d2350fb0}
 
   '@esbuild/aix-ppc64@0.25.12':
     resolution: {integrity: sha512-Hhmwd6CInZ3dwpuGTF8fJG6yoWmsToE+vYgD4nytZVxcu1ulHpUQRAB1UJ8+N1Am3Mz4+xOByoQoSZf4D+CpkA==}
@@ -1528,8 +1522,6 @@ snapshots:
       '@babel/helper-validator-identifier': 7.29.7
 
   '@bcoe/v8-coverage@1.0.2': {}
-
-  '@branchleft/tsconfig@0.8.3': {}
 
   '@esbuild/aix-ppc64@0.25.12':
     optional: true
