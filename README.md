@@ -130,7 +130,7 @@ it, and never add a `publish` job back into it.
 
 ## Limitations
 
-- **No Go.** TypeScript and Python only, for now.
+- **TypeScript and Python only**, for now.
 - **No standalone JSON Schema contracts.** The input is an OpenAPI
   document; a bare JSON Schema with no operations has nothing for
   `oasdiff` to diff a request/response contract against.

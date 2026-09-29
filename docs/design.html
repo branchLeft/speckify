@@ -340,12 +340,12 @@
         <pre class="mermaid">
 flowchart LR
   subgraph producer["Producer repository"]
-    spec["openapi.yaml<br/>beside the routes"]
+    spec["openapi.yaml&lt;br/&gt;beside the routes"]
     cfg["speckify.yaml"]
-    wf["speckify.yml workflow<br/>check + publish jobs"]
+    wf["speckify.yml workflow&lt;br/&gt;check + publish jobs"]
   end
   subgraph speck["branchLeft/speckify (MIT)"]
-    action["Composite Action<br/>pinned by commit SHA"]
+    action["Composite Action&lt;br/&gt;pinned by commit SHA"]
     cli["speckify CLI"]
   end
   subgraph tools["Pinned tools"]
@@ -356,15 +356,15 @@ flowchart LR
     tsc["TypeScript compiler API"]
     grf["griffe"]
   end
-  ghp[("GitHub Packages<br/>npm")]
+  ghp[("GitHub Packages&lt;br/&gt;npm")]
   pypi[("PyPI")]
-  rel["GitHub Release<br/>+ tag"]
-  consumer["Consumer repository<br/>pins a version"]
+  rel["GitHub Release&lt;br/&gt;+ tag"]
+  consumer["Consumer repository&lt;br/&gt;pins a version"]
   wf --> action --> cli
   spec --> cli
   cfg --> cli
   cli --> tools
-  cli -- "read last published<br/>version and spec" --> ghp
+  cli -- "read last published&lt;br/&gt;version and spec" --> ghp
   cli -- "read last published" --> pypi
   cli -- "publish" --> ghp
   cli -- "publish (OIDC)" --> pypi
@@ -477,18 +477,18 @@ publish:
       <figure class="diagram">
         <pre class="mermaid">
 flowchart TD
-  A["Bundle the spec<br/>inline external $refs, sort keys"] --> B{"Lint"}
-  B -- "fails" --> X["Stop with a clear error<br/>no version is computed"]
-  B -- "passes" --> C["Read the record<br/>last published version + its openapi.json"]
+  A["Bundle the spec&lt;br/&gt;inline external $refs, sort keys"] --> B{"Lint"}
+  B -- "fails" --> X["Stop with a clear error&lt;br/&gt;no version is computed"]
+  B -- "passes" --> C["Read the record&lt;br/&gt;last published version + its openapi.json"]
   C --> D{"Published before?"}
   D -- "no" --> F["First publish: 1.0.0"]
   D -- "yes" --> E["Normalise both: info.version to 0.0.0"]
   E --> G{"Identical?"}
   G -- "yes" --> N["Nothing to publish"]
-  G -- "no" --> H1["oasdiff, always --flatten-allof<br/>then the classification map"]
-  G -- "no" --> H2["Structural diff<br/>judged against the allow-list"]
-  G -- "no" --> H3["Generate both versions<br/>compare client surfaces"]
-  G -- "no" --> H4["Toolchain impact<br/>of the Speckify release"]
+  G -- "no" --> H1["oasdiff, always --flatten-allof&lt;br/&gt;then the classification map"]
+  G -- "no" --> H2["Structural diff&lt;br/&gt;judged against the allow-list"]
+  G -- "no" --> H3["Generate both versions&lt;br/&gt;compare client surfaces"]
+  G -- "no" --> H4["Toolchain impact&lt;br/&gt;of the Speckify release"]
   H1 --> M["bump = the highest of the four"]
   H2 --> M
   H3 --> M
@@ -588,9 +588,9 @@ flowchart TD
       <figure class="diagram">
         <pre class="mermaid">
 flowchart LR
-  E["One structural edit<br/>location + action"] --> D{"Documentation only?"}
+  E["One structural edit&lt;br/&gt;location + action"] --> D{"Documentation only?"}
   D -- "yes" --> P["patch"]
-  D -- "no" --> L{"Matches an allow-list rule<br/>in every direction it reaches?"}
+  D -- "no" --> L{"Matches an allow-list rule&lt;br/&gt;in every direction it reaches?"}
   L -- "yes" --> MI["minor"]
   L -- "no" --> MA["major"]
 </pre>
@@ -741,13 +741,13 @@ flowchart LR
       <figure class="diagram">
         <pre class="mermaid">
 flowchart TD
-  P["Previous spec<br/>from the registry"] --> G1["Generate with the<br/>current toolchain"]
-  N["New spec"] --> G2["Generate with the<br/>current toolchain"]
-  G1 --> TS["TypeScript: one ts.Program<br/>over both packages' .d.ts files"]
+  P["Previous spec&lt;br/&gt;from the registry"] --> G1["Generate with the&lt;br/&gt;current toolchain"]
+  N["New spec"] --> G2["Generate with the&lt;br/&gt;current toolchain"]
+  G1 --> TS["TypeScript: one ts.Program&lt;br/&gt;over both packages' .d.ts files"]
   G2 --> TS
-  G1 --> PY["Python: griffe object tree<br/>of both packages"]
+  G1 --> PY["Python: griffe object tree&lt;br/&gt;of both packages"]
   G2 --> PY
-  TS --> S{"Client or server<br/>surface?"}
+  TS --> S{"Client or server&lt;br/&gt;surface?"}
   PY --> S
   S -- "client" --> B["Joins the bump"]
   S -- "server" --> R["Reported only"]
@@ -786,15 +786,15 @@ flowchart TD
       <figure class="diagram">
         <pre class="mermaid">
 flowchart LR
-  B["Bundled spec<br/>at version X.Y.Z"] --> T["TypeScript package"]
+  B["Bundled spec&lt;br/&gt;at version X.Y.Z"] --> T["TypeScript package"]
   B --> Y["Python package"]
   T --> T1[". client SDK"]
   T --> T2["./types"]
   T --> T3["./zod validators"]
-  T --> T4["./server Handlers +<br/>node:http adapter"]
-  Y --> Y1["client<br/>openapi-python-client"]
-  Y --> Y2["models<br/>pydantic v2"]
-  Y --> Y3["server Handlers Protocol +<br/>FastAPI router"]
+  T --> T4["./server Handlers +&lt;br/&gt;node:http adapter"]
+  Y --> Y1["client&lt;br/&gt;openapi-python-client"]
+  Y --> Y2["models&lt;br/&gt;pydantic v2"]
+  Y --> Y3["server Handlers Protocol +&lt;br/&gt;FastAPI router"]
 </pre>
         <figcaption>
           Every package also carries <code>openapi.json</code> (the bundled spec, stamped with its
@@ -835,12 +835,12 @@ flowchart LR
       <figure class="diagram">
         <pre class="mermaid">
 flowchart TD
-  S["Planned version X.Y.Z"] --> Q{"Does this registry<br/>already have X.Y.Z?"}
+  S["Planned version X.Y.Z"] --> Q{"Does this registry&lt;br/&gt;already have X.Y.Z?"}
   Q -- "no" --> P["Publish it"]
-  Q -- "yes" --> C{"Is its openapi.json the<br/>spec we just built?"}
+  Q -- "yes" --> C{"Is its openapi.json the&lt;br/&gt;spec we just built?"}
   C -- "yes" --> K["Skip: already published"]
-  C -- "no" --> F["Fail loudly: another publish<br/>raced this one; rerun"]
-  P --> T["Tag and GitHub Release<br/>a failure here only warns"]
+  C -- "no" --> F["Fail loudly: another publish&lt;br/&gt;raced this one; rerun"]
+  P --> T["Tag and GitHub Release&lt;br/&gt;a failure here only warns"]
 </pre>
       </figure>
       <ul>
@@ -1094,7 +1094,7 @@ flowchart TD
 
       <h2 id="limits">Limits and open work</h2>
       <ul>
-        <li>TypeScript and Python only. No Go.</li>
+        <li>TypeScript and Python only.</li>
         <li>
           No standalone JSON Schema contracts yet; JSON Schema is supported inside OpenAPI 3.1
           documents.
