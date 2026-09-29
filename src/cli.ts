@@ -17,6 +17,7 @@ import {
   type TargetRecord,
 } from './record/index.js';
 import { computeContractPlan, renderChangelogMarkdown, type ContractPlan } from './plan.js';
+import { buildContract, DEFAULT_BUILD_OUT_DIR } from './build.js';
 import {
   loadClassificationMap,
   loadToolchainImpact,
@@ -173,10 +174,27 @@ program
   });
 
 program
-  .command('codegen')
-  .description('Generate client/server packages for every contract (not yet implemented).')
-  .action(() => {
-    notImplemented('codegen');
+  .command('build')
+  .description(
+    'Plan every contract, then generate and build its client/server packages into --out.',
+  )
+  .option('-c, --config <path>', 'path to speckify.yaml', 'speckify.yaml')
+  .option('-o, --out <dir>', 'output directory', DEFAULT_BUILD_OUT_DIR)
+  .action(async (options: { config: string; out: string }) => {
+    const context = await buildPlanContext(options.config);
+    for (const contract of context.config.contracts) {
+      const plan = await planContract(context, contract);
+      const result = await buildContract(plan, {
+        contract,
+        speckifyVersion: context.currentSpeckifyVersion,
+        toolchainDir: join(packageRoot, 'python'),
+        outDir: options.out,
+      });
+      const from = plan.previousVersion ?? '(unpublished)';
+      console.log(`## ${plan.contract}: ${from} -> ${plan.version} (${plan.bump})`);
+      if (result.typescript) console.log(`  typescript: ${result.typescript.dir}`);
+      if (result.python) console.log(`  python: ${result.python.distDir}`);
+    }
   });
 
 program.parseAsync(process.argv).catch((error: unknown) => {
