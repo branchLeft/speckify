@@ -24,15 +24,9 @@ function kindOf(fileName: string): 'wheel' | 'sdist' | null {
 }
 
 /**
- * Runs `uv build` (not `uv run`: building a standalone project uses its own
- * `pyproject.toml`, not the toolchain's) against the generated project, and
- * returns the wheel and sdist it produced.
- *
- * Unlike the generator steps, this deliberately does not run inside the
- * pinned `python/` toolchain's environment — the generated package has its
- * own dependency set (httpx, pydantic, optionally fastapi), declared in its
- * own `pyproject.toml`, and building it must resolve exactly those, not the
- * generator toolchain's.
+ * Runs `uv build` against the generated project and returns the wheel and
+ * sdist it produced. Deliberately outside the pinned toolchain env — see
+ * `build.md` for why.
  *
  * @throws {BuildError} if `uv build` fails or produces neither artifact.
  */

@@ -34,17 +34,13 @@ async function copyDir(source: string, destination: string): Promise<void> {
 
 /**
  * Runs openapi-python-client against `bundledSpec` and writes the result as
- * `<targetDir>/client/`, importable as `<import_name>.client`.
- *
- * `package_name_override: client` plus `--meta none` (both openapi-python-client's
- * own config options, per the spike report — never a regex patch of its output)
- * place the generated package directly at that path with no extra nesting or
- * generated pyproject/README, which Speckify's own package layout already owns.
+ * `<targetDir>/client/`, importable as `<import_name>.client`. See
+ * `client.md` for the config options that place it there with no extra
+ * nesting, and the completeness guard this depends on.
  *
  * @throws {ClientGenerationError} if the tool produces no output at all.
- * @throws {CompletenessGuardError} if any operationId in the spec has no
- * generated function — openapi-python-client 0.29.1 silently skips endpoints
- * it cannot handle (see completeness-guard.ts) rather than erroring on them.
+ * @throws {CompletenessGuardError} if any operationId has no generated
+ * function.
  */
 export async function generateClient(
   bundledSpec: string,

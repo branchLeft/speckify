@@ -46,19 +46,11 @@ function stampVersion(bundledSpecJson: string, version: string): string {
 }
 
 /**
- * Computes one contract's plan: the oasdiff changelog against the last
- * published spec (or, for a first publish, the empty set of changes), the
- * bump that follows from it combined with the toolchain's own impact, and
- * the version that bump produces.
+ * Computes one contract's plan: lint, diff against the last published spec,
+ * bump, and the resulting version. See `plan.md` for the first-publish and
+ * lint-ordering behaviour this depends on.
  *
- * A contract that has never been published diffs against nothing and
- * always resolves to the first published version, regardless of bump —
- * there is nothing to compare its spec to yet.
- *
- * The bundled spec is linted before any of that: a lint failure (an
- * unsupported openapi version, a missing/duplicate operationId, a
- * patternProperties schema) throws {@link LintError} and never reaches
- * oasdiff, so a spec codegen can't handle never gets a version at all.
+ * @throws {LintError} if the bundled spec fails lint.
  */
 export async function computeContractPlan(input: ContractPlanInput): Promise<ContractPlan> {
   lintBundledSpec(input.bundledSpec);

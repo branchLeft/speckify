@@ -7,7 +7,6 @@ and round-trips a FastAPI TestClient through the generated router.
 from __future__ import annotations
 
 import sys
-import textwrap
 import typing
 from pathlib import Path
 
@@ -45,29 +44,10 @@ UPLOAD_BLOB = {
     "responses": [{"statusCode": "201", "model": None}],
 }
 
-MODELS_PY = textwrap.dedent(
-    """
-    from __future__ import annotations
-
-    import typing
-
-    import pydantic
-
-
-    class Cat(pydantic.BaseModel):
-        pet_type: typing.Literal["cat"] = pydantic.Field(alias="petType")
-        meow_volume: int = pydantic.Field(alias="meowVolume")
-        model_config = pydantic.ConfigDict(populate_by_name=True)
-
-
-    class Dog(pydantic.BaseModel):
-        pet_type: typing.Literal["dog"] = pydantic.Field(alias="petType")
-        bark_volume: int = pydantic.Field(alias="barkVolume")
-        model_config = pydantic.ConfigDict(populate_by_name=True)
-
-
-    Pet = pydantic.RootModel[typing.Annotated[typing.Union[Cat, Dog], pydantic.Field(discriminator="pet_type")]]
-    """
+# A hand-written stand-in for datamodel-code-generator's output — real
+# generator output is exercised elsewhere (client.test.ts, models.test.ts).
+MODELS_PY = (Path(__file__).parent / "fixtures" / "hand_written_models.py").read_text(
+    encoding="utf-8"
 )
 
 

@@ -64,11 +64,7 @@ export interface ResolveOasdiffOptions {
 
 /**
  * Resolves the path to a working oasdiff {@link OASDIFF_VERSION} binary.
- *
- * Resolution order: `SPECKIFY_OASDIFF` env var, unconditionally trusted;
- * otherwise the version's cache directory; otherwise a download from the
- * GitHub release, verified against the committed SHA-256 table before it is
- * ever executed.
+ * Resolution order and the trust model behind it: see `binary.md`.
  *
  * @throws {OasdiffError} if the platform has no published build, the
  * download fails, or its checksum does not match.
