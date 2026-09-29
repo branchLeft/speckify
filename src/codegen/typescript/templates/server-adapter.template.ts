@@ -7,7 +7,7 @@
  * it is baked into a producer's published package.
  */
 import type { IncomingMessage, ServerResponse } from 'node:http';
-import type { ZodType } from 'zod';
+import { z, type ZodType } from 'zod';
 
 export interface RequestContext {
   readonly rawRequest: IncomingMessage;
@@ -132,6 +132,20 @@ function headersToRecord(req: IncomingMessage): Record<string, string> {
   return record;
 }
 
+/**
+ * Node always lowercases incoming header names, but a header schema's keys
+ * are whatever case the spec declared (hey-api's zod plugin preserves it
+ * verbatim). Headers are case-insensitive per RFC 9110, so the schema's own
+ * declared keys are lowercased to match before validating against `req.headers`.
+ */
+function withLowercasedHeaderKeys(schema: ZodType): ZodType {
+  const shape = (schema as unknown as { shape?: Record<string, ZodType> }).shape;
+  if (!shape) return schema;
+  return z.object(
+    Object.fromEntries(Object.entries(shape).map(([key, value]) => [key.toLowerCase(), value])),
+  );
+}
+
 async function handleRequest(
   req: IncomingMessage,
   res: ServerResponse,
@@ -171,7 +185,7 @@ async function handleRequest(
 
   const headers = headersToRecord(req);
   if (route.headersSchema) {
-    const result = route.headersSchema.safeParse(headers);
+    const result = withLowercasedHeaderKeys(route.headersSchema).safeParse(headers);
     if (!result.success) {
       sendProblem(res, 400, 'Invalid headers', result.error.issues);
       return;

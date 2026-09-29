@@ -168,7 +168,11 @@ describe('createRequestListener', () => {
       method: 'POST',
       path: '/uploads',
       bodyMode: 'octet-stream',
-      headersSchema: z.object({ 'x-signature': z.string() }),
+      // hey-api's zod plugin preserves the spec's declared header casing
+      // ('X-Signature'), while Node always lowercases incoming header
+      // names — this schema's mixed case is deliberate, to prove the
+      // adapter reconciles the two rather than requiring lowercase specs.
+      headersSchema: z.object({ 'X-Signature': z.string() }),
     };
     const listener = createRequestListener(
       {
