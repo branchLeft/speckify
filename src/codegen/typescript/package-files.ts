@@ -46,7 +46,12 @@ export function buildPackageJson(input: PackageFilesInput): Record<string, unkno
     version: input.version,
     type: 'module',
     exports,
-    files: ['dist'],
+    // npm only auto-includes package.json, README and the main entry;
+    // CHANGELOG.md and openapi.json are written to the package root
+    // alongside package.json (see generate.ts) and would otherwise be
+    // silently dropped from the published tarball (B5) -- and
+    // record/npm.ts depends on package/openapi.json actually being there.
+    files: ['dist', 'openapi.json', 'CHANGELOG.md', 'README.md'],
     dependencies: { zod: '^4.6.5' },
     speckify: { speckifyVersion: input.speckifyVersion },
   };

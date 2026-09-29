@@ -1,6 +1,8 @@
+import { execFile } from 'node:child_process';
 import { mkdtemp, readFile, rm } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
+import { promisify } from 'node:util';
 import { parse as parseYaml } from 'yaml';
 import { afterEach, describe, expect, it } from 'vitest';
 import { writeFile as writeFileFs } from 'node:fs/promises';
@@ -85,6 +87,37 @@ describe('generateTypeScriptPackage', () => {
     await expect(
       readFile(path.join(outDir, 'dist', 'handlers.gen.d.ts'), 'utf8'),
     ).resolves.toContain('Handlers');
+  }, 30_000);
+
+  // B5: `files` in package.json is the only thing that decides what a real
+  // `npm publish` actually ships (past package.json/README/the main entry,
+  // which npm always includes) -- writing openapi.json and CHANGELOG.md to
+  // disk proves nothing about whether npm would pack them.
+  it('packs openapi.json and CHANGELOG.md into the published tarball, per npm pack --dry-run --json', async () => {
+    const outDir = await tempOutDir();
+    const bundledSpec = await loadFixture('combined.bundled.yaml');
+
+    await generateTypeScriptPackage({
+      bundledSpec,
+      packageName: '@speckify-fixtures/combined',
+      version: '1.0.0',
+      client: true,
+      server: true,
+      changelog: '# Changelog\n\n## 1.0.0\n\nInitial release.\n',
+      speckifyVersion: '0.1.0',
+      outDir,
+    });
+
+    const execFileAsync = promisify(execFile);
+    const { stdout } = await execFileAsync('npm', ['pack', '--dry-run', '--json'], {
+      cwd: outDir,
+    });
+    const [packResult] = JSON.parse(stdout) as [{ files: { path: string }[] }];
+    const packedPaths = packResult.files.map((file) => file.path);
+
+    expect(packedPaths).toContain('openapi.json');
+    expect(packedPaths).toContain('CHANGELOG.md');
+    expect(packedPaths.some((filePath) => filePath.startsWith('dist/'))).toBe(true);
   }, 30_000);
 
   it('rejects when neither client nor server is requested', async () => {

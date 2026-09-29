@@ -1,7 +1,8 @@
 import { mkdtemp, readFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { spawn } from 'node:child_process';
+import { execFile, spawn } from 'node:child_process';
+import { promisify } from 'node:util';
 
 import { afterEach, describe, expect, it } from 'vitest';
 
@@ -100,6 +101,42 @@ describe.skipIf(!uvAvailable)(describeTitle, () => {
     );
 
     expect(output).toContain('IMPORT_OK');
+  }, 120_000);
+
+  // B5: pyproject.toml's [tool.speckify] does not carry into the wheel's
+  // METADATA, and hatchling's `packages = ["src/<name>"]` only ships files
+  // that live under that directory -- a root-level CHANGELOG.md is not
+  // included in the wheel by default, only in the sdist. Listing the real
+  // built wheel's contents is the only thing that proves what a `pip
+  // install` actually gets.
+  it('includes openapi.json, CHANGELOG.md and the speckify version file in the built wheel', async () => {
+    projectDir = await mkdtemp(join(tmpdir(), 'speckify-build-'));
+    const bundledSpec = loadFixtureAsBundledSpec('b-oneof-discriminator.bundled.yaml', '0.2.0');
+
+    const result = await buildPythonPackage(
+      {
+        bundledSpec,
+        packageName: 'speckify-fixture-b3',
+        version: '0.2.0',
+        client: false,
+        server: false,
+        changelog: '## 0.2.0\n\n- Wheel packaging fix.\n',
+        speckifyVersion: '0.4.1',
+      },
+      { projectDir, toolchainDir: TOOLCHAIN_DIR },
+    );
+
+    const wheel = result.artifacts.find((a) => a.kind === 'wheel');
+    if (!wheel) {
+      throw new Error('no wheel produced');
+    }
+
+    const execFileAsync = promisify(execFile);
+    const { stdout } = await execFileAsync('unzip', ['-l', wheel.path]);
+
+    expect(stdout).toContain('speckify_fixture_b3/openapi.json');
+    expect(stdout).toContain('speckify_fixture_b3/CHANGELOG.md');
+    expect(stdout).toContain('speckify_fixture_b3/speckify.json');
   }, 120_000);
 
   it('stamps info.version and [tool.speckify] version into the generated package', async () => {

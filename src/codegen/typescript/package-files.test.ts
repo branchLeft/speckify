@@ -24,6 +24,18 @@ describe('buildPackageJson', () => {
     expect(Object.hasOwn(pkg.exports as object, './server')).toBe(true);
   });
 
+  // B5: npm only auto-includes package.json, README and the main entry --
+  // CHANGELOG.md and openapi.json (written alongside package.json by
+  // generate.ts) are otherwise silently dropped from the published
+  // tarball, and record/npm.ts's whole "read the last published spec back"
+  // model depends on package/openapi.json actually being there.
+  it('lists openapi.json, CHANGELOG.md and README.md in files, not just dist', () => {
+    const pkg = buildPackageJson({ ...base, client: true, server: true });
+    expect(pkg.files).toEqual(
+      expect.arrayContaining(['dist', 'openapi.json', 'CHANGELOG.md', 'README.md']),
+    );
+  });
+
   it('carries the speckify metadata field', () => {
     const pkg = buildPackageJson({ ...base, client: true, server: true });
     expect(pkg.speckify).toEqual({ speckifyVersion: '0.1.0' });
