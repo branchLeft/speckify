@@ -83,7 +83,7 @@ interface PlanContext {
  * The bump every consumer inherits from the toolchain moving forward
  * depends on which Speckify version last *generated* the published package
  * (`previous.speckifyVersion`), never the contract's own semver
- * (`previous.version`) -- those are different axes entirely (B3). Exported
+ * (`previous.version`) -- those are different axes entirely. Exported
  * and pulled out of {@link planContract} so that distinction has its own
  * test, independent of the registry I/O the rest of that function does.
  */

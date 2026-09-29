@@ -157,7 +157,7 @@ describe('generated server round-trip', () => {
     expect(results.missingHeaderStatus).toBe(400);
   }, 30_000);
 
-  // B7: path and query values arrive off node:http as plain strings, but
+  // Path and query values arrive off node:http as plain strings, but
   // the generated zod schemas type them per the OpenAPI schema (z.int(),
   // z.boolean(), z.array(...)) with no coercion of their own -- so every
   // typed path/query parameter failed validation (400) before this fix,

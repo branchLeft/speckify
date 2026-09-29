@@ -28,18 +28,14 @@ const uvAvailable = await hasUv();
 const networkAvailable = await reachable('https://registry.npmjs.org');
 
 /**
- * Runs the *built* CLI (`node dist/cli.js build`), not the TypeScript
- * source under vitest -- everything src/e2e/pet-shelter.test.ts exercises
- * runs against src/ directly, so it never notices when `pnpm build` fails
- * to carry a runtime asset (a Jinja2 template, the raw TS server-adapter
- * template) into dist/ (B6). server:true on both languages specifically
- * exercises the templates only the server codegen path reads.
- *
- * The registries this hits (GitHub Packages, PyPI) are real, but unrelated
- * package names under this contract have never been published to either,
- * so `resolvePreviousState` naturally resolves to "never published" --
- * the same shape a mocked first-publish registry would return -- without
- * this test writing to either registry.
+ * Runs the *built* CLI, not the TypeScript source under vitest --
+ * src/e2e/pet-shelter.test.ts runs against src/ directly, so it never
+ * notices when `pnpm build` fails to carry a runtime asset (a Jinja2
+ * template, the raw TS server-adapter template) into dist/. server:true
+ * on both languages exercises the templates only server codegen reads.
+ * This contract's package names have never been published to either real
+ * registry hit here, so `resolvePreviousState` naturally resolves to
+ * "never published" without this test writing to either.
  */
 describe.skipIf(!networkAvailable)('the built CLI (node dist/cli.js build)', () => {
   it('generates and builds server code for both languages from dist, using templates dist must carry', async () => {

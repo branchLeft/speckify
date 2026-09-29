@@ -77,9 +77,9 @@ describe('resolveRepoRoot', () => {
   });
 });
 
-// S7: acceptance criteria in the item's own words -- a spec in a subdir
-// referencing a sibling-dir schema *within the repo* passes; a $ref that
-// escapes the repo root fails. The previous containment root was the
+// The acceptance criteria in plain terms: a spec in a subdir referencing
+// a sibling-dir schema *within the repo* passes; a $ref that escapes the
+// repo root fails. The previous containment root was the
 // config directory, which got the first half of this backwards (a sibling
 // package elsewhere in the same repo -- a normal shared-schema layout --
 // was refused as "path traversal") without actually enforcing the second

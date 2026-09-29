@@ -23,7 +23,7 @@ const bundledSpecV1 = JSON.stringify({
 // A real published record's stored spec carries its actual published
 // version, never the 0.0.0 placeholder a fresh bundle always uses. Using
 // a 0.0.0-versioned fixture as `previous.bundledSpec` (as this file used
-// to) hides B4's normalisation entirely: the two specs would already
+// to) hides the version normalisation entirely: the two specs would already
 // share the same info.version by accident.
 const publishedSpecV1_2_0 = JSON.stringify({
   openapi: '3.0.3',

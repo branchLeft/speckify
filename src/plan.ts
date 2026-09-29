@@ -136,7 +136,7 @@ export async function computeContractPlan(input: ContractPlanInput): Promise<Con
       const basePath = join(tempDir, 'base.json');
       const revisionPath = join(tempDir, 'revision.json');
       // Both sides are diffed with info.version normalised to the same
-      // placeholder (B4): otherwise the version bump we are computing would
+      // placeholder: otherwise the version bump we are computing would
       // itself show up as a diff (e.g. oasdiff's own api-version-not-bumped
       // check), and a real published spec's stamped version would never
       // equal a fresh bundle's 0.0.0 even when nothing else changed.

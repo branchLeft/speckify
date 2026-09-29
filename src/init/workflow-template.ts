@@ -20,17 +20,12 @@ const CHECKOUT_PIN = 'actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 
 /**
  * Renders the producer repo's own caller workflow: a `check` job on every
  * pull request and a `publish` job on push to the default branch, each
- * calling Speckify's composite action directly, pinned to a single ref.
- *
- * This calls the composite action (`uses: <repo>@<ref>`), not Speckify's
- * own reusable workflow (`uses: <repo>/.github/workflows/speckify.yml@<ref>`)
- * — PyPI's trusted-publishing docs are explicit that a reusable workflow
- * cannot be the workflow a Trusted Publisher is configured against: the
- * OIDC token a job invoked via `workflow_call` receives carries
- * `job_workflow_ref` pointing at the *reusable* workflow, not this file, so
- * PyPI's trusted-publisher match (repo + this workflow's own filename)
- * never succeeds. Calling the action directly makes `publish` a job this
- * file genuinely, visibly defines.
+ * calling Speckify's composite action directly (`uses: <repo>@<ref>`),
+ * pinned to a single ref -- never Speckify's own reusable workflow, whose
+ * OIDC token carries `job_workflow_ref` pointing at that reusable workflow
+ * rather than this file, which fails PyPI trusted-publisher matching
+ * (repo + this workflow's own filename). Calling the action directly makes
+ * `publish` a job this file genuinely, visibly defines.
  */
 export function renderCallerWorkflow(options: RenderCallerWorkflowOptions): string {
   const actionPin = `${options.repo}@${options.ref} # ${options.tag}`;

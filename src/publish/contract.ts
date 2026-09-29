@@ -39,12 +39,10 @@ type PublishedCheck = 'not-published' | 'already-published';
 
 /**
  * Tells a target that genuinely needs publishing apart from one the
- * registry already has at the target version. A version match with an
- * identical (normalised) spec is a safe, idempotent re-run and is skipped;
- * a version match with a *different* spec means a concurrent publish raced
- * this one to that version number, and is a loud failure rather than a
- * silent skip or a silent overwrite -- the registry state and this run's
- * plan have already diverged.
+ * registry already has at the target version. An identical (normalised)
+ * spec is a safe, idempotent re-run and is skipped; a *different* spec at
+ * that version means a concurrent publish raced this one, and is a loud
+ * failure rather than a silent skip or overwrite.
  *
  * @throws {Error} when the registry has this version already, published
  * with a different spec.

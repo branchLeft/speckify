@@ -158,7 +158,7 @@ function readJsonBody(req: IncomingMessage, maxBytes: number): Promise<Buffer> {
     req.on('error', (error) => {
       if (settled) return;
       settled = true;
-      reject(error as Error);
+      reject(error);
     });
   });
 }

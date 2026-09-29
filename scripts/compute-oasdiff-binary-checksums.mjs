@@ -1,19 +1,8 @@
 #!/usr/bin/env node
 // Regenerates `src/oasdiff/binary-checksums.json` for the oasdiff release
-// pinned in `src/oasdiff/version.ts`.
-//
-// oasdiff's own release only publishes SHA-256 sums for the release
-// *archives* (`checksums.json`), not for the binaries inside them. Speckify
-// verifies the extracted binary on every use (S2), which needs a checksum
-// of the binary itself, computed ahead of time and committed to the repo --
-// re-downloading and re-extracting the archive on every invocation just to
-// re-derive that hash would defeat the point of caching.
-//
-// This script is the one place that trust boundary is crossed: it downloads
-// each release archive, verifies it against the committed archive checksum
-// in `checksums.json` (so a compromised download here cannot poison the
-// binary table), extracts the binary, and hashes that. Run it by hand after
-// bumping `OASDIFF_VERSION` and committing a refreshed `checksums.json`.
+// pinned in `src/oasdiff/version.ts`. Why this table exists and how it's
+// trusted: see `src/oasdiff/binary.md`. Run by hand after bumping
+// `OASDIFF_VERSION` and committing a refreshed `checksums.json`.
 import { createHash } from 'node:crypto';
 import { readFile, writeFile } from 'node:fs/promises';
 import { dirname, join } from 'node:path';

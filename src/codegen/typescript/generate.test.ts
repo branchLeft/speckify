@@ -89,7 +89,7 @@ describe('generateTypeScriptPackage', () => {
     ).resolves.toContain('Handlers');
   }, 30_000);
 
-  // B5: `files` in package.json is the only thing that decides what a real
+  // `files` in package.json is the only thing that decides what a real
   // `npm publish` actually ships (past package.json/README/the main entry,
   // which npm always includes) -- writing openapi.json and CHANGELOG.md to
   // disk proves nothing about whether npm would pack them.

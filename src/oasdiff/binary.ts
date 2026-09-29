@@ -93,12 +93,14 @@ export interface ResolveOasdiffOptions {
 export async function resolveOasdiffBinary(options: ResolveOasdiffOptions): Promise<string> {
   const platform = options.platform ?? hostPlatform();
   const arch = options.arch ?? hostArch();
-  const warn = options.warn ?? ((message: string) => console.error(message));
+  const warn =
+    options.warn ??
+    ((message: string): void => {
+      console.error(message);
+    });
   const asset = assetName(platform, arch);
 
-  const binaryChecksums = await loadJson(
-    options.binaryChecksumsPath ?? defaultBinaryChecksumsPath,
-  );
+  const binaryChecksums = await loadJson(options.binaryChecksumsPath ?? defaultBinaryChecksumsPath);
   const expectedBinaryChecksum = binaryChecksums[asset];
   if (expectedBinaryChecksum === undefined) {
     throw new OasdiffError(`no committed binary checksum for oasdiff asset "${asset}"`);

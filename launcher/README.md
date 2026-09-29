@@ -7,7 +7,7 @@ Node CLI; `pip install speckify` gives you the `speckify` command by way of
 
 It checks that `node` (>=22) is on `PATH`, then execs:
 
-```
+```sh
 npx --yes speckify@<this launcher's own version> <your args>
 ```
 

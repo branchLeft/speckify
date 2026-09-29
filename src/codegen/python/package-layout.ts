@@ -80,7 +80,7 @@ export async function writeProjectFiles(
   await writeFile(join(packageDir, 'openapi.json'), input.bundledSpec, 'utf8');
   // hatchling's `packages = ["src/<name>"]` wheel target only ships files
   // under that directory; a root-level CHANGELOG.md lands in the sdist but
-  // not the wheel (B5). A copy here is package data, so `pip install` gets
+  // not the wheel. A copy here is package data, so `pip install` gets
   // it too, alongside openapi.json and speckify.json.
   await writeFile(join(packageDir, 'CHANGELOG.md'), input.changelog, 'utf8');
   // pyproject.toml's [tool.speckify] is not packaged into the built wheel's

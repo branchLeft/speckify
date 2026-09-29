@@ -14,7 +14,7 @@ describe('resolveToolchainImpactBump', () => {
     expect(resolveToolchainImpactBump(null, toolchainImpactEntries, '0.2.0')).toBe('none');
   });
 
-  // B3: the previous published state carries two independent version axes
+  // The previous published state carries two independent version axes
   // -- the contract's own semver (`version`, e.g. "1.2.0") and the Speckify
   // toolchain version that generated it (`speckifyVersion`, e.g. "0.1.0").
   // Confusing the two means a contract sitting at a high semver (many spec

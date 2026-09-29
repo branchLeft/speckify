@@ -38,7 +38,7 @@ describe('toolchainImpact', () => {
     expect(toolchainImpact(entries, { speckifyVersion: '0.1.0' }, '0.2.0')).toBe('patch');
   });
 
-  // B3: a published package that predates the embedded speckifyVersion field
+  // A published package that predates the embedded speckifyVersion field
   // (or, for a wheel/tarball, is missing it for any other reason) has an
   // *unknown* generating version -- not "never generated before". Reading
   // that as "no prior state" (impact: none) would silently under-bump every

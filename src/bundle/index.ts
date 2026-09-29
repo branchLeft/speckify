@@ -62,7 +62,7 @@ function stripInlinedSchemaMetadata(value: unknown): void {
 
 /**
  * `$RefParser.resolve`/`.bundle` options shared by every call: a remote
- * (http/https) `$ref` is refused outright rather than fetched (S1). Left
+ * (http/https) `$ref` is refused outright rather than fetched. Left
  * enabled, it's an SSRF surface (the bundler would fetch whatever URL a
  * spec author -- or anyone who can edit the spec via a PR -- writes) and
  * makes a bundled contract depend on a third-party URL staying up and

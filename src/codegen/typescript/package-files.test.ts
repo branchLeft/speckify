@@ -24,7 +24,7 @@ describe('buildPackageJson', () => {
     expect(Object.hasOwn(pkg.exports as object, './server')).toBe(true);
   });
 
-  // B5: npm only auto-includes package.json, README and the main entry --
+  // npm only auto-includes package.json, README and the main entry --
   // CHANGELOG.md and openapi.json (written alongside package.json by
   // generate.ts) are otherwise silently dropped from the published
   // tarball, and record/npm.ts's whole "read the last published spec back"

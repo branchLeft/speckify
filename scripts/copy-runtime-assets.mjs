@@ -6,7 +6,7 @@
 // never imported as a module), and the Python codegen's server templates
 // (render_server.py, its .jinja files, operations.py) are only ever run by
 // `uv run python <script>`, not compiled by tsc at all. Both are missing
-// from `dist/` after a plain `tsc` build (B6), so `pnpm build` runs this
+// from `dist/` after a plain `tsc` build, so `pnpm build` runs this
 // afterwards to carry them across, mirroring their `src/` paths under `dist/`.
 import { cp } from 'node:fs/promises';
 import { dirname, join } from 'node:path';

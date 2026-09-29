@@ -38,6 +38,7 @@
     "zod": "4.6.5"
   },
   "devDependencies": {
+    "@branchleft/tsconfig": "0.8.3",
     "@eslint/js": "9.20.0",
     "@hey-api/openapi-ts": "0.99.0",
     "@types/node": "22.13.4",

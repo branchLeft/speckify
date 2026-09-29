@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import { renderCallerWorkflow } from './workflow-template.js';
 
-// B10: PyPI trusted publishing does not accept a reusable workflow as the
+// PyPI trusted publishing does not accept a reusable workflow as the
 // Trusted Publisher's own workflow -- the producer's OIDC token carries
 // `job_workflow_ref` pointing at the *reusable* workflow it was invoked
 // through, not the caller's own file, which is what PyPI's Trusted

@@ -103,7 +103,7 @@ describe.skipIf(!uvAvailable)(describeTitle, () => {
     expect(output).toContain('IMPORT_OK');
   }, 120_000);
 
-  // B5: pyproject.toml's [tool.speckify] does not carry into the wheel's
+  // pyproject.toml's [tool.speckify] does not carry into the wheel's
   // METADATA, and hatchling's `packages = ["src/<name>"]` only ships files
   // that live under that directory -- a root-level CHANGELOG.md is not
   // included in the wheel by default, only in the sdist. Listing the real

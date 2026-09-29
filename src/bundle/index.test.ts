@@ -103,17 +103,14 @@ describe('bundleSpec', () => {
     ).rejects.toThrow(BundleError);
   });
 
-  // S1: a remote $ref is refused, never fetched -- both when checking it's
-  // within the repo root and when actually bundling. Left enabled, this is
-  // an SSRF surface (the bundler fetches whatever URL a spec author, or
-  // anyone who can edit the spec via a PR, writes) and makes the bundled
-  // contract depend on a public URL staying up and byte-for-byte unchanged
-  // forever. json-schema-ref-parser's own built-in `safeUrlResolver` blocks
-  // *unsafe* (private/loopback) targets already, which would make a fake
-  // local test server pass even without this fix and prove nothing -- so
-  // this instead asserts on the options actually passed to the resolver,
-  // which is what determines whether a legitimate *public* URL is ever
-  // attempted at all.
+  // A remote $ref is refused, never fetched -- both when checking it's
+  // within the repo root and when actually bundling: an SSRF surface left
+  // enabled, and a bundled contract that depends on a public URL staying
+  // up forever. json-schema-ref-parser's own `safeUrlResolver` already
+  // blocks *unsafe* (private/loopback) targets, which would make a fake
+  // local test server pass even without this fix -- so this asserts on
+  // the options passed to the resolver instead, which is what decides
+  // whether a legitimate *public* URL is ever attempted at all.
   describe('a remote $ref', () => {
     afterEach(() => {
       vi.restoreAllMocks();

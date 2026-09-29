@@ -16,21 +16,12 @@ export const TOOLCHAIN_IMPACT_FILENAME = 'toolchain-impact.json';
 
 /**
  * The bump every consumer inherits purely from moving Speckify's own
- * toolchain forward, independent of any change to their spec: a generator
- * fix that changes emitted code shape is a break even when the spec it
- * generates from did not move.
- *
- * `previous` of `null` means the contract has never been published before at
- * all, in which case there is no prior toolchain state to have drifted from,
- * so the impact is `none`.
- *
- * `previous.speckifyVersion` of `null` is a *different* case: the contract
- * has been published, but the version that generated it could not be read
- * back (an old package predating the embedded version field, or a
- * corrupted/incomplete one). That generating version is unknown, not
- * absent -- so it fails safe as though it predates every recorded release,
- * taking the max impact across the whole table up to `currentSpeckifyVersion`,
- * rather than silently reading back as `none`.
+ * toolchain forward: a generator fix that changes emitted code shape is a
+ * break even when the spec did not move. `previous` of `null` means never
+ * published, so there's no prior state to drift from -- `none`.
+ * `previous.speckifyVersion` of `null` differs: published, but the
+ * generating version couldn't be read back. That's unknown, not absent,
+ * so it fails safe to the max impact up to `currentSpeckifyVersion`.
  */
 export function toolchainImpact(
   entries: readonly ToolchainImpactEntry[],
