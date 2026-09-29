@@ -200,6 +200,89 @@ describe('createRequestListener', () => {
     });
   });
 
+  it('rejects a JSON body over maxJsonBodyBytes with 413, without buffering past the cap', async () => {
+    const route: RouteDefinition = {
+      id: 'createPet',
+      method: 'POST',
+      path: '/pets',
+      bodyMode: 'json',
+      bodySchema: z.object({ name: z.string() }),
+    };
+    let handlerCalled = false;
+    const listener = createRequestListener(
+      {
+        createPet: () => {
+          handlerCalled = true;
+          return Promise.resolve<HandledResponse>({ status: 201, body: {} });
+        },
+      },
+      [route],
+      { maxJsonBodyBytes: 8 },
+    );
+
+    await withServer(listener, async (baseUrl) => {
+      const res = await fetch(`${baseUrl}/pets`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        // 9 raw bytes, one over the 8-byte cap.
+        body: '{"n":123}',
+      });
+      expect(res.status).toBe(413);
+      expect(res.headers.get('content-type')).toBe('application/problem+json');
+      const problem = (await res.json()) as { title: string; status: number };
+      expect(problem).toEqual({ title: 'Payload Too Large', status: 413 });
+    });
+    expect(handlerCalled).toBe(false);
+  });
+
+  it('accepts a JSON body exactly at maxJsonBodyBytes', async () => {
+    const route: RouteDefinition = {
+      id: 'createPet',
+      method: 'POST',
+      path: '/pets',
+      bodyMode: 'json',
+      bodySchema: z.object({ name: z.string() }),
+    };
+    const body = JSON.stringify({ name: 'x' });
+    const listener = createRequestListener(
+      { createPet: () => Promise.resolve<HandledResponse>({ status: 201, body: {} }) },
+      [route],
+      { maxJsonBodyBytes: Buffer.byteLength(body) },
+    );
+
+    await withServer(listener, async (baseUrl) => {
+      const res = await fetch(`${baseUrl}/pets`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body,
+      });
+      expect(res.status).toBe(201);
+    });
+  });
+
+  it('defaults maxJsonBodyBytes to 1 MiB, accepting a body just under it', async () => {
+    const route: RouteDefinition = {
+      id: 'createPet',
+      method: 'POST',
+      path: '/pets',
+      bodyMode: 'json',
+    };
+    const listener = createRequestListener(
+      { createPet: () => Promise.resolve<HandledResponse>({ status: 201, body: {} }) },
+      [route],
+    );
+    const body = JSON.stringify({ name: 'x'.repeat(1024 * 1024 - 100) });
+
+    await withServer(listener, async (baseUrl) => {
+      const res = await fetch(`${baseUrl}/pets`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body,
+      });
+      expect(res.status).toBe(201);
+    });
+  });
+
   it('exposes the raw JSON body bytes to beforeHandle before parsing', async () => {
     const seen: string[] = [];
     const route: RouteDefinition = {

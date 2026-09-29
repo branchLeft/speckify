@@ -60,9 +60,18 @@ export interface RouteDefinition {
   readonly responseSchemas?: Readonly<Record<number, ZodType>>;
 }
 
+/** The default {@link ListenerOptions.maxJsonBodyBytes}: 1 MiB. */
+export const DEFAULT_MAX_JSON_BODY_BYTES = 1024 * 1024;
+
 export interface ListenerOptions {
   /** Validate handler responses against `responseSchemas`. @default true */
   readonly validateResponses?: boolean;
+  /**
+   * The largest JSON request body accepted, in bytes. A body that exceeds
+   * this is refused with a 413 problem response as soon as the cap is
+   * crossed -- never buffered past it. @default {@link DEFAULT_MAX_JSON_BODY_BYTES}
+   */
+  readonly maxJsonBodyBytes?: number;
   /**
    * Runs before body parsing, for callers that need to verify a request
    * signature from headers. `rawBody` carries the exact bytes for a JSON
@@ -112,14 +121,45 @@ function matchPath(template: string, actual: string): Record<string, string> | u
   return params;
 }
 
-function readJsonBody(req: IncomingMessage): Promise<Buffer> {
+/** Thrown by {@link readJsonBody} when the body crosses `maxBytes` before it ends. */
+class PayloadTooLargeError extends Error {}
+
+/**
+ * Buffers a JSON request body up to `maxBytes`. The moment a chunk would
+ * push the running total past the cap, buffering stops and the promise
+ * rejects with {@link PayloadTooLargeError} straight away -- the caller can
+ * write the 413 response without waiting for the rest of the body to
+ * arrive. The request stream is left attached (so the connection keeps
+ * draining rather than deadlocking the client on backpressure), but every
+ * further chunk is discarded rather than appended -- the body is never
+ * buffered past the cap, whatever `Content-Length` claimed or omitted.
+ */
+function readJsonBody(req: IncomingMessage, maxBytes: number): Promise<Buffer> {
   return new Promise((resolve, reject) => {
     const chunks: Buffer[] = [];
-    req.on('data', (chunk: Buffer) => chunks.push(chunk));
+    let total = 0;
+    let settled = false;
+    req.on('data', (chunk: Buffer) => {
+      total += chunk.length;
+      if (total > maxBytes) {
+        if (!settled) {
+          settled = true;
+          reject(new PayloadTooLargeError());
+        }
+        return;
+      }
+      chunks.push(chunk);
+    });
     req.on('end', () => {
+      if (settled) return;
+      settled = true;
       resolve(Buffer.concat(chunks));
     });
-    req.on('error', reject);
+    req.on('error', (error) => {
+      if (settled) return;
+      settled = true;
+      reject(error as Error);
+    });
   });
 }
 
@@ -319,7 +359,17 @@ async function handleRequest(
     await options.beforeHandle?.(req, route, undefined);
     body = req;
   } else if (route.bodyMode === 'json') {
-    const raw = await readJsonBody(req);
+    const maxJsonBodyBytes = options.maxJsonBodyBytes ?? DEFAULT_MAX_JSON_BODY_BYTES;
+    let raw: Buffer;
+    try {
+      raw = await readJsonBody(req, maxJsonBodyBytes);
+    } catch (error) {
+      if (error instanceof PayloadTooLargeError) {
+        sendProblem(res, 413, 'Payload Too Large');
+        return;
+      }
+      throw error;
+    }
     await options.beforeHandle?.(req, route, raw);
     if (raw.length === 0) {
       body = undefined;
