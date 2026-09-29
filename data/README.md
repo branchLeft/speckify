@@ -45,8 +45,7 @@ Mixed provenance — this file is not one thing:
 - The `perspective` header and every rule's `bump` and `reason` are
   Speckify's own judgement, MIT-licensed like the rest of this repository:
   what that oasdiff rule means for an existing, correctly-written client of
-  a versioned contract. Each row was drafted by an AI model (Claude Sonnet
-  5) reading the rule's check source, then reviewed by another (Claude
+  a versioned contract. Each row was drafted by an AI model (Claude Sonnet 5) reading the rule's check source, then reviewed by another (Claude
   Opus 5.5), which changed 62 rows before the file was committed.
 - `source` records which oasdiff Go source file the row's judgement was
   read from, so a judgement can be checked against where it came from
@@ -69,7 +68,7 @@ decision, not a mechanical one.
 
 ## `toolchain-impact.json`
 
-Speckify's own record of what each of *its own* released versions did to
+Speckify's own record of what each of _its own_ released versions did to
 every consumer's generated surface, independent of any spec change — a
 generator upgrade that renames a method, for instance. Each entry is
 `{ speckifyVersion, impact }`, and `impact` joins the same `max()` as the
