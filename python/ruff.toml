@@ -1,0 +1,11 @@
+# PY-2 (branchLeft/standards docs/shell-and-python.md): the same rigour as TypeScript.
+# `target-version` is left unset — ruff infers it from `requires-python` in pyproject.toml.
+line-length = 100
+
+[lint]
+extend-select = ["I", "N", "ANN", "BLE"]
+
+[lint.per-file-ignores]
+# A test's Handlers stand-ins deliberately use `typing.Any`: they exist to
+# exercise the generated router's dispatch, not to be typed consumers.
+"test_*.py" = ["ANN401"]
