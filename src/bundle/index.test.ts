@@ -18,6 +18,13 @@ interface BundledWidgetsDoc {
         };
       };
     };
+    '/things': {
+      get: {
+        responses: {
+          '200': { content: { 'application/json': { schema: Record<string, unknown> } } };
+        };
+      };
+    };
   };
 }
 
@@ -33,6 +40,23 @@ describe('bundleSpec', () => {
       properties: { id: { type: 'string' }, name: { type: 'string' } },
       required: ['id', 'name'],
     });
+  });
+
+  it('strips $id and $schema from a schema inlined from an external file', async () => {
+    const result = await bundleSpec(`${repoRoot}/openapi.yaml`, { repoRoot });
+    const doc = JSON.parse(result) as BundledWidgetsDoc;
+
+    const schema = doc.paths['/things'].get.responses['200'].content['application/json'].schema;
+    expect(schema.$id).toBeUndefined();
+    expect(schema.$schema).toBeUndefined();
+    // Everything else the external file declared survives, including its
+    // own-file-relative internal $ref, which is untouched.
+    expect(schema.type).toBe('object');
+    expect(schema.properties).toEqual({
+      id: { type: 'string' },
+      kind: { $ref: '#/$defs/ThingKind' },
+    });
+    expect(schema.$defs).toEqual({ ThingKind: { type: 'string', enum: ['a', 'b'] } });
   });
 
   it('produces deterministic, key-sorted JSON with a trailing newline', async () => {

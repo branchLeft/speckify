@@ -13,3 +13,13 @@ paths:
             application/json:
               schema:
                 $ref: './schemas/widget.schema.json'
+  /things:
+    get:
+      operationId: listThings
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: './schemas/thing.schema.json'
