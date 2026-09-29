@@ -8,12 +8,10 @@ const REPO_ROOT = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 
 const REPO_NODE_MODULES = path.join(REPO_ROOT, 'node_modules');
 
 /**
- * Generated packages need zod 4's API (z.iso, z.int, …), which is installed
- * here under the alias `zod4` so it never collides with the `zod` 3.x
- * speckify itself depends on for its own config validation. Symlinking it
- * (and @types/node) into the generated package's own node_modules makes the
- * package self-contained for compilation regardless of where its directory
- * lives on disk.
+ * Generated packages need zod's runtime alongside their generated
+ * `zod.gen.ts`. Symlinking it (and @types/node) into the generated
+ * package's own node_modules makes the package self-contained for
+ * compilation regardless of where its directory lives on disk.
  */
 async function linkDependency(
   packageDir: string,
@@ -61,7 +59,7 @@ function formatDiagnostics(diagnostics: readonly ts.Diagnostic[]): string[] {
  */
 export async function buildPackage(packageDir: string): Promise<void> {
   await Promise.all([
-    linkDependency(packageDir, 'zod', path.join(REPO_NODE_MODULES, 'zod4')),
+    linkDependency(packageDir, 'zod', path.join(REPO_NODE_MODULES, 'zod')),
     linkDependency(packageDir, '@types/node', path.join(REPO_NODE_MODULES, '@types', 'node')),
   ]);
 

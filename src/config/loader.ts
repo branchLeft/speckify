@@ -2,12 +2,12 @@ import { readFile } from 'node:fs/promises';
 import { isAbsolute, relative } from 'node:path';
 
 import { parse as parseYaml, YAMLParseError } from 'yaml';
-import type { ZodIssue } from 'zod';
+import { z } from 'zod';
 
 import { ConfigError } from './errors.js';
 import { speckifyConfigSchema, type SpeckifyConfig } from './schema.js';
 
-function formatIssue(issue: ZodIssue): string {
+function formatIssue(issue: z.core.$ZodIssue): string {
   const path = issue.path.length > 0 ? issue.path.join('.') : '(root)';
   return `${path}: ${issue.message}`;
 }

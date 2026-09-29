@@ -43,7 +43,7 @@ export type ClassificationMapFile = z.infer<typeof classificationMapFileSchema>;
  * `id` is validated strictly; the rest of oasdiff's shape is carried
  * through untyped since nothing here consumes it.
  */
-export const oasdiffCheckSchema = z.object({ id: z.string() }).passthrough();
+export const oasdiffCheckSchema = z.looseObject({ id: z.string() });
 export const oasdiffCheckCatalogueSchema = z.array(oasdiffCheckSchema);
 export type OasdiffCheck = z.infer<typeof oasdiffCheckSchema>;
 

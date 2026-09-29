@@ -28,7 +28,7 @@ async function defaultProcessRunner(
       typeof error === 'object' &&
       error !== null &&
       'code' in error &&
-      typeof (error as { code: unknown }).code === 'number' &&
+      typeof error.code === 'number' &&
       'stdout' in error &&
       typeof (error as { stdout: unknown }).stdout === 'string'
     ) {

@@ -92,7 +92,7 @@ describe('createRequestListener', () => {
       method: 'GET',
       path: '/events/{id}',
       bodyMode: 'none',
-      pathSchema: z.object({ id: z.string().uuid() }),
+      pathSchema: z.object({ id: z.uuid() }),
     };
     const listener = createRequestListener(
       { getEvent: () => Promise.resolve<HandledResponse>({ status: 200, body: {} }) },

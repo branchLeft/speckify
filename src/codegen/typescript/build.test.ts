@@ -52,7 +52,7 @@ describe('buildPackage', () => {
     });
   });
 
-  it('resolves a zod import via the symlinked zod4 alias', async () => {
+  it('resolves a zod import via the symlinked dependency', async () => {
     const dir = await tempPackageDir();
     await writeFile(
       path.join(dir, 'src', 'index.ts'),
