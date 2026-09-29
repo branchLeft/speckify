@@ -1,0 +1,40 @@
+openapi: 3.1.0
+info:
+  title: Binary Upload Fixture
+  version: 1.0.0
+paths:
+  /uploads:
+    post:
+      operationId: uploadBlob
+      parameters:
+        - name: X-Signature
+          in: header
+          required: true
+          schema:
+            type: string
+        - name: X-Timestamp
+          in: header
+          required: true
+          schema:
+            type: string
+            format: date-time
+      requestBody:
+        required: true
+        content:
+          application/octet-stream:
+            schema:
+              type: string
+              format: binary
+      responses:
+        '201':
+          description: Stored
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - id
+                properties:
+                  id:
+                    type: string
+components: {}
