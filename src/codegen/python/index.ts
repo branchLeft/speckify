@@ -17,21 +17,18 @@ export * from './errors.js';
 export { importNameFor } from './naming.js';
 
 /**
- * Generates a buildable Python package for one contract — pydantic models,
- * optionally a client (openapi-python-client) and/or a server basis
- * (Handlers Protocol + FastAPI router) — and builds it into a wheel and
- * sdist with `uv build`.
+ * Generates a Python package's sources — pydantic models, optionally a
+ * client (openapi-python-client) and/or a server basis (Handlers Protocol
+ * + FastAPI router) — under `options.projectDir`, without building them.
+ * The generated-surface diff (`surface/surface.md`) reads these sources.
  *
- * Each generator step runs the pinned toolchain at `options.toolchainDir`
- * via `uv run --frozen`, so the exact generator versions the spike verified
- * are what actually run, on any machine with `uv` on `PATH`.
+ * @returns the package's source directory, `<projectDir>/src/<import_name>`.
  */
-export async function buildPythonPackage(
+export async function generatePythonPackage(
   input: BuildPythonPackageInput,
   options: BuildPythonPackageOptions,
   uvDeps: UvRunnerDeps = {},
-): Promise<BuildPythonPackageResult> {
-  const importName = importNameFor(input.packageName);
+): Promise<string> {
   const packageDir = await writeProjectFiles(input, options.projectDir);
   // The server validates inline JSON bodies against hoisted models, so both
   // the models and the server are generated from the prepared spec.
@@ -58,6 +55,25 @@ export async function buildPythonPackage(
       uvDeps,
     });
   }
+  return packageDir;
+}
+
+/**
+ * Generates a buildable Python package for one contract (see
+ * {@link generatePythonPackage}) and builds it into a wheel and sdist with
+ * `uv build`.
+ *
+ * Each generator step runs the pinned toolchain at `options.toolchainDir`
+ * via `uv run --frozen`, so the exact generator versions the spike verified
+ * are what actually run, on any machine with `uv` on `PATH`.
+ */
+export async function buildPythonPackage(
+  input: BuildPythonPackageInput,
+  options: BuildPythonPackageOptions,
+  uvDeps: UvRunnerDeps = {},
+): Promise<BuildPythonPackageResult> {
+  const importName = importNameFor(input.packageName);
+  await generatePythonPackage(input, options, uvDeps);
 
   const artifacts = await runUvBuild({
     projectDir: options.projectDir,
