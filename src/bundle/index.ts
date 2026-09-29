@@ -61,12 +61,24 @@ function stripInlinedSchemaMetadata(value: unknown): void {
 }
 
 /**
+ * `$RefParser.resolve`/`.bundle` options shared by every call: a remote
+ * (http/https) `$ref` is refused outright rather than fetched (S1). Left
+ * enabled, it's an SSRF surface (the bundler would fetch whatever URL a
+ * spec author -- or anyone who can edit the spec via a PR -- writes) and
+ * makes a bundled contract depend on a third-party URL staying up and
+ * byte-for-byte unchanged forever. Speckify's whole model is that the
+ * bundle is self-contained; a `$ref` this can't resolve from disk is a
+ * bundle error, exactly like a broken relative path.
+ */
+const NO_REMOTE_REFS = { resolve: { http: false } };
+
+/**
  * Resolves every file a spec's `$ref`s reach and throws {@link PathTraversalError}
  * if any of them fall outside `root`. Symlinks are resolved first, so a link
  * inside the root that points outside it is caught too.
  */
 async function assertRefsWithinRoot(specPath: string, root: string): Promise<void> {
-  const refs = await $RefParser.resolve(specPath);
+  const refs = await $RefParser.resolve(specPath, NO_REMOTE_REFS);
   const realRoot = await realpath(root);
   const filePaths = refs.paths('file');
 
@@ -103,7 +115,7 @@ export async function bundleSpec(specPath: string, options: BundleSpecOptions): 
 
   let bundled: unknown;
   try {
-    bundled = await $RefParser.bundle(specPath);
+    bundled = await $RefParser.bundle(specPath, NO_REMOTE_REFS);
   } catch (error) {
     const reason = error instanceof Error ? error.message : String(error);
     throw new BundleError(`could not bundle "${specPath}": ${reason}`);
