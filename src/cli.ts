@@ -24,6 +24,7 @@ import {
 import { computeContractPlan, renderChangelogMarkdown, type ContractPlan } from './plan.js';
 import { buildContract, DEFAULT_BUILD_OUT_DIR, type BuildContractResult } from './build.js';
 import { SPECKIFY_REPO } from './constants.js';
+import { compareGeneratedSurfaces } from './surface/index.js';
 import {
   loadClassificationMap,
   loadToolchainImpact,
@@ -117,6 +118,13 @@ async function planContract(context: PlanContext, contract: Contract): Promise<C
     classificationMap: context.classificationMap,
     toolchainImpactBump: impactBump,
     oasdiffPath: context.oasdiffPath,
+    surfaceDiff: (previousSpec, currentSpec) =>
+      compareGeneratedSurfaces({
+        previousSpec,
+        currentSpec,
+        targets: { typescript: contract.typescript, python: contract.python },
+        toolchainDir: join(packageRoot, 'python'),
+      }),
   });
 }
 
@@ -220,6 +228,11 @@ program
         console.log(
           `Unclassified oasdiff rules treated as major: ${plan.unknownRuleIds.join(', ')}\n`,
         );
+      }
+      for (const change of plan.surface?.changes ?? []) {
+        if (change.bump === 'major') {
+          console.log(`Surface break (${change.language}) ${change.symbol}: ${change.reason}`);
+        }
       }
     }
     await postPrCommentIfInPrContext(plans);

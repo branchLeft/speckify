@@ -16,10 +16,13 @@ known to be safe for an existing, correctly-written client:
 - **every other edit is major**, whatever oasdiff says about it.
 
 oasdiff still runs. It writes the changelog, and its classification can
-raise the bump, never lower it:
+raise the bump, never lower it. So can the generated-surface diff in
+[`../surface/surface.md`](../surface/surface.md), which catches what a spec
+edit does to the generated SDKs' names, modules and signatures:
 
 ```text
-bump = max(allow-list bump, oasdiff classification bump, toolchain impact)
+bump = max(allow-list bump, oasdiff classification bump, toolchain impact,
+           generated-surface bump)
 ```
 
 A new kind of safe change gets minor only by being added to the list below,

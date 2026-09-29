@@ -12,6 +12,7 @@ import { hasUv, TOOLCHAIN_DIR } from '../codegen/python/test-support.js';
 import { OASDIFF_CLASSIFICATION_MAP_FILENAME, resolveOasdiffBinary } from '../oasdiff/index.js';
 import { computeContractPlan } from '../plan.js';
 import { loadClassificationMap } from '../version/index.js';
+import { unchangedSurface } from '../surface/test-support.js';
 
 const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..', '..');
 const exampleDir = join(repoRoot, 'examples', 'pet-shelter');
@@ -57,6 +58,7 @@ describe('examples/pet-shelter end to end', () => {
       previous: null,
       classificationMap,
       toolchainImpactBump: 'none',
+      surfaceDiff: unchangedSurface,
       oasdiffPath,
     });
 

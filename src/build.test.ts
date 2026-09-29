@@ -16,6 +16,7 @@ import { computeContractPlan } from './plan.js';
 import { buildContract } from './build.js';
 import { hasUv, TOOLCHAIN_DIR } from './codegen/python/test-support.js';
 import { resolveUv } from './codegen/python/uv.js';
+import { unchangedSurface } from './surface/test-support.js';
 
 // Shared between the TS and Python codegen fixture directories already,
 // and already proven end to end for both languages (see
@@ -128,6 +129,7 @@ describe('buildContract (end-to-end: plan through a mocked first-publish registr
       previous: null,
       classificationMap: {},
       toolchainImpactBump: 'none',
+      surfaceDiff: unchangedSurface,
       oasdiffPath: '',
     });
     expect(plan.previousVersion).toBeNull();
@@ -195,6 +197,7 @@ describe('buildContract (end-to-end: plan through a mocked first-publish registr
         previous: null,
         classificationMap: {},
         toolchainImpactBump: 'none',
+        surfaceDiff: unchangedSurface,
         oasdiffPath: '',
       });
       expect(plan.version).toBe('1.0.0');
@@ -240,6 +243,7 @@ describe('buildContract (end-to-end: plan through a mocked first-publish registr
       previous: null,
       classificationMap: {},
       toolchainImpactBump: 'none',
+      surfaceDiff: unchangedSurface,
       oasdiffPath: '',
     });
 

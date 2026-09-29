@@ -12,6 +12,7 @@ function plan(overrides: Partial<ContractPlan> = {}): ContractPlan {
     unknownRuleIds: [],
     changes: [],
     judgements: [],
+    surface: null,
     bundledSpec: '{}',
     ...overrides,
   };
@@ -50,6 +51,33 @@ describe('renderPrComment', () => {
     const body = renderPrComment([plan({ unknownRuleIds: ['some-new-rule'] })]);
     expect(body).toContain('Unclassified oasdiff rules treated as major');
     expect(body).toContain('some-new-rule');
+  });
+
+  it('lists the generated-surface changes that break existing clients', () => {
+    const body = renderPrComment([
+      plan({
+        bump: 'major',
+        surface: {
+          bump: 'major',
+          changes: [
+            {
+              language: 'python',
+              symbol: 'pkg.api.alpha',
+              bump: 'major',
+              reason: 'module removed',
+            },
+            { language: 'typescript', symbol: '.#Pet2', bump: 'minor', reason: 'export added' },
+          ],
+        },
+      }),
+    ]);
+    expect(body).toContain('Generated-surface changes that break existing clients');
+    expect(body).toContain('python `pkg.api.alpha`: module removed');
+    expect(body).not.toContain('Pet2');
+  });
+
+  it('renders no surface section without breaking surface changes', () => {
+    expect(renderPrComment([plan()])).not.toContain('Generated-surface');
   });
 
   it('renders nothing for unknown rules when there are none', () => {

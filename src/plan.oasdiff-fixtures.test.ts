@@ -13,6 +13,7 @@ import { computeContractPlan } from './plan.js';
 import { loadClassificationMap } from './version/classification-map.js';
 import type { ClassificationMap } from './version/types.js';
 import type { Bump } from './version/types.js';
+import { unchangedSurface } from './surface/test-support.js';
 
 const fixturesDir = fileURLToPath(new URL('./fixtures/oasdiff-scenarios/', import.meta.url));
 const dataDir = fileURLToPath(new URL('../data/', import.meta.url));
@@ -63,6 +64,7 @@ describe('the real classify path, against real fixture pairs', () => {
       previous: { version: '1.0.0', bundledSpec: base, speckifyVersion: null },
       classificationMap,
       toolchainImpactBump: 'none',
+      surfaceDiff: unchangedSurface,
       oasdiffPath,
     });
     return { bump: plan.bump, version: plan.version };
@@ -142,6 +144,7 @@ describe('the real classify path, against captured real oasdiff output', () => {
       previous: { version: '1.0.0', bundledSpec: base, speckifyVersion: null },
       classificationMap,
       toolchainImpactBump: 'none',
+      surfaceDiff: unchangedSurface,
       oasdiffPath: '/bin/oasdiff',
       runProcess: runProcessReturning(changes),
     });

@@ -21,6 +21,15 @@ function renderContractSection(plan: ContractPlan): string {
     );
   }
 
+  const breaking = (plan.surface?.changes ?? []).filter((change) => change.bump === 'major');
+  if (breaking.length > 0) {
+    lines.push('Generated-surface changes that break existing clients:', '');
+    for (const change of breaking) {
+      lines.push(`- ${change.language} \`${change.symbol}\`: ${change.reason}`);
+    }
+    lines.push('');
+  }
+
   return lines.join('\n');
 }
 

@@ -43,3 +43,12 @@ When no edit is above patch but the text still differs, the difference must
 be annotations or inert vendor extensions alone. Anything else means the
 structural diff missed something, and the bump is major. Identical specs,
 once `info.version` is normalised, publish nothing.
+
+## The generated surface can raise it too
+
+Every plan with a previous version also generates both specs with the current
+toolchain and compares the packages' public surfaces
+([`surface/surface.md`](surface/surface.md)). Its bump joins the same max and
+is returned on the plan as `surface`. `surfaceDiff` is a required input, so no
+caller can skip it by omission. A first publish has no previous surface, and
+`surface` is null.

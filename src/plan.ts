@@ -6,6 +6,7 @@ import { toCanonicalJson } from './bundle/canonical-json.js';
 import { lintBundledSpec } from './lint/index.js';
 import { runOasdiffChangelog, type OasdiffChange, type ProcessRunner } from './oasdiff/index.js';
 import type { RegistryRecordEntry } from './record/index.js';
+import type { SurfaceReport } from './surface/index.js';
 import {
   allowListBump,
   applyBump,
@@ -20,6 +21,12 @@ import {
 } from './version/index.js';
 import { normalizeForComparison, stripExtensionKeys } from './version/structural-diff.js';
 
+/**
+ * Compares the packages the two specs generate; see `surface/surface.md`.
+ * The CLI binds it to a contract's targets with `compareGeneratedSurfaces`.
+ */
+export type SurfaceDiff = (previousSpec: string, currentSpec: string) => Promise<SurfaceReport>;
+
 export interface ContractPlanInput {
   /** The contract's name, as declared in speckify.yaml. */
   contract: string;
@@ -31,6 +38,8 @@ export interface ContractPlanInput {
   /** The bump every consumer inherits from Speckify's own toolchain moving forward. */
   toolchainImpactBump: Bump;
   oasdiffPath: string;
+  /** Required, so no caller can skip the generated-surface diff by omission. */
+  surfaceDiff: SurfaceDiff;
   runProcess?: ProcessRunner | undefined;
 }
 
@@ -43,6 +52,8 @@ export interface ContractPlan {
   changes: OasdiffChange[];
   /** Every structural edit, each judged against the allow-list (`version/allow-list.md`). */
   judgements: EditJudgement[];
+  /** The generated-surface diff, or null on a first publish (nothing to compare). */
+  surface: SurfaceReport | null;
   /** The bundled spec with `version` stamped into its `info.version`. */
   bundledSpec: string;
 }
@@ -125,6 +136,7 @@ export async function computeContractPlan(input: ContractPlanInput): Promise<Con
   let unknownRuleIds: string[] = [];
   let judgements: EditJudgement[] = [];
   let specBump: Bump = 'none';
+  let surface: SurfaceReport | null = null;
 
   if (input.previous !== null) {
     const tempDir = await mkdtemp(join(tmpdir(), 'speckify-plan-'));
@@ -157,8 +169,12 @@ export async function computeContractPlan(input: ContractPlanInput): Promise<Con
     unknownRuleIds = classified.unknownRuleIds;
     const gate = versionGate(input.previous.bundledSpec, input.bundledSpec);
     judgements = gate.judgements;
-    // oasdiff can raise the allow-list's verdict, never lower it.
-    specBump = maxBump([gate.bump, classified.bump]);
+    surface = await input.surfaceDiff(
+      normalizeInfoVersionForComparison(input.previous.bundledSpec),
+      normalizeInfoVersionForComparison(input.bundledSpec),
+    );
+    // oasdiff and the generated surface can raise the allow-list's verdict, never lower it.
+    specBump = maxBump([gate.bump, classified.bump, surface.bump]);
   }
 
   const bump = maxBump([specBump, input.toolchainImpactBump]);
@@ -172,6 +188,7 @@ export async function computeContractPlan(input: ContractPlanInput): Promise<Con
     unknownRuleIds,
     changes,
     judgements,
+    surface,
     bundledSpec: stampVersion(input.bundledSpec, version),
   };
 }

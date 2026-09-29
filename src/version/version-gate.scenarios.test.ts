@@ -9,6 +9,7 @@ import type { OasdiffChange, ProcessRunner } from '../oasdiff/index.js';
 import { OASDIFF_CLASSIFICATION_MAP_FILENAME } from '../oasdiff/version.js';
 import { computeContractPlan, type ContractPlan } from '../plan.js';
 import { loadClassificationMap } from './classification-map.js';
+import { unchangedSurface } from '../surface/test-support.js';
 
 // Every under-bump found in review cycles 1-5, through computeContractPlan:
 // alone and beside an unrelated new optional response property, against
@@ -424,6 +425,7 @@ async function plan(base: Doc, revision: Doc, runProcess?: ProcessRunner): Promi
     previous: { version: '1.2.3', bundledSpec: JSON.stringify(base), speckifyVersion: null },
     classificationMap,
     toolchainImpactBump: 'none',
+    surfaceDiff: unchangedSurface,
     oasdiffPath: runProcess === undefined ? String(oasdiffPath) : '/bin/oasdiff',
     runProcess,
   });

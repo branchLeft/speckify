@@ -1,3 +1,5 @@
+import { readFileSync } from 'node:fs';
+
 import { describe, expect, it, vi } from 'vitest';
 
 import { LintError } from './lint/index.js';
@@ -5,6 +7,7 @@ import { computeContractPlan, renderChangelogMarkdown, type ContractPlan } from 
 import type { OasdiffChange, ProcessRunner } from './oasdiff/index.js';
 import {} from './oasdiff/version.js';
 import type { ClassificationMap } from './version/index.js';
+import { unchangedSurface } from './surface/test-support.js';
 
 const map: ClassificationMap = {
   'response-required-property-removed': 'major',
@@ -50,6 +53,7 @@ describe('computeContractPlan', () => {
         previous: null,
         classificationMap: map,
         toolchainImpactBump: 'none',
+        surfaceDiff: unchangedSurface,
         oasdiffPath: '/bin/oasdiff',
         runProcess,
       }),
@@ -72,6 +76,7 @@ describe('computeContractPlan', () => {
         previous: { version: '1.2.0', bundledSpec: publishedSpecV1_2_0, speckifyVersion: null },
         classificationMap: map,
         toolchainImpactBump: 'none',
+        surfaceDiff: unchangedSurface,
         oasdiffPath: '/bin/oasdiff',
         runProcess,
       }),
@@ -87,6 +92,7 @@ describe('computeContractPlan', () => {
       previous: null,
       classificationMap: map,
       toolchainImpactBump: 'none',
+      surfaceDiff: unchangedSurface,
       oasdiffPath: '/bin/oasdiff',
       runProcess,
     });
@@ -111,6 +117,7 @@ describe('computeContractPlan', () => {
       previous: { version: '1.2.0', bundledSpec: publishedSpecV1_2_0, speckifyVersion: null },
       classificationMap: map,
       toolchainImpactBump: 'none',
+      surfaceDiff: unchangedSurface,
       oasdiffPath: '/bin/oasdiff',
       runProcess: runProcessReturning(changes),
     });
@@ -128,6 +135,7 @@ describe('computeContractPlan', () => {
       previous: { version: '1.2.0', bundledSpec: publishedSpecV1_2_0, speckifyVersion: null },
       classificationMap: map,
       toolchainImpactBump: 'none',
+      surfaceDiff: unchangedSurface,
       oasdiffPath: '/bin/oasdiff',
       runProcess: runProcessReturning(changes),
     });
@@ -148,6 +156,7 @@ describe('computeContractPlan', () => {
       previous: { version: '1.2.0', bundledSpec: publishedSpecV1_2_0, speckifyVersion: null },
       classificationMap: map,
       toolchainImpactBump: 'none',
+      surfaceDiff: unchangedSurface,
       oasdiffPath: '/bin/oasdiff',
       runProcess: runProcessReturning([]),
     });
@@ -163,6 +172,7 @@ describe('computeContractPlan', () => {
       previous: { version: '1.2.0', bundledSpec: publishedSpecV1_2_0, speckifyVersion: null },
       classificationMap: map,
       toolchainImpactBump: 'none',
+      surfaceDiff: unchangedSurface,
       oasdiffPath: '/bin/oasdiff',
       runProcess: runProcessReturning([]),
     });
@@ -217,6 +227,7 @@ describe('computeContractPlan', () => {
       previous: { version: '1.2.0', bundledSpec: previousSpec, speckifyVersion: null },
       classificationMap: map,
       toolchainImpactBump: 'none',
+      surfaceDiff: unchangedSurface,
       oasdiffPath: '/bin/oasdiff',
       // oasdiff missed the tightened schema, as if the binary had a real gap.
       runProcess: runProcessReturning([]),
@@ -246,6 +257,7 @@ describe('computeContractPlan', () => {
       previous: { version: '1.2.0', bundledSpec: previousSpec, speckifyVersion: null },
       classificationMap: map,
       toolchainImpactBump: 'none',
+      surfaceDiff: unchangedSurface,
       oasdiffPath: '/bin/oasdiff',
       runProcess: runProcessReturning([]),
     });
@@ -272,6 +284,7 @@ describe('computeContractPlan', () => {
       previous: { version: '1.2.0', bundledSpec: previousSpec, speckifyVersion: null },
       classificationMap: map,
       toolchainImpactBump: 'none',
+      surfaceDiff: unchangedSurface,
       oasdiffPath: '/bin/oasdiff',
       runProcess: runProcessReturning([]),
     });
@@ -298,6 +311,7 @@ describe('computeContractPlan', () => {
       previous: { version: '1.2.0', bundledSpec: previousSpec, speckifyVersion: null },
       classificationMap: map,
       toolchainImpactBump: 'none',
+      surfaceDiff: unchangedSurface,
       oasdiffPath: '/bin/oasdiff',
       runProcess: runProcessReturning([]),
     });
@@ -316,6 +330,7 @@ describe('computeContractPlan', () => {
       previous: { version: '1.2.0', bundledSpec: publishedSpecV1_2_0, speckifyVersion: null },
       classificationMap: map,
       toolchainImpactBump: 'major',
+      surfaceDiff: unchangedSurface,
       oasdiffPath: '/bin/oasdiff',
       runProcess: runProcessReturning(changes),
     });
@@ -403,6 +418,7 @@ describe('computeContractPlan', () => {
       previous: { version: '1.2.0', bundledSpec: previousSpec, speckifyVersion: null },
       classificationMap: map,
       toolchainImpactBump: 'none',
+      surfaceDiff: unchangedSurface,
       // oasdiff sees (and correctly classifies as minor) the new response
       // property, but says nothing about additionalProperties -- it has no
       // rule for it. Trusting this minor bump would under-bump.
@@ -487,6 +503,7 @@ describe('computeContractPlan', () => {
       previous: { version: '1.2.0', bundledSpec: previousSpec, speckifyVersion: null },
       classificationMap: map,
       toolchainImpactBump: 'none',
+      surfaceDiff: unchangedSurface,
       // oasdiff has no rule for additionalProperties, so it stays silent.
       oasdiffPath: '/bin/oasdiff',
       runProcess: runProcessReturning([]),
@@ -550,6 +567,7 @@ describe('computeContractPlan', () => {
       previous: { version: '1.2.0', bundledSpec: previousSpec, speckifyVersion: null },
       classificationMap: map,
       toolchainImpactBump: 'none',
+      surfaceDiff: unchangedSurface,
       oasdiffPath: '/bin/oasdiff',
       runProcess: runProcessReturning([
         {
@@ -620,6 +638,7 @@ describe('computeContractPlan: the allow-list gate (offline, stubbed oasdiff out
       previous: { version: '1.2.3', bundledSpec: previousSpec, speckifyVersion: null },
       classificationMap: map,
       toolchainImpactBump: 'none',
+      surfaceDiff: unchangedSurface,
       oasdiffPath: '/bin/oasdiff',
       runProcess: runProcessReturning(changes),
     });
@@ -716,5 +735,86 @@ describe('renderChangelogMarkdown', () => {
     expect(lines[0]).toContain('response-required-property-removed');
     expect(lines[0]).toContain('(GET /widgets)');
     expect(lines[1]).toContain('description-changed');
+  });
+});
+
+describe('computeContractPlan and the generated-surface diff', () => {
+  const previous = { version: '1.2.0', bundledSpec: publishedSpecV1_2_0, speckifyVersion: null };
+  const input = {
+    contract: 'orders-api',
+    classificationMap: map,
+    toolchainImpactBump: 'none' as const,
+    oasdiffPath: '/bin/oasdiff',
+    runProcess: runProcessReturning([]),
+  };
+
+  it('is major when the same spec generates a different surface, as a generator change would', async () => {
+    const surfaceDiff = vi.fn(async () =>
+      Promise.resolve({
+        bump: 'major' as const,
+        changes: [
+          {
+            language: 'typescript' as const,
+            symbol: '.#Pet',
+            bump: 'major' as const,
+            reason: 'export removed',
+          },
+        ],
+      }),
+    );
+    const plan = await computeContractPlan({
+      ...input,
+      bundledSpec: bundledSpecV1,
+      previous,
+      surfaceDiff,
+    });
+    expect(plan.bump).toBe('major');
+    expect(plan.version).toBe('2.0.0');
+    expect(plan.surface?.changes).toHaveLength(1);
+    // Both sides reach the generators with info.version normalised.
+    const [previousSpec, currentSpec] = surfaceDiff.mock.calls[0] as unknown as [string, string];
+    expect(previousSpec).toBe(currentSpec);
+  });
+
+  it('raises a spec-level none to minor for a compatible surface change', async () => {
+    const plan = await computeContractPlan({
+      ...input,
+      bundledSpec: bundledSpecV1,
+      previous,
+      surfaceDiff: () => Promise.resolve({ bump: 'minor', changes: [] }),
+    });
+    expect(plan.bump).toBe('minor');
+  });
+
+  it('runs no surface diff on a first publish', async () => {
+    const surfaceDiff = vi.fn(unchangedSurface);
+    const plan = await computeContractPlan({
+      ...input,
+      bundledSpec: bundledSpecV1,
+      previous: null,
+      surfaceDiff,
+    });
+    expect(surfaceDiff).not.toHaveBeenCalled();
+    expect(plan.surface).toBeNull();
+  });
+
+  it.each([
+    ['op-added-CreateThing', 'operation-id'],
+    ['param-Page-Size-beside-page_size', 'parameter-names'],
+  ])('lint refuses %s before the surface diff runs', async (fixture, ruleId) => {
+    const read = (side: string): string =>
+      readFileSync(new URL(`./surface/fixtures/${fixture}.${side}.json`, import.meta.url), 'utf8');
+    const surfaceDiff = vi.fn(unchangedSurface);
+    const attempt = computeContractPlan({
+      ...input,
+      bundledSpec: read('rev'),
+      previous: { ...previous, bundledSpec: read('base') },
+      surfaceDiff,
+    });
+    await expect(attempt).rejects.toThrow(LintError);
+    await attempt.catch((error: unknown) => {
+      expect((error as LintError).findings.map((f) => f.ruleId)).toContain(ruleId);
+    });
+    expect(surfaceDiff).not.toHaveBeenCalled();
   });
 });
