@@ -1,5 +1,5 @@
 import { execFile } from 'node:child_process';
-import { cp, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import { cp, mkdtemp, readdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -106,4 +106,68 @@ describe.skipIf(!networkAvailable)('the built CLI (node dist/cli.js build)', () 
       await rm(workDir, { recursive: true, force: true });
     }
   }, 180_000);
+
+  it.skipIf(!uvAvailable)(
+    'builds both languages with the default --out, invoked from the config dir, with no nested-path failure',
+    async () => {
+      await execFileAsync('npm', ['run', 'build'], { cwd: repoRoot });
+
+      const workDir = await mkdtemp(join(tmpdir(), 'speckify-built-cli-default-out-'));
+      try {
+        await cp(join(exampleDir, 'openapi.yaml'), join(workDir, 'openapi.yaml'));
+
+        const speckifyYaml = [
+          'contracts:',
+          '  - name: pet-shelter-default-out-e2e',
+          '    spec: ./openapi.yaml',
+          '    typescript:',
+          '      package: "@speckify-default-out-e2e/pet-shelter"',
+          '      client: true',
+          '      server: true',
+          '    python:',
+          '      package: speckify-default-out-e2e-pet-shelter',
+          '      client: true',
+          '      server: true',
+          '',
+          'publish:',
+          '  githubPackages:',
+          '    owner: speckify-default-out-e2e',
+          '',
+        ].join('\n');
+        await writeFile(join(workDir, 'speckify.yaml'), speckifyYaml, 'utf8');
+
+        // Deliberately no `-o`: this exercises `DEFAULT_BUILD_OUT_DIR`
+        // ('.speckify/out', a relative path) resolved against the config
+        // dir, from a cwd that is that same config dir. A prior bug left
+        // the default unresolved, so `uv build`'s own cwd (the generated
+        // project dir, itself under the relative default) re-resolved the
+        // relative --out-dir a second time underneath itself, and the
+        // wheel/sdist never landed where Speckify looked for them.
+        await execFileAsync(process.execPath, [cliPath, 'build', '-c', 'speckify.yaml'], {
+          cwd: workDir,
+          env: { ...process.env, GITHUB_TOKEN: '' },
+        });
+
+        const wheelDir = join(
+          workDir,
+          '.speckify',
+          'out',
+          'pet-shelter-default-out-e2e',
+          'python',
+          'dist',
+        );
+        const distEntries = await readdir(wheelDir);
+        expect(distEntries.some((name) => name.endsWith('.whl'))).toBe(true);
+        expect(distEntries.some((name) => name.endsWith('.tar.gz'))).toBe(true);
+
+        const tsDistEntries = await readdir(
+          join(workDir, '.speckify', 'out', 'pet-shelter-default-out-e2e', 'typescript', 'dist'),
+        );
+        expect(tsDistEntries.length).toBeGreaterThan(0);
+      } finally {
+        await rm(workDir, { recursive: true, force: true });
+      }
+    },
+    180_000,
+  );
 });

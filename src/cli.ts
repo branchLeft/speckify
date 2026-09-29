@@ -330,6 +330,12 @@ program
   .action(async (options: { config: string; out: string }) => {
     const context = await buildPlanContext(options.config);
     const npmToken = process.env.NODE_AUTH_TOKEN ?? process.env.GITHUB_TOKEN ?? '';
+    // Resolved once, against the config dir, rather than left relative:
+    // `uv build` runs with its cwd set to the generated project dir (itself
+    // nested under this directory), so a relative --out-dir get resolved a
+    // second time against *that* cwd and lands doubly nested underneath
+    // itself instead of where Speckify looks for the wheel and sdist.
+    const outDir = resolve(context.configDir, options.out);
     let anyFailed = false;
 
     for (const contract of context.config.contracts) {
@@ -338,7 +344,7 @@ program
         contract,
         speckifyVersion: context.currentSpeckifyVersion,
         toolchainDir: join(packageRoot, 'python'),
-        outDir: options.out,
+        outDir,
       });
       const targets = targetsForContract(contract, plan.version, built);
       if (targets.length === 0) {
@@ -417,13 +423,17 @@ program
   .option('-o, --out <dir>', 'output directory', DEFAULT_BUILD_OUT_DIR)
   .action(async (options: { config: string; out: string }) => {
     const context = await buildPlanContext(options.config);
+    // See the `publish` command's identical resolve: an unresolved relative
+    // --out-dir gets re-resolved against `uv build`'s own cwd and lands
+    // nested underneath itself.
+    const outDir = resolve(context.configDir, options.out);
     for (const contract of context.config.contracts) {
       const plan = await planContract(context, contract);
       const result = await buildContract(plan, {
         contract,
         speckifyVersion: context.currentSpeckifyVersion,
         toolchainDir: join(packageRoot, 'python'),
-        outDir: options.out,
+        outDir,
       });
       const from = plan.previousVersion ?? '(unpublished)';
       console.log(`## ${plan.contract}: ${from} -> ${plan.version} (${plan.bump})`);
