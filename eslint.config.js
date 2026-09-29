@@ -15,7 +15,10 @@ export default [
     languageOptions: {
       parserOptions: {
         projectService: {
-          allowDefaultProject: ['eslint.config.js', 'vitest.config.ts'],
+          // vitest.config.ts is no longer here: it's now covered by
+          // tsconfig.json's own `include` (TS-5), so the project service
+          // finds it there and rejects a default-project fallback too.
+          allowDefaultProject: ['eslint.config.js'],
         },
         tsconfigRootDir: import.meta.dirname,
       },
