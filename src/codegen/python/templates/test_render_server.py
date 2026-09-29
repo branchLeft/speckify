@@ -92,9 +92,32 @@ CREATE_WIDGET = {
     "pathParams": [],
     "queryParams": [],
     "headerParams": [],
-    # An inline (non-$ref) JSON body schema: no generated pydantic model.
-    "requestBody": {"kind": "json", "required": True, "model": None},
+    # An inline JSON body schema, hoisted into a named model at generation time.
+    "requestBody": {"kind": "json", "required": True, "model": "CreateWidgetRequestBody"},
     "responses": [{"statusCode": "201", "model": None}],
+}
+
+PATCH_WIDGET = {
+    "operationId": "patchWidget",
+    "method": "PATCH",
+    "path": "/widgets",
+    "pathParams": [],
+    "queryParams": [],
+    "headerParams": [],
+    "requestBody": {"kind": "json", "required": False, "model": "CreateWidgetRequestBody"},
+    "responses": [{"statusCode": "200", "model": None}],
+}
+
+ECHO_JSON = {
+    "operationId": "echoJson",
+    "method": "POST",
+    "path": "/echo",
+    "pathParams": [],
+    "queryParams": [],
+    "headerParams": [],
+    # A JSON media type that declares no schema at all: nothing to validate against.
+    "requestBody": {"kind": "json", "required": True, "model": None},
+    "responses": [{"statusCode": "200", "model": None}],
 }
 
 UPLOAD_BLOB = {
@@ -126,7 +149,9 @@ def generated_package(tmp_path: Path) -> typing.Any:
     (package_dir / "__init__.py").write_text("", encoding="utf-8")
     (package_dir / "models.py").write_text(MODELS_PY, encoding="utf-8")
 
-    operations = parse_operations([CREATE_PET, UPLOAD_BLOB, GET_ITEM, LIST_WIDGETS, CREATE_WIDGET])
+    operations = parse_operations(
+        [CREATE_PET, UPLOAD_BLOB, GET_ITEM, LIST_WIDGETS, CREATE_WIDGET, PATCH_WIDGET, ECHO_JSON]
+    )
     write_server_module(operations, package_dir / "server")
 
     sys.path.insert(0, str(tmp_path))
@@ -383,7 +408,13 @@ class _WidgetHandlers:
         }
 
     async def create_widget(self, *, body: typing.Any) -> typing.Any:
-        return {"status_code": 201, "body": {"received": body}}
+        return {"status_code": 201, "body": {"received": body.model_dump()}}
+
+    async def patch_widget(self, *, body: typing.Any) -> typing.Any:
+        return {"status_code": 200, "body": {"received": None if body is None else body.model_dump()}}
+
+    async def echo_json(self, *, body: typing.Any) -> typing.Any:
+        return {"status_code": 200, "body": {"received": body}}
 
 
 def _widget_client(generated_package: typing.Any) -> TestClient:
@@ -399,6 +430,14 @@ def _widget_client(generated_package: typing.Any) -> TestClient:
 
         async def create_widget(self, **kwargs: typing.Any) -> typing.Any:
             raw = await _WidgetHandlers.create_widget(self, **kwargs)
+            return Result(**raw)
+
+        async def patch_widget(self, **kwargs: typing.Any) -> typing.Any:
+            raw = await _WidgetHandlers.patch_widget(self, **kwargs)
+            return Result(**raw)
+
+        async def echo_json(self, **kwargs: typing.Any) -> typing.Any:
+            raw = await _WidgetHandlers.echo_json(self, **kwargs)
             return Result(**raw)
 
     app = FastAPI()
@@ -470,6 +509,56 @@ def test_inline_json_body_is_parsed_and_passed_through_not_silently_dropped(
 
     assert response.status_code == 201
     assert response.json() == {"received": {"name": "Widget A", "quantity": 3}}
+
+
+def test_inline_json_body_is_validated_against_its_hoisted_model(generated_package: typing.Any) -> None:
+    client = _widget_client(generated_package)
+
+    wrong_type = client.post("/widgets", json={"name": "Widget A", "quantity": "three"})
+    too_long = client.post("/widgets", json={"name": "x" * 41, "quantity": 3})
+    missing_field = client.post("/widgets", json={"quantity": 3})
+
+    assert wrong_type.status_code == 422
+    assert too_long.status_code == 422
+    assert missing_field.status_code == 422
+
+
+def test_required_json_body_that_is_absent_or_null_is_rejected_not_passed_as_none(
+    generated_package: typing.Any,
+) -> None:
+    client = _widget_client(generated_package)
+
+    absent = client.post("/widgets", content=b"", headers={"content-type": "application/json"})
+    null = client.post("/widgets", content=b"null", headers={"content-type": "application/json"})
+    schemaless_absent = client.post("/echo", content=b"", headers={"content-type": "application/json"})
+
+    assert absent.status_code == 422
+    assert null.status_code == 422
+    assert schemaless_absent.status_code == 422
+
+
+def test_optional_json_body_that_is_absent_reaches_the_handler_as_none(
+    generated_package: typing.Any,
+) -> None:
+    client = _widget_client(generated_package)
+
+    absent = client.patch("/widgets")
+    present = client.patch("/widgets", json={"name": "B", "quantity": 1})
+    invalid = client.patch("/widgets", json={"name": "B"})
+
+    assert absent.status_code == 200
+    assert absent.json() == {"received": None}
+    assert present.json() == {"received": {"name": "B", "quantity": 1}}
+    assert invalid.status_code == 422
+
+
+def test_json_body_with_no_schema_is_passed_through_as_parsed(generated_package: typing.Any) -> None:
+    client = _widget_client(generated_package)
+
+    response = client.post("/echo", json={"anything": [1, 2]})
+
+    assert response.status_code == 200
+    assert response.json() == {"received": {"anything": [1, 2]}}
 
 
 def test_json_body_over_max_bytes_rejected_with_413_before_before_handle_sees_it(

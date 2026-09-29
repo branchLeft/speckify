@@ -1,6 +1,7 @@
 import { generateClient } from './client.js';
 import { generateModels } from './models.js';
 import { generateServer } from './server.js';
+import { prepareServerSpec } from './server-spec.js';
 import { importNameFor } from './naming.js';
 import { writeProjectFiles } from './package-layout.js';
 import { runUvBuild } from './build.js';
@@ -32,8 +33,11 @@ export async function buildPythonPackage(
 ): Promise<BuildPythonPackageResult> {
   const importName = importNameFor(input.packageName);
   const packageDir = await writeProjectFiles(input, options.projectDir);
+  // The server validates inline JSON bodies against hoisted models, so both
+  // the models and the server are generated from the prepared spec.
+  const modelSpec = input.server ? prepareServerSpec(input.bundledSpec) : input.bundledSpec;
 
-  await generateModels(input.bundledSpec, {
+  await generateModels(modelSpec, {
     toolchainDir: options.toolchainDir,
     targetDir: packageDir,
     uvDeps,
@@ -48,7 +52,7 @@ export async function buildPythonPackage(
   }
 
   if (input.server) {
-    await generateServer(input.bundledSpec, {
+    await generateServer(modelSpec, {
       toolchainDir: options.toolchainDir,
       targetDir: packageDir,
       uvDeps,

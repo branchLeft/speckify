@@ -17,8 +17,9 @@ interface RawSchema {
   enum?: unknown[];
   minimum?: number;
   maximum?: number;
-  exclusiveMinimum?: number;
-  exclusiveMaximum?: number;
+  /** A number in OpenAPI 3.1; a boolean modifier of `minimum` in OpenAPI 3.0. */
+  exclusiveMinimum?: number | boolean;
+  exclusiveMaximum?: number | boolean;
   minLength?: number;
   maxLength?: number;
   pattern?: string;
@@ -102,8 +103,15 @@ function constraintsForSchema(schema: RawSchema | undefined): ParamConstraints {
   const constraints: ParamConstraints = {};
   const enumValues = enumConstraint(schema);
   if (enumValues !== undefined) constraints.enum = enumValues;
-  if (typeof schema?.minimum === 'number') constraints.minimum = schema.minimum;
-  if (typeof schema?.maximum === 'number') constraints.maximum = schema.maximum;
+  // OpenAPI 3.0 spells an exclusive bound as `minimum` plus `exclusiveMinimum: true`.
+  if (typeof schema?.minimum === 'number') {
+    if (schema.exclusiveMinimum === true) constraints.exclusiveMinimum = schema.minimum;
+    else constraints.minimum = schema.minimum;
+  }
+  if (typeof schema?.maximum === 'number') {
+    if (schema.exclusiveMaximum === true) constraints.exclusiveMaximum = schema.maximum;
+    else constraints.maximum = schema.maximum;
+  }
   if (typeof schema?.exclusiveMinimum === 'number') {
     constraints.exclusiveMinimum = schema.exclusiveMinimum;
   }
@@ -141,10 +149,8 @@ function toRequestBodyInfo(requestBody: RawRequestBody | undefined): RequestBody
   const json = requestBody.content['application/json'];
   if (json !== undefined) {
     const ref = json.schema?.$ref;
-    // An inline (non-$ref) JSON body schema has no generated pydantic
-    // model to bind to -- `model: null` tells the router to parse and pass
-    // the JSON value through unvalidated by a model, rather than falling
-    // through to `{ kind: 'none' }` and silently dropping the body.
+    // `model: null` only survives for a JSON body with no schema at all:
+    // prepareServerSpec hoists every inline schema into a named model first.
     return { kind: 'json', required, model: ref !== undefined ? modelNameFromRef(ref) : null };
   }
   if (requestBody.content['application/octet-stream'] !== undefined) {

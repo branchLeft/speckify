@@ -47,7 +47,7 @@ class Handlers(typing.Protocol):
 {% endfor %}
 {% if op.request_body.kind == 'json' %}
 {% if op.request_body.model %}
-        body: models.{{ op.request_body.model }},
+        body: models.{{ op.request_body.model }}{% if not op.request_body.required %} | None{% endif %},
 {% else %}
         body: typing.Any,
 {% endif %}

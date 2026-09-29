@@ -17,4 +17,11 @@ class Dog(pydantic.BaseModel):
     model_config = pydantic.ConfigDict(populate_by_name=True)
 
 
+class CreateWidgetRequestBody(pydantic.BaseModel):
+    """What prepareServerSpec hoists an inline JSON body schema into."""
+
+    name: str = pydantic.Field(max_length=40)
+    quantity: int
+
+
 Pet = pydantic.RootModel[typing.Annotated[typing.Union[Cat, Dog], pydantic.Field(discriminator="pet_type")]]

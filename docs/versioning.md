@@ -53,11 +53,19 @@ For each contract, on every `speckify check` or `speckify publish` run:
      as new rule ids are seen; until then, unclassified means "assume the
      worst."
 
-   One case sits outside oasdiff's own rule set entirely: if oasdiff
-   reports **no** semantic changes but the bundled spec's text still
-   differs from what was last published (a description tweak that
-   doesn't move any rule id), that's treated as `patch` — the contract
-   did change, even if nothing about the wire behaviour did.
+   Two cases sit outside oasdiff's own rule set:
+
+   - **A change oasdiff does not judge is `major`.** oasdiff only judges
+     each keyword at particular places in a document; nothing under a
+     callback, for example. Speckify diffs the two specs itself. Any change
+     that is not at a location oasdiff's rules are shown to judge forces
+     `major`, even when oasdiff reported other, smaller changes. The rule
+     and its validation against the real binary are in
+     [`src/version/location-coverage.md`](../src/version/location-coverage.md).
+   - **No semantic change, but different text.** If oasdiff reports no
+     changes but the spec's text still differs from what was last
+     published, the difference is `patch` only when it is documentation
+     alone, such as a description tweak. Anything else is `major`.
 
 6. **Bump and stamp.** The highest-severity bump found — across every
    oasdiff rule matched, plus any bump Speckify's own toolchain forces on

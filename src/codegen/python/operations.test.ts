@@ -138,6 +138,28 @@ describe('extractOperations (N4: param constraints, array query params, inline b
     ]);
   });
 
+  it.each([
+    [{ minimum: 0, exclusiveMinimum: true }, { exclusiveMinimum: 0 }],
+    [{ maximum: 9, exclusiveMaximum: true }, { exclusiveMaximum: 9 }],
+    [{ minimum: 0, exclusiveMinimum: false }, { minimum: 0 }],
+    [
+      { exclusiveMinimum: 0, exclusiveMaximum: 9 },
+      { exclusiveMinimum: 0, exclusiveMaximum: 9 },
+    ],
+  ])('honours OpenAPI 3.0 boolean and 3.1 numeric exclusive bounds: %j', (bounds, expected) => {
+    const [op] = extractOperations({
+      paths: {
+        '/w': {
+          get: {
+            operationId: 'w',
+            parameters: [{ name: 'n', in: 'query', schema: { type: 'integer', ...bounds } }],
+          },
+        },
+      },
+    });
+    expect(op?.queryParams[0]?.constraints).toEqual(expected);
+  });
+
   it('marks an array-typed query parameter and derives pyType/constraints from its items schema', () => {
     const document = {
       paths: {

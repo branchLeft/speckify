@@ -103,6 +103,72 @@ describe.skipIf(!uvAvailable)(describeTitle, () => {
     expect(output).toContain('IMPORT_OK');
   }, 120_000);
 
+  it('validates an inline JSON request body against a model generated for it', async () => {
+    projectDir = await mkdtemp(join(tmpdir(), 'speckify-build-'));
+    const bundledSpec = JSON.stringify({
+      openapi: '3.0.3',
+      info: { title: 'Widgets', version: '0.1.0' },
+      paths: {
+        '/widgets': {
+          post: {
+            operationId: 'createWidget',
+            requestBody: {
+              required: true,
+              content: {
+                'application/json': {
+                  schema: {
+                    type: 'object',
+                    required: ['name'],
+                    properties: { name: { type: 'string', maxLength: 5 } },
+                  },
+                },
+              },
+            },
+            responses: { '201': { description: 'created' } },
+          },
+        },
+      },
+    });
+
+    const result = await buildPythonPackage(
+      {
+        bundledSpec,
+        packageName: 'speckify-fixture-inline',
+        version: '0.1.0',
+        client: false,
+        server: true,
+        changelog: '## 0.1.0\n',
+        speckifyVersion: '0.0.0-test',
+      },
+      { projectDir, toolchainDir: TOOLCHAIN_DIR },
+    );
+    const wheel = result.artifacts.find((a) => a.kind === 'wheel');
+    if (!wheel) {
+      throw new Error('no wheel produced');
+    }
+
+    const output = await runPythonWithWheel(
+      wheel.path,
+      [
+        'import fastapi, fastapi.testclient',
+        'from speckify_fixture_inline import server',
+        'class H:',
+        '    async def create_widget(self, *, body):',
+        '        return server.handlers.CreateWidgetResponse201(body={"name": body.name})',
+        'app = fastapi.FastAPI()',
+        'app.include_router(server.create_router(H()))',
+        'c = fastapi.testclient.TestClient(app)',
+        'print(c.post("/widgets", json={"name": "ok"}).status_code)',
+        'print(c.post("/widgets", json={"name": "too long"}).status_code)',
+        'print(c.post("/widgets", json={}).status_code)',
+        'print(c.post("/widgets", content=b"", headers={"content-type": "application/json"}).status_code)',
+      ].join('\n'),
+      ['fastapi>=0.110', 'httpx'],
+    );
+
+    expect(output.trim().split('\n')).toEqual(['201', '422', '422', '422']);
+  }, 180_000);
+
   // pyproject.toml's [tool.speckify] does not carry into the wheel's
   // METADATA, and hatchling's `packages = ["src/<name>"]` only ships files
   // that live under that directory -- a root-level CHANGELOG.md is not

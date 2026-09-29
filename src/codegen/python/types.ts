@@ -81,12 +81,7 @@ export type RequestBodyInfo =
   | {
       kind: 'json';
       required: boolean;
-      /**
-       * `null` for an inline (non-`$ref`) JSON body schema: there is no
-       * generated pydantic model to validate against, so the router parses
-       * and passes the JSON value through unvalidated by a model rather
-       * than dropping the body.
-       */
+      /** `null` only for a JSON body with no schema; see server-spec.ts. */
       model: string | null;
     }
   | { kind: 'octet-stream'; required: boolean }

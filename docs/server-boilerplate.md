@@ -18,6 +18,49 @@ implementation plugs handlers into — never a working service on its own.
   constrained to the response shapes the spec declares for that
   operation.
 
+## Exactly what the Python server validates
+
+The Python router checks the following before your handler runs. A failed
+check is rejected with 422.
+
+- **Path, query and header parameters**, including those declared on the
+  path item or through a `$ref`:
+  - Coerced to `int`, `float` or `bool` as the schema's `type` says.
+    `nan` and `inf` are not numbers.
+  - A `required` parameter must be present.
+  - `enum` is checked for string, number and boolean members.
+  - `minimum`, `maximum`, both exclusive bounds, `minLength`, `maxLength`
+    and `pattern` are checked. Exclusive bounds work in both the OpenAPI 3.0
+    boolean form and the 3.1 numeric form.
+  - An array query parameter checks each repeated value against its
+    `items` schema. A required one needs at least one value.
+- **An `application/json` request body** is validated by a generated
+  pydantic model. This holds whether the schema is a `$ref` or written
+  inline: an inline schema is given a model named
+  `<OperationId>RequestBody` when the package is generated.
+  - A required body that is empty or `null` is rejected with 422.
+  - An optional body that is absent reaches the handler as `None`.
+  - Malformed JSON is rejected with 400.
+  - A body over 1 MiB is rejected with 413 before it is fully read. The
+    limit is configurable through `create_router`.
+
+These are **not** validated. The value reaches your handler as described:
+
+- Array-level keywords on a query parameter: `minItems`, `maxItems` and
+  `uniqueItems`.
+- An object-typed parameter (for example `style: deepObject`), and an array
+  path or header parameter. Each arrives as the raw string.
+- A parameter's `format` (`date-time`, `uuid`, ...). The value arrives as a
+  string.
+- Cookie parameters, which are not read.
+- A JSON body whose media type declares no schema. It arrives exactly as
+  parsed.
+- A body under any media type other than `application/json` or
+  `application/octet-stream` (for example `application/merge-patch+json`).
+  It is not passed to the handler.
+- Responses. The handler's return type constrains them, but the router
+  does not check them against the spec at run time.
+
 ## What it does not give you
 
 - Authentication, authorisation, or any business logic — that's what you
