@@ -7,7 +7,8 @@ import { writeFile as writeFileFs } from 'node:fs/promises';
 import { generateTypeScriptPackage } from './generate.js';
 import { CodegenInputError, IncompleteGenerationError } from './errors.js';
 import { assertGenerationComplete } from './completeness.js';
-import { extractOperations, type BundledSpec } from './operations.js';
+import type { BundledSpec } from '../../bundle/index.js';
+import { extractOperations } from './operations.js';
 import { readSdkFunctionNames } from './read-generated-names.js';
 
 const FIXTURES_DIR = path.join(

@@ -1,13 +1,8 @@
+import type { BundledSpec } from '../../bundle/index.js';
 import { CodegenInputError } from './errors.js';
 
 const HTTP_METHODS = ['get', 'put', 'post', 'delete', 'options', 'head', 'patch', 'trace'] as const;
 type HttpMethod = (typeof HTTP_METHODS)[number];
-
-/** A bundled OpenAPI document, typed only as far as this module reads it. */
-export interface BundledSpec {
-  readonly paths?: Record<string, Record<string, unknown> | undefined>;
-  readonly info?: { readonly license?: unknown; readonly version?: string };
-}
 
 export interface OperationInfo {
   readonly operationId: string;

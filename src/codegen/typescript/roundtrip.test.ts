@@ -6,7 +6,7 @@ import { promisify } from 'node:util';
 import { parse as parseYaml } from 'yaml';
 import { afterEach, describe, expect, it } from 'vitest';
 import { generateTypeScriptPackage } from './generate.js';
-import type { BundledSpec } from './operations.js';
+import type { BundledSpec } from '../../bundle/index.js';
 
 const execFileAsync = promisify(execFile);
 const FIXTURES_DIR = path.join(

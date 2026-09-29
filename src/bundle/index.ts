@@ -19,6 +19,16 @@ interface OpenApiDocument {
   [key: string]: unknown;
 }
 
+/**
+ * The shape of a bundled OpenAPI document as far as downstream consumers
+ * (codegen, linting) read it. This is the one definition every consumer
+ * imports rather than each declaring its own subset of the same shape.
+ */
+export interface BundledSpec {
+  readonly paths?: Record<string, Record<string, unknown> | undefined>;
+  readonly info?: { readonly license?: unknown; readonly version?: string };
+}
+
 function isOpenApiDocument(value: unknown): value is OpenApiDocument {
   return typeof value === 'object' && value !== null;
 }

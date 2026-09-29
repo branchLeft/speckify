@@ -4,7 +4,8 @@ import { buildPackage } from './build.js';
 import { assertGenerationComplete } from './completeness.js';
 import { CodegenInputError } from './errors.js';
 import { runHeyApi } from './heyapi.js';
-import { extractOperations, type BundledSpec } from './operations.js';
+import type { BundledSpec } from '../../bundle/index.js';
+import { extractOperations } from './operations.js';
 import {
   buildPackageJson,
   buildReadme,

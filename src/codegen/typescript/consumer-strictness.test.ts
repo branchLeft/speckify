@@ -4,7 +4,7 @@ import path from 'node:path';
 import ts from 'typescript';
 import { afterEach, describe, expect, it } from 'vitest';
 import { generateTypeScriptPackage } from './generate.js';
-import type { BundledSpec } from './operations.js';
+import type { BundledSpec } from '../../bundle/index.js';
 import { parse as parseYaml } from 'yaml';
 
 const FIXTURES_DIR = path.join(

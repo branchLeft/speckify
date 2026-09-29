@@ -1,5 +1,5 @@
 import { createClient } from '@hey-api/openapi-ts';
-import type { BundledSpec } from './operations.js';
+import type { BundledSpec } from '../../bundle/index.js';
 
 /**
  * Runs @hey-api/openapi-ts programmatically against an already-bundled spec,
