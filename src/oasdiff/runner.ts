@@ -66,6 +66,14 @@ export async function runOasdiffChangelog(options: RunOasdiffOptions): Promise<O
       options.revisionSpecPath,
       '--format',
       'json',
+      // oasdiff compares allOf branches one at a time unless told otherwise,
+      // which understates severity: a breaking change (e.g. nullable added
+      // to a required field) inside one branch reports as a WARN instead of
+      // an ERR, because another branch might in principle still guarantee
+      // it — under-bumping the resulting semver. Flattening first compares
+      // what the branches describe together, which is what a client
+      // actually receives.
+      '--flatten-allof',
     ]);
     stdout = result.stdout;
   } catch (error) {

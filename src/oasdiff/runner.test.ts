@@ -1,7 +1,14 @@
+import { homedir } from 'node:os';
+import { join } from 'node:path';
+import { fileURLToPath } from 'node:url';
+
 import { describe, expect, it, vi } from 'vitest';
 
+import { resolveOasdiffBinary } from './binary.js';
 import { OasdiffError } from './errors.js';
 import { runOasdiffChangelog, type ProcessRunner } from './runner.js';
+
+const fixturesDir = fileURLToPath(new URL('./fixtures/', import.meta.url));
 
 describe('runOasdiffChangelog', () => {
   it('runs the pinned oasdiff changelog command and parses its JSON output', async () => {
@@ -32,7 +39,24 @@ describe('runOasdiffChangelog', () => {
       'revision.json',
       '--format',
       'json',
+      '--flatten-allof',
     ]);
+  });
+
+  it('always passes --flatten-allof, whatever the inputs', async () => {
+    const runProcess: ProcessRunner = vi.fn(async () =>
+      Promise.resolve({ stdout: '[]', stderr: '' }),
+    );
+
+    await runOasdiffChangelog({
+      oasdiffPath: '/bin/oasdiff',
+      baseSpecPath: 'a.json',
+      revisionSpecPath: 'b.json',
+      runProcess,
+    });
+
+    const call = vi.mocked(runProcess).mock.calls[0];
+    expect(call?.[1]).toContain('--flatten-allof');
   });
 
   it('treats an empty stdout as no changes', async () => {
@@ -93,5 +117,34 @@ describe('runOasdiffChangelog', () => {
         runProcess,
       }),
     ).rejects.toThrow(/did not match the expected changelog shape/);
+  });
+});
+
+describe('runOasdiffChangelog against the real oasdiff binary', () => {
+  it('reports the allOf-nullable fixture as ERR (level 3), which --flatten-allof alone makes true', async () => {
+    let oasdiffPath: string;
+    try {
+      oasdiffPath = await resolveOasdiffBinary({
+        cacheDir: join(homedir(), '.cache', 'speckify', 'oasdiff'),
+      });
+    } catch {
+      // No cached or downloadable binary in this environment (offline CI, a
+      // fresh machine with no network) — nothing further to prove here.
+      return;
+    }
+
+    const result = await runOasdiffChangelog({
+      oasdiffPath,
+      baseSpecPath: `${fixturesDir}allof-nullable-base.json`,
+      revisionSpecPath: `${fixturesDir}allof-nullable-revision.json`,
+    });
+
+    const nullableChange = result.find((change) => change.id === 'response-property-became-nullable');
+    expect(nullableChange).toBeDefined();
+    // Confirmed manually against the real binary: running this identical
+    // pair without --flatten-allof reports the same rule id at level 2
+    // (WARN), not 3 (ERR) — a genuinely breaking change that would
+    // under-bump semver if the flag were ever dropped.
+    expect(nullableChange?.level).toBe(3);
   });
 });
