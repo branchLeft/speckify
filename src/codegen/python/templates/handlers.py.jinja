@@ -39,10 +39,18 @@ class Handlers(typing.Protocol):
         self,
         *,
 {% for p in op.all_params %}
+{% if p.is_array %}
+        {{ p.py_name }}: list[{{ p.py_type }}],
+{% else %}
         {{ p.py_name }}: {{ p.py_type }}{% if not p.required %} | None{% endif %},
+{% endif %}
 {% endfor %}
 {% if op.request_body.kind == 'json' %}
+{% if op.request_body.model %}
         body: models.{{ op.request_body.model }},
+{% else %}
+        body: typing.Any,
+{% endif %}
 {% elif op.request_body.kind == 'octet-stream' %}
         body: typing.AsyncIterator[bytes],
 {% endif %}

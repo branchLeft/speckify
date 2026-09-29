@@ -42,18 +42,53 @@ export interface BuildPythonPackageResult {
   artifacts: readonly BuiltArtifact[];
 }
 
+/**
+ * Constraints a bare query/path/header value is checked against at request
+ * time -- the runtime equivalent of what datamodel-code-generator would
+ * bake into a named model's `pydantic.Field`, for a parameter that has no
+ * model of its own to carry them. Every field is optional and only the
+ * ones the parameter's schema actually declares are set.
+ */
+export interface ParamConstraints {
+  enum?: readonly (string | number | boolean)[];
+  minimum?: number;
+  maximum?: number;
+  exclusiveMinimum?: number;
+  exclusiveMaximum?: number;
+  minLength?: number;
+  maxLength?: number;
+  pattern?: string;
+}
+
 /** How a single OpenAPI parameter or header is represented. */
 export interface ParamInfo {
   name: string;
   /** The Python identifier the template binds it to (snake_case). */
   pyName: string;
   required: boolean;
-  /** A Python type expression, kept deliberately simple (str/int/float/bool). */
+  /** A Python type expression, kept deliberately simple (str/int/float/bool) -- the element type when `isArray`. */
   pyType: string;
+  /**
+   * True when the schema is `type: array` (query parameters only; array
+   * path/header params are rare enough that Speckify falls back to a
+   * single string for them, same as before this field existed).
+   */
+  isArray: boolean;
+  constraints: ParamConstraints;
 }
 
 export type RequestBodyInfo =
-  | { kind: 'json'; required: boolean; model: string }
+  | {
+      kind: 'json';
+      required: boolean;
+      /**
+       * `null` for an inline (non-`$ref`) JSON body schema: there is no
+       * generated pydantic model to validate against, so the router parses
+       * and passes the JSON value through unvalidated by a model rather
+       * than dropping the body.
+       */
+      model: string | null;
+    }
   | { kind: 'octet-stream'; required: boolean }
   | { kind: 'none' };
 

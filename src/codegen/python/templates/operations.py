@@ -18,11 +18,24 @@ def snake_case(identifier: str) -> str:
     return re.sub(r"[-\s]+", "_", stage1).lower()
 
 
+class RawParamConstraints(typing.TypedDict, total=False):
+    enum: list[str | int | float | bool]
+    minimum: float
+    maximum: float
+    exclusiveMinimum: float
+    exclusiveMaximum: float
+    minLength: int
+    maxLength: int
+    pattern: str
+
+
 class RawParam(typing.TypedDict):
     name: str
     pyName: str
     required: bool
     pyType: str
+    isArray: typing.NotRequired[bool]
+    constraints: typing.NotRequired[RawParamConstraints]
 
 
 class RawRequestBody(typing.TypedDict):
@@ -53,6 +66,16 @@ class Param:
     py_name: str
     required: bool
     py_type: str
+    is_array: bool = False
+    constraints: RawParamConstraints = dataclasses.field(default_factory=lambda: RawParamConstraints())
+
+    @property
+    def constraints_literal(self) -> str:
+        """`constraints` rendered as Python source: every value it can hold
+        (str/int/float/bool, or a list of those for `enum`) reprs to valid
+        Python, unlike `json.dumps` output (`true`/`false`/`null` are not
+        Python literals)."""
+        return repr(dict(self.constraints))
 
 
 @dataclasses.dataclass(frozen=True)
@@ -133,5 +156,10 @@ def parse_operations(raw: list[RawOperation]) -> list[Operation]:
 
 def _parse_param(raw: RawParam) -> Param:
     return Param(
-        name=raw["name"], py_name=raw["pyName"], required=raw["required"], py_type=raw["pyType"]
+        name=raw["name"],
+        py_name=raw["pyName"],
+        required=raw["required"],
+        py_type=raw["pyType"],
+        is_array=raw.get("isArray", False),
+        constraints=raw.get("constraints", {}),
     )

@@ -41,6 +41,62 @@ GET_ITEM = {
     "responses": [{"statusCode": "200", "model": None}],
 }
 
+LIST_WIDGETS = {
+    "operationId": "listWidgets",
+    "method": "GET",
+    "path": "/widgets",
+    "pathParams": [],
+    "queryParams": [
+        {
+            "name": "status",
+            "pyName": "status",
+            "required": False,
+            "pyType": "str",
+            "isArray": False,
+            "constraints": {"enum": ["active", "archived"]},
+        },
+        {
+            "name": "limit",
+            "pyName": "limit",
+            "required": False,
+            "pyType": "int",
+            "isArray": False,
+            "constraints": {"minimum": 1, "maximum": 100},
+        },
+        {
+            "name": "tag",
+            "pyName": "tag",
+            "required": False,
+            "pyType": "str",
+            "isArray": True,
+            "constraints": {},
+        },
+        {
+            "name": "score",
+            "pyName": "score",
+            "required": False,
+            "pyType": "float",
+            "isArray": False,
+            "constraints": {},
+        },
+    ],
+    "headerParams": [],
+    "requestBody": {"kind": "none"},
+    "responses": [{"statusCode": "200", "model": None}],
+}
+
+CREATE_WIDGET = {
+    "operationId": "createWidget",
+    "method": "POST",
+    "path": "/widgets",
+    "pathParams": [],
+    "queryParams": [],
+    "headerParams": [],
+    # An inline (non-$ref) JSON body schema: no generated pydantic model.
+    "requestBody": {"kind": "json", "required": True, "model": None},
+    "responses": [{"statusCode": "201", "model": None}],
+}
+
 UPLOAD_BLOB = {
     "operationId": "uploadBlob",
     "method": "POST",
@@ -70,7 +126,7 @@ def generated_package(tmp_path: Path) -> typing.Any:
     (package_dir / "__init__.py").write_text("", encoding="utf-8")
     (package_dir / "models.py").write_text(MODELS_PY, encoding="utf-8")
 
-    operations = parse_operations([CREATE_PET, UPLOAD_BLOB, GET_ITEM])
+    operations = parse_operations([CREATE_PET, UPLOAD_BLOB, GET_ITEM, LIST_WIDGETS, CREATE_WIDGET])
     write_server_module(operations, package_dir / "server")
 
     sys.path.insert(0, str(tmp_path))
@@ -295,3 +351,142 @@ def test_before_handle_runs_before_path_parameter_parsing(generated_package: typ
 
     assert calls == ["before_handle"]
     assert response.status_code == 422
+
+
+class _WidgetHandlers:
+    """A stand-in Handlers implementation for the N4 tests below: every
+    endpoint just echoes what it received, so each test asserts on the
+    router's own parsing/validation rather than on any handler logic."""
+
+    async def create_pet(self, *, body: typing.Any) -> typing.Any:
+        raise NotImplementedError
+
+    async def upload_blob(
+        self, *, signature: str, timestamp: str, body: typing.AsyncIterator[bytes]
+    ) -> typing.Any:
+        raise NotImplementedError
+
+    async def get_item(self, *, item_id: int) -> typing.Any:
+        raise NotImplementedError
+
+    async def list_widgets(
+        self,
+        *,
+        status: str | None,
+        limit: int | None,
+        tag: list[str],
+        score: float | None,
+    ) -> typing.Any:
+        return {
+            "status_code": 200,
+            "body": {"status": status, "limit": limit, "tag": tag, "score": score},
+        }
+
+    async def create_widget(self, *, body: typing.Any) -> typing.Any:
+        return {"status_code": 201, "body": {"received": body}}
+
+
+def _widget_client(generated_package: typing.Any) -> TestClient:
+    class Result:
+        def __init__(self, status_code: int, body: typing.Any) -> None:
+            self.status_code = status_code
+            self.body = body
+
+    class WidgetHandlers(_WidgetHandlers):
+        async def list_widgets(self, **kwargs: typing.Any) -> typing.Any:
+            raw = await _WidgetHandlers.list_widgets(self, **kwargs)
+            return Result(**raw)
+
+        async def create_widget(self, **kwargs: typing.Any) -> typing.Any:
+            raw = await _WidgetHandlers.create_widget(self, **kwargs)
+            return Result(**raw)
+
+    app = FastAPI()
+    app.include_router(generated_package.create_router(WidgetHandlers()))
+    return TestClient(app)
+
+
+def test_array_query_param_keeps_every_repeated_value(generated_package: typing.Any) -> None:
+    client = _widget_client(generated_package)
+
+    response = client.get("/widgets?tag=red&tag=blue&tag=green")
+
+    assert response.status_code == 200
+    assert response.json()["tag"] == ["red", "blue", "green"]
+
+
+def test_array_query_param_defaults_to_an_empty_list_when_absent(generated_package: typing.Any) -> None:
+    client = _widget_client(generated_package)
+
+    response = client.get("/widgets")
+
+    assert response.status_code == 200
+    assert response.json()["tag"] == []
+
+
+def test_query_param_enum_constraint_rejects_a_value_outside_it(generated_package: typing.Any) -> None:
+    client = _widget_client(generated_package)
+
+    ok = client.get("/widgets?status=active")
+    bad = client.get("/widgets?status=deleted")
+
+    assert ok.status_code == 200
+    assert bad.status_code == 422
+
+
+def test_query_param_range_constraint_rejects_a_value_outside_it(generated_package: typing.Any) -> None:
+    client = _widget_client(generated_package)
+
+    ok = client.get("/widgets?limit=50")
+    too_low = client.get("/widgets?limit=0")
+    too_high = client.get("/widgets?limit=101")
+
+    assert ok.status_code == 200
+    assert too_low.status_code == 422
+    assert too_high.status_code == 422
+
+
+def test_float_query_param_rejects_nan_and_infinity(generated_package: typing.Any) -> None:
+    client = _widget_client(generated_package)
+
+    finite = client.get("/widgets?score=1.5")
+    nan = client.get("/widgets?score=nan")
+    infinity = client.get("/widgets?score=inf")
+    negative_infinity = client.get("/widgets?score=-infinity")
+
+    assert finite.status_code == 200
+    assert finite.json()["score"] == 1.5
+    assert nan.status_code == 422
+    assert infinity.status_code == 422
+    assert negative_infinity.status_code == 422
+
+
+def test_inline_json_body_is_parsed_and_passed_through_not_silently_dropped(
+    generated_package: typing.Any,
+) -> None:
+    client = _widget_client(generated_package)
+
+    response = client.post("/widgets", json={"name": "Widget A", "quantity": 3})
+
+    assert response.status_code == 201
+    assert response.json() == {"received": {"name": "Widget A", "quantity": 3}}
+
+
+def test_json_body_over_max_bytes_rejected_with_413_before_before_handle_sees_it(
+    generated_package: typing.Any,
+) -> None:
+    app = FastAPI()
+    app.include_router(
+        generated_package.create_router(_WidgetHandlersRaisingIfCalled(), max_json_body_bytes=8)
+    )
+    client = TestClient(app)
+
+    # 9 raw bytes, one over the 8-byte cap.
+    response = client.post("/widgets", content=b'{"n":123}', headers={"content-type": "application/json"})
+
+    assert response.status_code == 413
+
+
+class _WidgetHandlersRaisingIfCalled(_WidgetHandlers):
+    async def create_widget(self, *, body: typing.Any) -> typing.Any:
+        raise AssertionError("handler must not run for an over-limit body")

@@ -12,6 +12,8 @@ body, strictly after `before_handle` has run."""
 from __future__ import annotations
 
 import json
+import math
+import re
 import typing
 
 import fastapi
@@ -20,6 +22,11 @@ import pydantic
 from .. import models
 from .handlers import BeforeHandle, Handlers
 
+#: A JSON request body larger than this is refused with 413, before it is
+#: ever fully buffered -- reading stops the moment the running total crosses
+#: the cap, never after.
+DEFAULT_MAX_JSON_BODY_BYTES = 1024 * 1024
+
 
 def _json_response(result: typing.Any) -> fastapi.Response:
     body = result.body
@@ -27,14 +34,25 @@ def _json_response(result: typing.Any) -> fastapi.Response:
     return fastapi.responses.JSONResponse(status_code=result.status_code, content=content)
 
 
-def _parse_bool(name: str, raw: str) -> bool:
+async def _read_json_body(request: fastapi.Request, max_bytes: int) -> bytes:
+    total = 0
+    chunks: list[bytes] = []
+    async for chunk in request.stream():
+        total += len(chunk)
+        if total > max_bytes:
+            raise fastapi.HTTPException(status_code=413, detail="Payload Too Large")
+        chunks.append(chunk)
+    return b"".join(chunks)
+
+
+def _parse_bool(name: str, location: str, raw: str) -> bool:
     lowered = raw.lower()
     if lowered == "true":
         return True
     if lowered == "false":
         return False
     raise fastapi.HTTPException(
-        status_code=422, detail=[{"loc": ["query", name], "msg": "invalid boolean", "type": "bool_parsing"}]
+        status_code=422, detail=[{"loc": [location, name], "msg": "invalid boolean", "type": "bool_parsing"}]
     )
 
 
@@ -49,14 +67,24 @@ def _coerce(name: str, location: str, raw: str, py_type: str) -> typing.Any:
             ) from exc
     if py_type == "float":
         try:
-            return float(raw)
+            value = float(raw)
         except ValueError as exc:
             raise fastapi.HTTPException(
                 status_code=422,
                 detail=[{"loc": [location, name], "msg": "invalid number", "type": "float_parsing"}],
             ) from exc
+        # `float("nan")`/`float("inf")`/`float("-inf")` all parse without
+        # raising -- a JSON Schema `number`/`integer` value is never one of
+        # these (neither is valid JSON syntax), so a wire value that
+        # produces one here was never a real number to begin with.
+        if not math.isfinite(value):
+            raise fastapi.HTTPException(
+                status_code=422,
+                detail=[{"loc": [location, name], "msg": "value is not a finite number", "type": "finite_number"}],
+            )
+        return value
     if py_type == "bool":
-        return _parse_bool(name, raw)
+        return _parse_bool(name, location, raw)
     return raw
 
 
@@ -69,7 +97,121 @@ def _require(name: str, location: str, raw: str | None) -> str:
     return raw
 
 
-def create_router(handlers: Handlers, *, before_handle: BeforeHandle | None = None) -> fastapi.APIRouter:
+def _require_nonempty(name: str, location: str, raw: list[str]) -> list[str]:
+    if not raw:
+        raise fastapi.HTTPException(
+            status_code=422,
+            detail=[{"loc": [location, name], "msg": "field required", "type": "missing"}],
+        )
+    return raw
+
+
+def _check_constraints(
+    name: str, location: str, value: typing.Any, constraints: dict[str, typing.Any]
+) -> typing.Any:
+    """The runtime equivalent of the `pydantic.Field` constraints
+    datamodel-code-generator would bake into a named model, applied to a
+    bare query/path/header value that has no model of its own to carry
+    them. Returns `value` unchanged so callers can chain it inline."""
+    if value is None or not constraints:
+        return value
+
+    enum = constraints.get("enum")
+    if enum is not None and value not in enum:
+        raise fastapi.HTTPException(
+            status_code=422,
+            detail=[{"loc": [location, name], "msg": "value is not a valid enumeration member", "type": "enum"}],
+        )
+
+    if isinstance(value, (int, float)) and not isinstance(value, bool):
+        minimum = constraints.get("minimum")
+        if minimum is not None and value < minimum:
+            raise fastapi.HTTPException(
+                status_code=422,
+                detail=[
+                    {
+                        "loc": [location, name],
+                        "msg": f"ensure this value is >= {minimum}",
+                        "type": "greater_than_equal",
+                    }
+                ],
+            )
+        maximum = constraints.get("maximum")
+        if maximum is not None and value > maximum:
+            raise fastapi.HTTPException(
+                status_code=422,
+                detail=[
+                    {"loc": [location, name], "msg": f"ensure this value is <= {maximum}", "type": "less_than_equal"}
+                ],
+            )
+        exclusive_minimum = constraints.get("exclusiveMinimum")
+        if exclusive_minimum is not None and value <= exclusive_minimum:
+            raise fastapi.HTTPException(
+                status_code=422,
+                detail=[
+                    {
+                        "loc": [location, name],
+                        "msg": f"ensure this value is > {exclusive_minimum}",
+                        "type": "greater_than",
+                    }
+                ],
+            )
+        exclusive_maximum = constraints.get("exclusiveMaximum")
+        if exclusive_maximum is not None and value >= exclusive_maximum:
+            raise fastapi.HTTPException(
+                status_code=422,
+                detail=[
+                    {"loc": [location, name], "msg": f"ensure this value is < {exclusive_maximum}", "type": "less_than"}
+                ],
+            )
+
+    if isinstance(value, str):
+        min_length = constraints.get("minLength")
+        if min_length is not None and len(value) < min_length:
+            raise fastapi.HTTPException(
+                status_code=422,
+                detail=[
+                    {
+                        "loc": [location, name],
+                        "msg": f"ensure this value has at least {min_length} characters",
+                        "type": "string_too_short",
+                    }
+                ],
+            )
+        max_length = constraints.get("maxLength")
+        if max_length is not None and len(value) > max_length:
+            raise fastapi.HTTPException(
+                status_code=422,
+                detail=[
+                    {
+                        "loc": [location, name],
+                        "msg": f"ensure this value has at most {max_length} characters",
+                        "type": "string_too_long",
+                    }
+                ],
+            )
+        pattern = constraints.get("pattern")
+        if pattern is not None and re.search(pattern, value) is None:
+            raise fastapi.HTTPException(
+                status_code=422,
+                detail=[
+                    {
+                        "loc": [location, name],
+                        "msg": f"string does not match pattern '{pattern}'",
+                        "type": "string_pattern_mismatch",
+                    }
+                ],
+            )
+
+    return value
+
+
+def create_router(
+    handlers: Handlers,
+    *,
+    before_handle: BeforeHandle | None = None,
+    max_json_body_bytes: int = DEFAULT_MAX_JSON_BODY_BYTES,
+) -> fastapi.APIRouter:
     router = fastapi.APIRouter()
 
 {% for op in operations %}
@@ -79,34 +221,87 @@ def create_router(handlers: Handlers, *, before_handle: BeforeHandle | None = No
             await before_handle(request)
 
 {% for p in op.path_params %}
-        {{ p.py_name }} = _coerce("{{ p.name }}", "path", request.path_params["{{ p.name }}"], "{{ p.py_type }}")
+        {{ p.py_name }} = _check_constraints(
+            "{{ p.name }}",
+            "path",
+            _coerce("{{ p.name }}", "path", request.path_params["{{ p.name }}"], "{{ p.py_type }}"),
+            {{ p.constraints_literal }},
+        )
 {% endfor %}
 {% for p in op.query_params %}
+{% if p.is_array %}
+        _raw_{{ p.py_name }} = request.query_params.getlist("{{ p.name }}")
+{% if p.required %}
+        _require_nonempty("{{ p.name }}", "query", _raw_{{ p.py_name }})
+{% endif %}
+        {{ p.py_name }} = [
+            _check_constraints(
+                "{{ p.name }}", "query", _coerce("{{ p.name }}", "query", _v, "{{ p.py_type }}"), {{ p.constraints_literal }}
+            )
+            for _v in _raw_{{ p.py_name }}
+        ]
+{% else %}
         _raw_{{ p.py_name }} = request.query_params.get("{{ p.name }}")
 {% if p.required %}
-        {{ p.py_name }} = _coerce("{{ p.name }}", "query", _require("{{ p.name }}", "query", _raw_{{ p.py_name }}), "{{ p.py_type }}")
+        {{ p.py_name }} = _check_constraints(
+            "{{ p.name }}",
+            "query",
+            _coerce("{{ p.name }}", "query", _require("{{ p.name }}", "query", _raw_{{ p.py_name }}), "{{ p.py_type }}"),
+            {{ p.constraints_literal }},
+        )
 {% else %}
-        {{ p.py_name }} = _coerce("{{ p.name }}", "query", _raw_{{ p.py_name }}, "{{ p.py_type }}") if _raw_{{ p.py_name }} is not None else None
+        {{ p.py_name }} = (
+            _check_constraints(
+                "{{ p.name }}",
+                "query",
+                _coerce("{{ p.name }}", "query", _raw_{{ p.py_name }}, "{{ p.py_type }}"),
+                {{ p.constraints_literal }},
+            )
+            if _raw_{{ p.py_name }} is not None
+            else None
+        )
+{% endif %}
 {% endif %}
 {% endfor %}
 {% for p in op.header_params %}
         _raw_{{ p.py_name }} = request.headers.get("{{ p.name }}")
 {% if p.required %}
-        {{ p.py_name }} = _coerce("{{ p.name }}", "header", _require("{{ p.name }}", "header", _raw_{{ p.py_name }}), "{{ p.py_type }}")
+        {{ p.py_name }} = _check_constraints(
+            "{{ p.name }}",
+            "header",
+            _coerce("{{ p.name }}", "header", _require("{{ p.name }}", "header", _raw_{{ p.py_name }}), "{{ p.py_type }}"),
+            {{ p.constraints_literal }},
+        )
 {% else %}
-        {{ p.py_name }} = _coerce("{{ p.name }}", "header", _raw_{{ p.py_name }}, "{{ p.py_type }}") if _raw_{{ p.py_name }} is not None else None
+        {{ p.py_name }} = (
+            _check_constraints(
+                "{{ p.name }}",
+                "header",
+                _coerce("{{ p.name }}", "header", _raw_{{ p.py_name }}, "{{ p.py_type }}"),
+                {{ p.constraints_literal }},
+            )
+            if _raw_{{ p.py_name }} is not None
+            else None
+        )
 {% endif %}
 {% endfor %}
 {% if op.request_body.kind == 'json' %}
-        raw_bytes = await request.body()
+        raw_bytes = await _read_json_body(request, max_json_body_bytes)
         try:
             raw_body = json.loads(raw_bytes) if raw_bytes else None
         except json.JSONDecodeError as exc:
             raise fastapi.HTTPException(status_code=400, detail="Malformed JSON body") from exc
+{% if op.request_body.model %}
         try:
             body = models.{{ op.request_body.model }}.model_validate(raw_body)
         except pydantic.ValidationError as exc:
             raise fastapi.HTTPException(status_code=422, detail=exc.errors()) from exc
+{% else %}
+        # Inline (non-$ref) JSON body schema: there is no generated
+        # pydantic model to validate against. The parsed JSON value is
+        # passed through as-is rather than being silently dropped.
+        body = raw_body
+{% endif %}
 {% elif op.request_body.kind == 'octet-stream' %}
         body = request.stream()
 {% endif %}

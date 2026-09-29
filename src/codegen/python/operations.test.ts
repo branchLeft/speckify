@@ -41,7 +41,7 @@ describe('extractOperations', () => {
     expect(getThing.method).toBe('GET');
     expect(getThing.path).toBe('/things/{id}');
     expect(getThing.pathParams).toEqual([
-      { name: 'id', pyName: 'id', required: true, pyType: 'str' },
+      { name: 'id', pyName: 'id', required: true, pyType: 'str', isArray: false, constraints: {} },
     ]);
   });
 
@@ -74,5 +74,122 @@ describe('extractOperations', () => {
 
   it('returns an empty list for a document with no paths', () => {
     expect(extractOperations({})).toEqual([]);
+  });
+});
+
+describe('extractOperations (N4: param constraints, array query params, inline bodies)', () => {
+  it('carries enum/range/pattern constraints from a query parameter schema', () => {
+    const document = {
+      paths: {
+        '/widgets': {
+          get: {
+            operationId: 'listWidgets',
+            parameters: [
+              {
+                name: 'status',
+                in: 'query',
+                required: false,
+                schema: { type: 'string', enum: ['active', 'archived'] },
+              },
+              {
+                name: 'limit',
+                in: 'query',
+                required: false,
+                schema: { type: 'integer', minimum: 1, maximum: 100 },
+              },
+              {
+                name: 'slug',
+                in: 'query',
+                required: false,
+                schema: { type: 'string', minLength: 1, maxLength: 40, pattern: '^[a-z-]+$' },
+              },
+            ],
+          },
+        },
+      },
+    };
+
+    const [op] = extractOperations(document);
+    expect(op?.queryParams).toEqual([
+      {
+        name: 'status',
+        pyName: 'status',
+        required: false,
+        pyType: 'str',
+        isArray: false,
+        constraints: { enum: ['active', 'archived'] },
+      },
+      {
+        name: 'limit',
+        pyName: 'limit',
+        required: false,
+        pyType: 'int',
+        isArray: false,
+        constraints: { minimum: 1, maximum: 100 },
+      },
+      {
+        name: 'slug',
+        pyName: 'slug',
+        required: false,
+        pyType: 'str',
+        isArray: false,
+        constraints: { minLength: 1, maxLength: 40, pattern: '^[a-z-]+$' },
+      },
+    ]);
+  });
+
+  it('marks an array-typed query parameter and derives pyType/constraints from its items schema', () => {
+    const document = {
+      paths: {
+        '/widgets': {
+          get: {
+            operationId: 'listWidgets',
+            parameters: [
+              {
+                name: 'tag',
+                in: 'query',
+                required: false,
+                schema: { type: 'array', items: { type: 'string', enum: ['a', 'b'] } },
+              },
+            ],
+          },
+        },
+      },
+    };
+
+    const [op] = extractOperations(document);
+    expect(op?.queryParams).toEqual([
+      {
+        name: 'tag',
+        pyName: 'tag',
+        required: false,
+        pyType: 'str',
+        isArray: true,
+        constraints: { enum: ['a', 'b'] },
+      },
+    ]);
+  });
+
+  it('reports an inline (non-$ref) JSON request body as kind "json" with a null model, never "none"', () => {
+    const document = {
+      paths: {
+        '/widgets': {
+          post: {
+            operationId: 'createWidget',
+            requestBody: {
+              required: true,
+              content: {
+                'application/json': {
+                  schema: { type: 'object', properties: { name: { type: 'string' } } },
+                },
+              },
+            },
+          },
+        },
+      },
+    };
+
+    const [op] = extractOperations(document);
+    expect(op?.requestBody).toEqual({ kind: 'json', required: true, model: null });
   });
 });
