@@ -11,10 +11,38 @@ So every plan with a previous version also compares the generated packages
 themselves:
 
 ```text
-bump = max(allow-list, oasdiff classification, toolchain impact, surface bump)
+bump = max(allow-list, oasdiff classification, toolchain impact, client surface bump)
 ```
 
 A first publish has nothing to compare against and runs no surface diff.
+
+**Only the client surface drives the bump.** Every bump in this file — the
+allow-list, the classification map, the toolchain-impact check — is judged
+from the point of view of an existing, correctly-written **client** of the
+API (`docs/versioning.md`, the classification map's own header). A generated
+server package is not that: nobody publishes a compiled artifact against it
+the way an SDK consumer does. It's regenerated and rebuilt by the one
+producer who wrote the spec change, in the same PR, so a break there is
+caught by that producer's own build, never shipped to a third party frozen
+against an old version. Feeding a server-only break into `max()` used to
+over-bump: a new operation always adds a method to the TypeScript `Handlers`
+interface and the Python `Handlers` `Protocol`, which §2's own rule (a
+`Protocol` gaining a member is major) makes major — so a purely additive
+change looked like a breaking one.
+
+So the surface diff is computed once, over both halves, and then split by
+where each change landed:
+
+- the **client surface** — TS's `.`, `./types` and `./zod` entry points;
+  Python's client and models modules — sets `report.bump`, exactly as
+  before;
+- the **server surface** — TS's `./server` entry point; Python's
+  `<package>.server` module tree — is still compared, in full, but only
+  **reported**: `report.serverChanges`, and a "Server changes" section in
+  the changelog/PR comment. It never reaches `max()`.
+
+A change that touches neither surface doesn't exist: every generated symbol
+is exactly one or the other.
 
 ## 1. What is compared
 

@@ -19,7 +19,7 @@ describe('compareGeneratedSurfaces', () => {
       currentSpec: '{"openapi":"3.0.3"}',
       targets: { typescript: { client: true, server: false } },
     });
-    expect(report).toEqual({ bump: 'none', changes: [] });
+    expect(report).toEqual({ bump: 'none', changes: [], serverChanges: [] });
   });
 });
 

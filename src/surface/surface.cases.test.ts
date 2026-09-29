@@ -25,7 +25,11 @@ const CLIENTS: SurfaceTargets = {
 async function surface(
   name: string,
   options: { raw?: boolean; targets?: SurfaceTargets; same?: boolean } = {},
-): Promise<{ bump: string; changes: readonly SurfaceChange[] }> {
+): Promise<{
+  bump: string;
+  changes: readonly SurfaceChange[];
+  serverChanges: readonly SurfaceChange[];
+}> {
   const previousSpec = fixture(name, 'base', options.raw);
   return compareGeneratedSurfaces({
     previousSpec,
@@ -117,7 +121,9 @@ describe.skipIf(!uvAvailable)('the generated-surface diff over real generators',
   });
 
   it(
-    'a new operation is major for a contract that generates a server: implementers must add a handler',
+    'a new operation is minor for a contract that generates a server: the server-only Handlers ' +
+      'break is reported, not fed into the bump — only the producer who changed the spec ' +
+      'consumes the server package (surface.md §1)',
     async () => {
       const report = await surface('server-endpoint-added', {
         targets: {
@@ -125,14 +131,22 @@ describe.skipIf(!uvAvailable)('the generated-surface diff over real generators',
           python: { client: true, server: true },
         },
       });
-      expect(majorIn(report.changes, 'typescript')).toEqual([
+      expect(report.bump).toBe('minor');
+      // The client surface (TS `.`/`./types`/`./zod`, Python client+models)
+      // only gains a new export for the new operation: no major there.
+      expect(majorIn(report.changes, 'typescript')).toEqual([]);
+      expect(majorIn(report.changes, 'python')).toEqual([]);
+      // The server-only surface still reports the Handlers break, for the
+      // producer's own visibility — it just doesn't drive the bump.
+      expect(majorIn(report.serverChanges, 'typescript')).toEqual([
         './server#Handlers: is used as input and no longer accepts every value it accepted',
       ]);
-      expect(majorIn(report.changes, 'python')).toEqual([
+      expect(majorIn(report.serverChanges, 'python')).toEqual([
         'speckify_surface.server.handlers.Handlers: a Protocol consumers implement changed',
       ]);
       const clientOnly = await surface('server-endpoint-added');
       expect(clientOnly.bump).toBe('minor');
+      expect(clientOnly.serverChanges).toEqual([]);
     },
     TIMEOUT,
   );

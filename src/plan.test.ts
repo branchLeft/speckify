@@ -760,6 +760,7 @@ describe('computeContractPlan and the generated-surface diff', () => {
             reason: 'export removed',
           },
         ],
+        serverChanges: [],
       }),
     );
     const plan = await computeContractPlan({
@@ -781,7 +782,7 @@ describe('computeContractPlan and the generated-surface diff', () => {
       ...input,
       bundledSpec: bundledSpecV1,
       previous,
-      surfaceDiff: () => Promise.resolve({ bump: 'minor', changes: [] }),
+      surfaceDiff: () => Promise.resolve({ bump: 'minor', changes: [], serverChanges: [] }),
     });
     expect(plan.bump).toBe('minor');
   });

@@ -78,10 +78,14 @@ For each contract, on every `speckify check` or `speckify publish` run:
    [`src/version/allow-list.md`](../src/version/allow-list.md).
 
 7. **Bump and stamp.** The highest-severity bump found — the allow-list's
-   verdict, every oasdiff rule matched, plus any bump Speckify's own toolchain forces on
+   verdict, every oasdiff rule matched, any bump Speckify's own toolchain forces on
    every consumer between releases (`src/version/toolchain-impact.ts`,
    for the rare case a Speckify release itself changes what "the same
-   contract" means) — is applied to the last published version.
+   contract" means), plus the generated **client** surface's own diff
+   (`src/surface/surface.md` — a generated server package's surface is
+   compared too, but only reported, never fed into this max: only the
+   producer who changed the spec consumes it) — is applied to the last
+   published version.
    **A contract that has never been published always starts at `1.0.0`**,
    regardless of what the diff says, because there's nothing to diff
    against yet and a `0.x` series would tell consumers "not stable"

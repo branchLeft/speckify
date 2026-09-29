@@ -68,6 +68,7 @@ describe('renderPrComment', () => {
             },
             { language: 'typescript', symbol: '.#Pet2', bump: 'minor', reason: 'export added' },
           ],
+          serverChanges: [],
         },
       }),
     ]);
@@ -78,6 +79,37 @@ describe('renderPrComment', () => {
 
   it('renders no surface section without breaking surface changes', () => {
     expect(renderPrComment([plan()])).not.toContain('Generated-surface');
+  });
+
+  it('reports server-only surface changes without them affecting the version', () => {
+    const body = renderPrComment([
+      plan({
+        bump: 'minor',
+        surface: {
+          bump: 'minor',
+          changes: [
+            { language: 'python', symbol: 'pkg.models.Pet', bump: 'minor', reason: 'export added' },
+          ],
+          serverChanges: [
+            {
+              language: 'python',
+              symbol: 'pkg.server.handlers.Handlers',
+              bump: 'major',
+              reason: 'a Protocol consumers implement changed',
+            },
+          ],
+        },
+      }),
+    ]);
+    expect(body).toContain('Server changes (do not affect this version)');
+    expect(body).toContain(
+      'python `pkg.server.handlers.Handlers` (major): a Protocol consumers implement changed',
+    );
+    expect(body).not.toContain('Generated-surface changes that break existing clients');
+  });
+
+  it('renders no server-changes section when there are none', () => {
+    expect(renderPrComment([plan()])).not.toContain('Server changes');
   });
 
   it('renders nothing for unknown rules when there are none', () => {

@@ -30,6 +30,36 @@ export interface CompareSurfacesInput {
 /** The generated packages' name: the same on both sides, so it never shows as a change. */
 const SURFACE_PACKAGE = 'speckify-surface';
 
+/** The server-only subpath hey-api/openapi-python-client-style TS packages export. */
+const TS_SERVER_SUBPATH = './server';
+
+/**
+ * True for a change under the server-only surface: TS's `./server` entry
+ * point, or Python's `<importName>.server` module tree. Everything else is
+ * the client surface (TS client/types/zod entry points; Python client +
+ * models) — see surface.md §1.
+ */
+function isServerChange(change: SurfaceChange, pythonImportName: string): boolean {
+  if (change.language === 'typescript') {
+    return change.symbol === TS_SERVER_SUBPATH || change.symbol.startsWith(`${TS_SERVER_SUBPATH}#`);
+  }
+  const prefix = `${pythonImportName}.server`;
+  return change.symbol === prefix || change.symbol.startsWith(`${prefix}.`);
+}
+
+/** Splits `changes` into the client surface (drives the bump) and the server-only surface. */
+function splitByScope(
+  changes: readonly SurfaceChange[],
+  pythonImportName: string,
+): { client: SurfaceChange[]; server: SurfaceChange[] } {
+  const client: SurfaceChange[] = [];
+  const server: SurfaceChange[] = [];
+  for (const change of changes) {
+    (isServerChange(change, pythonImportName) ? server : client).push(change);
+  }
+  return { client, server };
+}
+
 interface Generated {
   readonly typescript?: string;
   readonly python?: string;
@@ -89,8 +119,7 @@ export async function compareGeneratedSurfaces(
       generate(input.previousSpec, join(root, 'previous'), input),
       generate(input.currentSpec, join(root, 'current'), input),
     ]);
-    const changes: SurfaceChange[] = [];
-    const [ts, py] = await Promise.all([
+    const [tsAll, pyAll] = await Promise.all([
       previous.typescript !== undefined && current.typescript !== undefined
         ? compareTypeScriptPackages(previous.typescript, current.typescript)
         : [],
@@ -98,8 +127,10 @@ export async function compareGeneratedSurfaces(
         ? comparePythonPackages(previous.python, current.python, input)
         : [],
     ]);
-    changes.push(...ts, ...py);
-    return reportOf(changes);
+    const pythonImportName = importNameFor(SURFACE_PACKAGE);
+    const ts = splitByScope(tsAll, pythonImportName);
+    const py = splitByScope(pyAll, pythonImportName);
+    return reportOf([...ts.client, ...py.client], [...ts.server, ...py.server]);
   } finally {
     await rm(root, { recursive: true, force: true });
   }

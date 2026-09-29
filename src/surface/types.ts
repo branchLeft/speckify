@@ -12,20 +12,35 @@ export interface SurfaceChange {
 }
 
 export interface SurfaceReport {
-  /** The highest change's bump; `none` when both surfaces are identical. */
+  /** The highest **client**-surface change's bump; `none` when both client surfaces are identical. */
   readonly bump: Bump;
+  /** Changes to the client surface (TS client/types/zod entry points; Python client + models). */
   readonly changes: readonly SurfaceChange[];
+  /**
+   * Changes to the server-only surface (TS `./server`; Python `<pkg>.server`).
+   * Reported for visibility — a producer regenerating their own server needs
+   * to know — but never fed into the bump: only the producer who made the
+   * change consumes the server package, per surface.md §1.
+   */
+  readonly serverChanges: readonly SurfaceChange[];
 }
 
 /** Which way a type flows between the consumer and the SDK; see surface.md §3. */
 export type Role = 'input' | 'output';
 
-/** The report for a list of changes: the highest bump, `none` when there are none. */
-export function reportOf(changes: readonly SurfaceChange[]): SurfaceReport {
+/**
+ * The report for a list of client-surface changes: the highest bump, `none`
+ * when there are none. `serverChanges` rides along unjudged (see
+ * {@link SurfaceReport.serverChanges}).
+ */
+export function reportOf(
+  changes: readonly SurfaceChange[],
+  serverChanges: readonly SurfaceChange[] = [],
+): SurfaceReport {
   const bump: Bump = changes.some((change) => change.bump === 'major')
     ? 'major'
     : changes.length > 0
       ? 'minor'
       : 'none';
-  return { bump, changes };
+  return { bump, changes, serverChanges };
 }

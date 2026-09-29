@@ -30,6 +30,17 @@ function renderContractSection(plan: ContractPlan): string {
     lines.push('');
   }
 
+  const serverChanges = plan.surface?.serverChanges ?? [];
+  if (serverChanges.length > 0) {
+    // Reported for the producer who regenerates their own server; never
+    // part of the bump above (surface.md §1).
+    lines.push('Server changes (do not affect this version):', '');
+    for (const change of serverChanges) {
+      lines.push(`- ${change.language} \`${change.symbol}\` (${change.bump}): ${change.reason}`);
+    }
+    lines.push('');
+  }
+
   return lines.join('\n');
 }
 
