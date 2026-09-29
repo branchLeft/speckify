@@ -1,11 +1,21 @@
 import { mkdir, mkdtemp, readdir, readFile, rm, stat, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 
 import { assertClientCompleteness } from './completeness-guard.js';
 import { ClientGenerationError } from './errors.js';
 import { extractOperations } from './operations.js';
 import { runUv, type UvRunnerDeps } from './uv.js';
+
+/**
+ * The custom template directory overriding openapi-python-client's own
+ * `model.py.jinja` to make every generated attrs model keyword-only. See
+ * `templates/openapi-python-client/model.py.jinja` for why.
+ */
+const CUSTOM_TEMPLATE_PATH = fileURLToPath(
+  new URL('./templates/openapi-python-client/', import.meta.url),
+);
 
 export interface GenerateClientOptions {
   /** The `python/` toolchain directory whose pinned openapi-python-client runs. */
@@ -72,6 +82,8 @@ export async function generateClient(
         configPath,
         '--output-path',
         outputPath,
+        '--custom-template-path',
+        CUSTOM_TEMPLATE_PATH,
         '--overwrite',
       ],
       options.toolchainDir,

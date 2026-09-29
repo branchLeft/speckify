@@ -165,7 +165,33 @@ class Surface:
             and name != "model_config"
         ]
 
+    def attrs_kw_only(self, cls: griffe.Class) -> bool:
+        """True when the class's `@attrs.define`-family decorator passed `kw_only=True`.
+
+        Generated attrs classes never write `__init__` in source — attrs
+        synthesises it from the decorator at class-creation time — so this is
+        the only way to see it from static analysis. Speckify's own
+        openapi-python-client model template passes `kw_only=True` (see
+        `../../codegen/python/templates/openapi-python-client/model.py.jinja`)
+        so field order carries no meaning in the generated constructor's
+        surface, matching the pydantic models below.
+        """
+        for decorator in cls.decorators:
+            if self.call_target(decorator.value) not in ATTRS_DECORATORS:
+                continue
+            if not isinstance(decorator.value, griffe.ExprCall):
+                continue
+            keywords = {
+                arg.name: arg.value
+                for arg in decorator.value.arguments
+                if isinstance(arg, griffe.ExprKeyword)
+            }
+            if literal(keywords.get("kw_only")) is True:
+                return True
+        return False
+
     def attrs_init(self, cls: griffe.Class) -> list[JsonValue]:
+        kind = "keyword-only" if self.attrs_kw_only(cls) else "positional or keyword"
         params: list[JsonValue] = []
         for field in self.fields(cls):
             value = field.value
@@ -183,7 +209,7 @@ class Surface:
             params.append(
                 {
                     "name": field.name,
-                    "kind": "positional or keyword",
+                    "kind": kind,
                     "default": has_default,
                     "annotation": self.expr(field.annotation),
                 }

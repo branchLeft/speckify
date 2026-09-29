@@ -38,6 +38,28 @@ describe.skipIf(!uvAvailable)(describeTitle, () => {
     expect(created).toContain('def sync');
   }, 60_000);
 
+  it('generates keyword-only attrs models: positional construction raises TypeError', async () => {
+    targetDir = await mkdtemp(join(tmpdir(), 'speckify-client-'));
+    const bundledSpec = loadFixtureAsBundledSpec('b-oneof-discriminator.bundled.yaml');
+
+    await generateClient(bundledSpec, { toolchainDir: TOOLCHAIN_DIR, targetDir });
+
+    const script = [
+      'import sys',
+      `sys.path.insert(0, ${JSON.stringify(targetDir)})`,
+      'from client.models.cat import Cat',
+      'try:',
+      "    Cat('cat', 3)",
+      'except TypeError:',
+      "    print('TypeError')",
+      'else:',
+      "    print('NO ERROR: still positional')",
+    ].join('\n');
+    const { runUvOrThrow } = await import('./uv.js');
+    const result = await runUvOrThrow(['python', '-c', script], TOOLCHAIN_DIR);
+    expect(result.stdout.trim()).toBe('TypeError');
+  }, 60_000);
+
   it('refuses the combined fixture: openapi-python-client silently drops uploadBlob', async () => {
     // uploadBlob has a `format: date-time` header param — the known
     // openapi-python-client 0.29.1 limitation the completeness guard exists for.

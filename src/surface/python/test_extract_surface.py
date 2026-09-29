@@ -36,6 +36,12 @@ class Body:
     def to_dict(self) -> dict: ...
 
 
+@_attrs_define(kw_only=True)
+class KwOnlyBody:
+    a: str
+    b: Optional[int] = None
+
+
 class Base(BaseModel):
     inherited: str
 
@@ -109,6 +115,19 @@ def test_attrs_constructor_is_positional_in_declaration_order(tmp_path: Path) ->
     assert b["annotation"] == {"u": [{"n": "None"}, {"n": "int"}]}
     assert body["protocol"] is False
     assert cast(Json, cast(Json, body["members"])["b"])["value"] is None
+
+
+def test_attrs_constructor_with_kw_only_true_is_keyword_only(tmp_path: Path) -> None:
+    """The custom openapi-python-client model template passes `kw_only=True`
+    (see codegen/python/templates/openapi-python-client/model.py.jinja) so a
+    generated model's field order carries no surface meaning; this proves the
+    static extractor actually sees that, since attrs synthesises `__init__` at
+    class-creation time rather than writing it in source."""
+    body = member(extract(write_package(tmp_path, PACKAGE)), "pkg.models", "KwOnlyBody")
+    assert names(body["init"]) == [
+        ("a", "keyword-only", False),
+        ("b", "keyword-only", True),
+    ]
 
 
 def test_pydantic_constructor_is_keyword_only_by_alias_with_inherited_fields(

@@ -58,8 +58,6 @@ describe.skipIf(!uvAvailable)('the generated-surface diff over real generators',
       ['unref-CreateThingResponse200', ['python']],
       ['tags-reorder', ['python']],
       ['tags-reorder-with-noise', ['python']],
-      ['required-removed', ['python']],
-      ['optional-property-mid', ['python']],
     ] as const)(
       '%s is major in %j',
       async (name, languages) => {
@@ -81,14 +79,17 @@ describe.skipIf(!uvAvailable)('the generated-surface diff over real generators',
     );
 
     it(
-      'the same reorder fed to the generators unsorted moves a Python positional argument: major',
+      'the same reorder fed to the generators unsorted is minor now generated attrs models are ' +
+        'keyword-only: field order carries no meaning in the constructor surface any more ' +
+        '(see the Python-models-keyword-only follow-up)',
       async () => {
         const report = await surface('properties-reorder', {
           raw: true,
           targets: only(['python']),
         });
-        expect(report.bump).toBe('major');
-        expect(majorIn(report.changes, 'python').join('\n')).toContain('moved');
+        expect(majorIn(report.changes, 'python')).toEqual([]);
+        expect(report.bump).toBe('minor');
+        expect(report.changes.map((c) => c.reason).join('\n')).toContain('signature changed');
       },
       TIMEOUT,
     );
@@ -101,6 +102,14 @@ describe.skipIf(!uvAvailable)('the generated-surface diff over real generators',
       ['response-optional-field', 'minor'],
       ['optional-query-param', 'minor'],
       ['description-edit', 'none'],
+      // Both used to be major: inserting an optional property anywhere but
+      // last, or moving a property from required to optional, shifted a
+      // *positional* attrs constructor argument. Now every generated attrs
+      // model is keyword-only (see the Python-models-keyword-only
+      // follow-up), field order carries no surface meaning, so these are
+      // exactly what they look like: a harmless addition and relaxation.
+      ['optional-property-mid', 'minor'],
+      ['required-removed', 'minor'],
     ] as const)(
       '%s is %s',
       async (name, bump) => {
