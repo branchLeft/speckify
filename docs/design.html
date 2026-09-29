@@ -371,7 +371,8 @@ flowchart LR
   cli -. "convenience only" .-> rel
   consumer -- "npm install" --> ghp
   consumer -- "pip install" --> pypi
-</pre>
+</pre
+        >
         <figcaption>
           Solid arrows are data Speckify depends on. The dotted arrow is written but never read
           back.
@@ -494,7 +495,8 @@ flowchart TD
   H3 --> M
   H4 --> M
   M --> V["Next version + changelog"]
-</pre>
+</pre
+        >
         <figcaption>
           The four judges run independently. Any of them can raise the bump; none can lower
           another's verdict.
@@ -593,7 +595,8 @@ flowchart LR
   D -- "no" --> L{"Matches an allow-list rule&lt;br/&gt;in every direction it reaches?"}
   L -- "yes" --> MI["minor"]
   L -- "no" --> MA["major"]
-</pre>
+</pre
+        >
       </figure>
       <p>
         Before diffing, both documents are prepared the same way. Documentation keys are stripped
@@ -751,7 +754,8 @@ flowchart TD
   PY --> S
   S -- "client" --> B["Joins the bump"]
   S -- "server" --> R["Reported only"]
-</pre>
+</pre
+        >
       </figure>
       <h3>TypeScript</h3>
       <p>
@@ -795,7 +799,8 @@ flowchart LR
   Y --> Y1["client&lt;br/&gt;openapi-python-client"]
   Y --> Y2["models&lt;br/&gt;pydantic v2"]
   Y --> Y3["server Handlers Protocol +&lt;br/&gt;FastAPI router"]
-</pre>
+</pre
+        >
         <figcaption>
           Every package also carries <code>openapi.json</code> (the bundled spec, stamped with its
           version), <code>CHANGELOG.md</code>, and the Speckify version that built it.
@@ -841,7 +846,8 @@ flowchart TD
   C -- "yes" --> K["Skip: already published"]
   C -- "no" --> F["Fail loudly: another publish&lt;br/&gt;raced this one; rerun"]
   P --> T["Tag and GitHub Release&lt;br/&gt;a failure here only warns"]
-</pre>
+</pre
+        >
       </figure>
       <ul>
         <li>
