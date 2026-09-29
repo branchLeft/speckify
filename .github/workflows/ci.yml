@@ -50,6 +50,6 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - name: Run actionlint
-        uses: reviewdog/action-actionlint@068bf0ce873c499b29c1c799fa813417db01f578 # v1.9.0
+        uses: reviewdog/action-actionlint@144cce1f5f4aad4f36bfba866f46565ac2c93546 # v1.9.0
         with:
           fail_level: error
