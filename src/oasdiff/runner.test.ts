@@ -139,7 +139,9 @@ describe('runOasdiffChangelog against the real oasdiff binary', () => {
       revisionSpecPath: `${fixturesDir}allof-nullable-revision.json`,
     });
 
-    const nullableChange = result.find((change) => change.id === 'response-property-became-nullable');
+    const nullableChange = result.find(
+      (change) => change.id === 'response-property-became-nullable',
+    );
     expect(nullableChange).toBeDefined();
     // Confirmed manually against the real binary: running this identical
     // pair without --flatten-allof reports the same rule id at level 2
