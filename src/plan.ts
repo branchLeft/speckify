@@ -9,10 +9,16 @@ import type { RegistryRecordEntry } from './record/index.js';
 import {
   applyBump,
   classify,
+  diffDocuments,
+  findUncoveredEdits,
   maxBump,
+  prepareDocument,
   type Bump,
   type ClassificationMap,
+  type OasdiffCoverage,
+  type UncoveredEdit,
 } from './version/index.js';
+import { normalizeForComparison } from './version/structural-diff.js';
 
 export interface ContractPlanInput {
   /** The contract's name, as declared in speckify.yaml. */
@@ -22,14 +28,8 @@ export interface ContractPlanInput {
   /** The last published state for this contract across its targets, or null if never published. */
   previous: RegistryRecordEntry | null;
   classificationMap: ClassificationMap;
-  /**
-   * Every JSON-Schema/OpenAPI keyword oasdiff's own rule catalogue judges
-   * at all (`data/oasdiff-<version>.covered-keywords.json`, loaded via
-   * `version/covered-keywords.ts`). A structural change at a keyword absent
-   * from this set is one oasdiff has no rule for -- see the structural
-   * fallback below.
-   */
-  coveredKeywords: ReadonlySet<string>;
+  /** Where oasdiff 1.x judges changes at all; see `version/location-coverage.md`. */
+  coverage: OasdiffCoverage;
   /** The bump every consumer inherits from Speckify's own toolchain moving forward. */
   toolchainImpactBump: Bump;
   oasdiffPath: string;
@@ -43,6 +43,8 @@ export interface ContractPlan {
   bump: Bump;
   unknownRuleIds: string[];
   changes: OasdiffChange[];
+  /** Structural edits oasdiff cannot be shown to judge; any one forces major. */
+  uncovered: UncoveredEdit[];
   /** The bundled spec with `version` stamped into its `info.version`. */
   bundledSpec: string;
 }
@@ -56,138 +58,6 @@ function stampVersion(bundledSpecJson: string, version: string): string {
 /** The placeholder every fresh bundle stamps into `info.version`; see `bundle/index.ts`. */
 const PLACEHOLDER_VERSION = '0.0.0';
 
-/**
- * Keys that never carry semantic meaning for a client: prose annotations
- * oasdiff (correctly) does not diff on. Stripped from both sides before
- * the doc-only-difference fallback check and the structural keyword diff
- * in {@link computeContractPlan}, never before the real oasdiff diff
- * itself.
- */
-const DOC_ONLY_KEYS = new Set([
-  'description',
-  'summary',
-  'example',
-  'examples',
-  'externalDocs',
-  'title',
-]);
-
-/**
- * Keys whose children are arbitrary names (property, schema, path, status,
- * media type, security scheme, discriminator key) — never fixed keywords.
- * See plan.md for how stripDocOnlyKeys and collectChangedKeywords handle
- * these: name-only changes are oasdiff's concern, not keyword-level edits.
- */
-const NAME_MAP_KEYS = new Set([
-  'paths',
-  'properties',
-  'patternProperties',
-  'definitions',
-  '$defs',
-  'schemas',
-  'responses',
-  'content',
-  'parameters',
-  'securitySchemes',
-  'webhooks',
-  'callbacks',
-  'headers',
-  'examples',
-  'requestBodies',
-  'links',
-  'mapping',
-  'dependentRequired',
-  'dependentSchemas',
-  'encoding',
-]);
-
-function isPlainObject(value: unknown): value is Record<string, unknown> {
-  return value !== null && typeof value === 'object' && !Array.isArray(value);
-}
-
-/**
- * Strips {@link DOC_ONLY_KEYS} only in annotation position: never as a key
- * of a {@link NAME_MAP_KEYS} container, where the key is an arbitrary name
- * chosen by the spec's author (a property called "title", a schema called
- * "Description", ...) rather than the JSON-Schema/OpenAPI `title` or
- * `description` keyword.
- */
-function stripDocOnlyKeys(value: unknown, parentIsNameMap = false): unknown {
-  if (Array.isArray(value)) {
-    return value.map((item) => stripDocOnlyKeys(item, false));
-  }
-  if (isPlainObject(value)) {
-    const result: Record<string, unknown> = {};
-    for (const [key, val] of Object.entries(value)) {
-      if (!parentIsNameMap && DOC_ONLY_KEYS.has(key)) {
-        continue;
-      }
-      result[key] = stripDocOnlyKeys(val, NAME_MAP_KEYS.has(key) && isPlainObject(val));
-    }
-    return result;
-  }
-  return value;
-}
-
-/**
- * Collects every JSON-Schema/OpenAPI keyword whose value differs between two
- * spec trees. Name map containers (properties, schemas, paths) skip
- * name-only changes. Array keywords compare as atomic units. See plan.md for
- * algorithm details and how this feeds oasdiff coverage fallback logic.
- */
-function collectChangedKeywords(a: unknown, b: unknown, parentIsNameMap = false): Set<string> {
-  const changed = new Set<string>();
-
-  if (parentIsNameMap) {
-    const aObj = isPlainObject(a) ? a : {};
-    const bObj = isPlainObject(b) ? b : {};
-    for (const key of new Set([...Object.keys(aObj), ...Object.keys(bObj)])) {
-      if (!(key in aObj) || !(key in bObj)) {
-        continue; // a pure add/remove under a name map: oasdiff's own business
-      }
-      for (const keyword of collectChangedKeywords(aObj[key], bObj[key], false)) {
-        changed.add(keyword);
-      }
-    }
-    return changed;
-  }
-
-  if (!isPlainObject(a) || !isPlainObject(b)) {
-    return changed;
-  }
-
-  for (const key of new Set([...Object.keys(a), ...Object.keys(b)])) {
-    const av = a[key];
-    const bv = b[key];
-    const bothMapOrMissing =
-      (isPlainObject(av) || av === undefined) && (isPlainObject(bv) || bv === undefined);
-
-    if (NAME_MAP_KEYS.has(key) && bothMapOrMissing) {
-      for (const keyword of collectChangedKeywords(av, bv, true)) {
-        changed.add(keyword);
-      }
-      continue;
-    }
-    if (isPlainObject(av) && isPlainObject(bv)) {
-      // A structural container this key's own name doesn't classify
-      // (an Operation, Schema, Response, RequestBody, MediaType object,
-      // ...): recurse to find the actual keyword that differs inside it,
-      // rather than reporting the container's own key.
-      for (const keyword of collectChangedKeywords(av, bv, false)) {
-        changed.add(keyword);
-      }
-      continue;
-    }
-    // A scalar, an array (compared as one atomic unit -- see the doc
-    // comment above), or the container itself appearing/disappearing
-    // wholesale: this key is the keyword that changed.
-    if (toCanonicalJson(av) !== toCanonicalJson(bv)) {
-      changed.add(key);
-    }
-  }
-  return changed;
-}
-
 function withPlaceholderVersion(doc: Record<string, unknown>): Record<string, unknown> {
   const info = doc.info;
   if (info === null || typeof info !== 'object') {
@@ -198,28 +68,32 @@ function withPlaceholderVersion(doc: Record<string, unknown>): Record<string, un
 
 /**
  * Normalises a bundled spec's `info.version` to the shared placeholder, so
- * the real oasdiff diff (and the raw-text-equality check that gates the
- * fallback below) never sees a difference that is purely "this is the spec
- * we last published at version X" vs "this is a fresh bundle, unstamped".
+ * neither oasdiff nor the text-equality check sees the stamped version.
  */
 function normalizeInfoVersionForComparison(bundledSpecJson: string): string {
   const doc = JSON.parse(bundledSpecJson) as Record<string, unknown>;
   return toCanonicalJson(withPlaceholderVersion(doc));
 }
 
-/**
- * True only when two specs are identical once `info.version` is normalised
- * and doc-only annotations are stripped from both. This is the fail-safe
- * fallback for "oasdiff reported no changes, but the spec text differs":
- * oasdiff missing a real, client-visible change must never read as "no
- * changes" (a republish of an unchanged spec, or an under-bump) — so
- * anything beyond a doc-only/version difference bumps MAJOR instead of the
- * PATCH this path used to apply unconditionally.
- */
+/** True only when two specs are identical once normalised and annotation-stripped. */
 function isDocOnlyDifference(previousSpecJson: string, currentSpecJson: string): boolean {
-  const previous = withPlaceholderVersion(JSON.parse(previousSpecJson) as Record<string, unknown>);
-  const current = withPlaceholderVersion(JSON.parse(currentSpecJson) as Record<string, unknown>);
-  return toCanonicalJson(stripDocOnlyKeys(previous)) === toCanonicalJson(stripDocOnlyKeys(current));
+  const previous = normalizeForComparison(JSON.parse(previousSpecJson) as Record<string, unknown>);
+  const current = normalizeForComparison(JSON.parse(currentSpecJson) as Record<string, unknown>);
+  return toCanonicalJson(previous) === toCanonicalJson(current);
+}
+
+/** Every structural edit oasdiff cannot be shown to judge; see version/location-coverage.md. */
+function uncoveredEdits(
+  previousSpecJson: string,
+  currentSpecJson: string,
+  coverage: OasdiffCoverage,
+  changes: readonly OasdiffChange[],
+): UncoveredEdit[] {
+  const edits = diffDocuments(
+    prepareDocument(JSON.parse(previousSpecJson) as Record<string, unknown>),
+    prepareDocument(JSON.parse(currentSpecJson) as Record<string, unknown>),
+  );
+  return findUncoveredEdits(edits, coverage, changes);
 }
 
 /**
@@ -236,6 +110,7 @@ export async function computeContractPlan(input: ContractPlanInput): Promise<Con
 
   let changes: OasdiffChange[] = [];
   let unknownRuleIds: string[] = [];
+  let uncovered: UncoveredEdit[] = [];
   let specBump: Bump = 'none';
 
   if (input.previous !== null) {
@@ -271,26 +146,16 @@ export async function computeContractPlan(input: ContractPlanInput): Promise<Con
       normalizeInfoVersionForComparison(input.previous.bundledSpec) !==
       normalizeInfoVersionForComparison(input.bundledSpec);
 
-    // Structural fallback: a real difference at a keyword oasdiff's own
-    // rule catalogue never looks at (see coveredKeywords) carries no
-    // information from oasdiff's silence about it, no matter what oasdiff
-    // *did* report elsewhere -- e.g. a tightened additionalProperties
-    // alongside an unrelated, correctly-classified new response property
-    // must still force major, not inherit the minor oasdiff gave the part
-    // it does understand. Runs on doc-stripped, version-normalised specs,
-    // same as the doc-only fallback below.
-    const strippedPrevious = stripDocOnlyKeys(
-      withPlaceholderVersion(JSON.parse(input.previous.bundledSpec) as Record<string, unknown>),
-    );
-    const strippedCurrent = stripDocOnlyKeys(
-      withPlaceholderVersion(JSON.parse(input.bundledSpec) as Record<string, unknown>),
-    );
-    const changedKeywords = collectChangedKeywords(strippedPrevious, strippedCurrent);
-    const uncoveredKeywords = [...changedKeywords].filter(
-      (keyword) => !input.coveredKeywords.has(keyword),
+    // Unconditional: an unjudged change must not inherit whatever bump
+    // oasdiff gave the changes it did judge (location-coverage.md §6).
+    uncovered = uncoveredEdits(
+      input.previous.bundledSpec,
+      input.bundledSpec,
+      input.coverage,
+      changes,
     );
 
-    if (uncoveredKeywords.length > 0) {
+    if (uncovered.length > 0) {
       specBump = 'major';
     } else if (changes.length === 0 && textDiffersOnceVersionIsNormalized) {
       // oasdiff saw no semantic diff, but the spec text differs beyond just
@@ -316,6 +181,7 @@ export async function computeContractPlan(input: ContractPlanInput): Promise<Con
     bump,
     unknownRuleIds,
     changes,
+    uncovered,
     bundledSpec: stampVersion(input.bundledSpec, version),
   };
 }

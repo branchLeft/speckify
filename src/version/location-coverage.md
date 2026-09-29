@@ -50,18 +50,25 @@ The diff emits **edits** in oasdiff's own vocabulary (`checker/metaschema`
 at the pinned tag): a location (a list of segments) and one syntactic
 action.
 
-| Value at the location                                    | Actions                                          |
-| -------------------------------------------------------- | ------------------------------------------------ |
-| member of a name map or keyed list (property, path, ...) | `add`, `remove`                                  |
-| list of scalars (`enum`, `required`, `type`, op `tags`)  | `add` / `remove` per member                      |
-| number                                                   | `set`, `unset`, `increase`, `decrease`           |
-| boolean                                                  | `set` (became true), `unset` (became false/gone) |
-| string or any other value (`default`, `const`, ...)      | `set`, `unset`, `change`                         |
-| object appearing or disappearing                         | `set`, `unset`                                   |
+| Value at the location                                    | Actions                                                             |
+| -------------------------------------------------------- | ------------------------------------------------------------------- |
+| member of a name map or keyed list (property, path, ...) | `add`, `remove`                                                     |
+| list of scalars (`enum`, `required`, `type`, op `tags`)  | `add` / `remove` per member                                         |
+| number                                                   | `set`, `unset`, `increase`, `decrease`                              |
+| boolean                                                  | `set` (became true), `unset` (was true), `change` (absent ↔ false) |
+| string or any other value (`default`, `const`, ...)      | `set`, `unset`, `change`                                            |
+| object appearing or disappearing                         | `set`, `unset`                                                      |
 
 A vendor extension segment such as `x-internal` is written `x-*`, which is
 how oasdiff spells every extension location. `type` is normalised to a set,
 so `string` → `integer` is a `remove` plus an `add`.
+
+A boolean going from absent to `false`, or back, is not oasdiff's `set` or
+`unset`. Where the default is `true` (for example `explode` on a form
+parameter), that transition changes behaviour. So it is a `change`, which no
+boolean claim lists, and it is MAJOR. `additionalProperties`, `default`,
+`const` and `$ref` are compared as opaque values: absent → `false` is a
+`set`.
 
 ## 3. Components are judged where they are used
 
@@ -131,22 +138,40 @@ callback changes, including a callback's removal, are MAJOR.
 
 ### Claims oasdiff declares but does not honour
 
-The empirical validation (section 6) found claims that the pinned oasdiff
+The empirical validation (section 7) found claims that the pinned oasdiff
 declares but on which it reports nothing, for some schema positions (the
 _class_ of the collapsed location). Examples: `pattern` on a body schema's
 root, generic `x-*` edits, `readOnly` on an `items` schema. These are kept,
 with the reason, in `data/oasdiff-<version>.silent-claims.json`. That file
 is hand-curated, never generated from oasdiff output. An edit whose claim is
-listed there for its class is uncovered.
+listed there for its class is uncovered. A completeness test checks that
+every entry names a real claim pattern and a subset of its actions.
+
+For oasdiff 1.32.1 the list covers:
+
+- On body schemas: `enum` values added at the root; `pattern` at the root;
+  generic `x-*`; `readOnly` and `writeOnly` except on a named property;
+  `deprecated` except on a named property outside `allOf`; and `nullable`,
+  `discriminator`, `prefixItems` and `if`/`then`/`else` inside an `allOf`
+  branch.
+- On parameters: a generic `x-*` on the parameter or its schema; a property
+  added to an object parameter schema, or made required.
+- On the operation: a generic `x-*`.
+- On security schemes: OAuth flow `scopes`, `tokenUrl` and
+  `authorizationUrl`, whether or not the scheme is in use.
+
+So a vendor extension edit now matches its `x-*` claim, but oasdiff 1.32.1
+judges only the specific extensions it knows, such as `x-extensible-enum`
+and `x-stability-level`. A generic extension edit therefore stays MAJOR.
 
 A collapsed body-schema location has one of these classes, set by the last
 descent that was not `allOf`:
 
-| Class      | Meaning                                                  |
-| ---------- | -------------------------------------------------------- |
-| `root`     | the body schema itself                                   |
-| `property` | a schema reached through `properties.<name>`             |
-| `subschema`| a schema reached through `items`, `additionalProperties` or `anyOf` |
+| Class       | Meaning                                                             |
+| ----------- | ------------------------------------------------------------------- |
+| `root`      | the body schema itself                                              |
+| `property`  | a schema reached through `properties.<name>`                        |
+| `subschema` | a schema reached through `items`, `additionalProperties` or `anyOf` |
 
 Each class gets a `+allOf` suffix when one or more `allOf` descents follow
 that last descent. Everything outside body schemas has class `root`.
@@ -194,7 +219,17 @@ binary. It skips, with a reason, only when the binary is unavailable; CI has
 it. Each fixture sits on its own path, so one oasdiff run judges many
 fixtures, and each report is attributed by path. The test fails if Speckify
 calls any fixture's edits covered but oasdiff reported nothing for that
-fixture. It also runs every reviewer scenario through `computeContractPlan`,
+fixture. The table crosses six placements (request body, response body, query
+parameter, `deepObject` parameter, response header and callback body) with
+fourteen nestings and every schema change the claims name, in both OpenAPI
+3.0 and 3.1. It adds operation-level and document-level changes. At the
+time of writing that is 13,485 fixtures. Speckify calls 3,191 of them
+covered, and oasdiff reported on every one of those 3,191. The other 10,294
+are uncovered and bump MAJOR; oasdiff reported nothing at all for 8,346 of
+them. A fixture must produce at least one edit, so the table cannot
+silently empty itself.
+
+It also runs every reviewer scenario through `computeContractPlan`,
 each paired with an unrelated optional response property, and expects
 MAJOR. Its controls are: a covered request-body property `maxLength`
 tightening gives oasdiff's MAJOR, a description-only edit gives PATCH, and

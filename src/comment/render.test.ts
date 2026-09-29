@@ -11,6 +11,7 @@ function plan(overrides: Partial<ContractPlan> = {}): ContractPlan {
     bump: 'minor',
     unknownRuleIds: [],
     changes: [],
+    uncovered: [],
     bundledSpec: '{}',
     ...overrides,
   };

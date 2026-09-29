@@ -1,0 +1,673 @@
+{
+  "oasdiffVersion": "1.32.1",
+  "claims": [
+    {
+      "pattern": "components.schemas.*",
+      "actions": ["remove"]
+    },
+    {
+      "pattern": "components.securitySchemes.*",
+      "actions": ["add", "remove"]
+    },
+    {
+      "pattern": "components.securitySchemes.*.flows.**.authorizationUrl",
+      "actions": ["change", "set", "unset"]
+    },
+    {
+      "pattern": "components.securitySchemes.*.flows.**.scopes.*",
+      "actions": ["add", "change", "remove"]
+    },
+    {
+      "pattern": "components.securitySchemes.*.flows.**.tokenUrl",
+      "actions": ["change", "set", "unset"]
+    },
+    {
+      "pattern": "components.securitySchemes.*.type",
+      "actions": ["change"]
+    },
+    {
+      "pattern": "info.version",
+      "actions": ["change"]
+    },
+    {
+      "pattern": "paths.*",
+      "actions": ["add", "remove"]
+    },
+    {
+      "pattern": "paths.*.*",
+      "actions": ["add", "remove"]
+    },
+    {
+      "pattern": "paths.*.*.deprecated",
+      "actions": ["set", "unset"]
+    },
+    {
+      "pattern": "paths.*.*.operationId",
+      "actions": ["change", "set", "unset"]
+    },
+    {
+      "pattern": "paths.*.*.parameters.*",
+      "actions": ["add", "remove"]
+    },
+    {
+      "pattern": "paths.*.*.parameters.*.deprecated",
+      "actions": ["set", "unset"]
+    },
+    {
+      "pattern": "paths.*.*.parameters.*.required",
+      "actions": ["set", "unset"]
+    },
+    {
+      "pattern": "paths.*.*.parameters.*.schema.default",
+      "actions": ["change", "set", "unset"]
+    },
+    {
+      "pattern": "paths.*.*.parameters.*.schema.enum",
+      "actions": ["add", "remove"]
+    },
+    {
+      "pattern": "paths.*.*.parameters.*.schema.exclusiveMaximum",
+      "actions": ["decrease", "increase", "set", "unset"]
+    },
+    {
+      "pattern": "paths.*.*.parameters.*.schema.exclusiveMinimum",
+      "actions": ["decrease", "increase", "set", "unset"]
+    },
+    {
+      "pattern": "paths.*.*.parameters.*.schema.format",
+      "actions": ["change", "set", "unset"]
+    },
+    {
+      "pattern": "paths.*.*.parameters.*.schema.maxContains",
+      "actions": ["decrease", "increase", "set", "unset"]
+    },
+    {
+      "pattern": "paths.*.*.parameters.*.schema.maxItems",
+      "actions": ["decrease", "increase", "set", "unset"]
+    },
+    {
+      "pattern": "paths.*.*.parameters.*.schema.maxLength",
+      "actions": ["decrease", "increase", "set", "unset"]
+    },
+    {
+      "pattern": "paths.*.*.parameters.*.schema.maxProperties",
+      "actions": ["decrease", "increase", "set", "unset"]
+    },
+    {
+      "pattern": "paths.*.*.parameters.*.schema.maximum",
+      "actions": ["decrease", "increase", "set", "unset"]
+    },
+    {
+      "pattern": "paths.*.*.parameters.*.schema.minContains",
+      "actions": ["decrease", "increase", "set", "unset"]
+    },
+    {
+      "pattern": "paths.*.*.parameters.*.schema.minItems",
+      "actions": ["decrease", "increase", "set", "unset"]
+    },
+    {
+      "pattern": "paths.*.*.parameters.*.schema.minLength",
+      "actions": ["decrease", "increase", "set", "unset"]
+    },
+    {
+      "pattern": "paths.*.*.parameters.*.schema.minProperties",
+      "actions": ["decrease", "increase", "set", "unset"]
+    },
+    {
+      "pattern": "paths.*.*.parameters.*.schema.minimum",
+      "actions": ["decrease", "increase", "set", "unset"]
+    },
+    {
+      "pattern": "paths.*.*.parameters.*.schema.multipleOf",
+      "actions": ["set", "unset"]
+    },
+    {
+      "pattern": "paths.*.*.parameters.*.schema.nullable",
+      "actions": ["set", "unset"]
+    },
+    {
+      "pattern": "paths.*.*.parameters.*.schema.pattern",
+      "actions": ["change", "set", "unset"]
+    },
+    {
+      "pattern": "paths.*.*.parameters.*.schema.properties.*",
+      "actions": ["add"]
+    },
+    {
+      "pattern": "paths.*.*.parameters.*.schema.required",
+      "actions": ["add"]
+    },
+    {
+      "pattern": "paths.*.*.parameters.*.schema.type",
+      "actions": ["add", "remove"]
+    },
+    {
+      "pattern": "paths.*.*.parameters.*.schema.x-*",
+      "actions": ["change"]
+    },
+    {
+      "pattern": "paths.*.*.parameters.*.x-*",
+      "actions": ["add", "change", "remove"]
+    },
+    {
+      "pattern": "paths.*.*.requestBody",
+      "actions": ["set", "unset"]
+    },
+    {
+      "pattern": "paths.*.*.requestBody.content.*",
+      "actions": ["add", "remove"]
+    },
+    {
+      "pattern": "paths.*.*.requestBody.content.*.itemSchema",
+      "actions": ["set", "unset"]
+    },
+    {
+      "pattern": "paths.*.*.requestBody.content.*.schema",
+      "actions": ["set", "unset"]
+    },
+    {
+      "pattern": "paths.*.*.requestBody.content.*.schema.allOf.*",
+      "actions": ["add", "remove"]
+    },
+    {
+      "pattern": "paths.*.*.requestBody.content.*.schema.anyOf.*",
+      "actions": ["add", "remove"]
+    },
+    {
+      "pattern": "paths.*.*.requestBody.content.*.schema.const",
+      "actions": ["change", "set", "unset"]
+    },
+    {
+      "pattern": "paths.*.*.requestBody.content.*.schema.contains",
+      "actions": ["set", "unset"]
+    },
+    {
+      "pattern": "paths.*.*.requestBody.content.*.schema.contentEncoding",
+      "actions": ["change", "set", "unset"]
+    },
+    {
+      "pattern": "paths.*.*.requestBody.content.*.schema.contentMediaType",
+      "actions": ["change", "set", "unset"]
+    },
+    {
+      "pattern": "paths.*.*.requestBody.content.*.schema.contentSchema",
+      "actions": ["set", "unset"]
+    },
+    {
+      "pattern": "paths.*.*.requestBody.content.*.schema.default",
+      "actions": ["change", "set", "unset"]
+    },
+    {
+      "pattern": "paths.*.*.requestBody.content.*.schema.dependentRequired.*",
+      "actions": ["add", "remove"]
+    },
+    {
+      "pattern": "paths.*.*.requestBody.content.*.schema.dependentSchemas.*",
+      "actions": ["add", "remove"]
+    },
+    {
+      "pattern": "paths.*.*.requestBody.content.*.schema.deprecated",
+      "actions": ["set", "unset"]
+    },
+    {
+      "pattern": "paths.*.*.requestBody.content.*.schema.discriminator",
+      "actions": ["set", "unset"]
+    },
+    {
+      "pattern": "paths.*.*.requestBody.content.*.schema.discriminator.mapping.*",
+      "actions": ["add", "change", "remove"]
+    },
+    {
+      "pattern": "paths.*.*.requestBody.content.*.schema.discriminator.propertyName",
+      "actions": ["change"]
+    },
+    {
+      "pattern": "paths.*.*.requestBody.content.*.schema.else",
+      "actions": ["set", "unset"]
+    },
+    {
+      "pattern": "paths.*.*.requestBody.content.*.schema.enum",
+      "actions": ["add", "remove"]
+    },
+    {
+      "pattern": "paths.*.*.requestBody.content.*.schema.exclusiveMaximum",
+      "actions": ["decrease", "increase", "set", "unset"]
+    },
+    {
+      "pattern": "paths.*.*.requestBody.content.*.schema.exclusiveMinimum",
+      "actions": ["decrease", "increase", "set", "unset"]
+    },
+    {
+      "pattern": "paths.*.*.requestBody.content.*.schema.format",
+      "actions": ["change", "set", "unset"]
+    },
+    {
+      "pattern": "paths.*.*.requestBody.content.*.schema.if",
+      "actions": ["set", "unset"]
+    },
+    {
+      "pattern": "paths.*.*.requestBody.content.*.schema.maxContains",
+      "actions": ["decrease", "increase", "set", "unset"]
+    },
+    {
+      "pattern": "paths.*.*.requestBody.content.*.schema.maxItems",
+      "actions": ["decrease", "increase", "set", "unset"]
+    },
+    {
+      "pattern": "paths.*.*.requestBody.content.*.schema.maxLength",
+      "actions": ["decrease", "increase", "set", "unset"]
+    },
+    {
+      "pattern": "paths.*.*.requestBody.content.*.schema.maxProperties",
+      "actions": ["decrease", "increase", "set", "unset"]
+    },
+    {
+      "pattern": "paths.*.*.requestBody.content.*.schema.maximum",
+      "actions": ["decrease", "increase", "set", "unset"]
+    },
+    {
+      "pattern": "paths.*.*.requestBody.content.*.schema.minContains",
+      "actions": ["decrease", "increase", "set", "unset"]
+    },
+    {
+      "pattern": "paths.*.*.requestBody.content.*.schema.minItems",
+      "actions": ["decrease", "increase", "set", "unset"]
+    },
+    {
+      "pattern": "paths.*.*.requestBody.content.*.schema.minLength",
+      "actions": ["decrease", "increase", "set", "unset"]
+    },
+    {
+      "pattern": "paths.*.*.requestBody.content.*.schema.minProperties",
+      "actions": ["decrease", "increase", "set", "unset"]
+    },
+    {
+      "pattern": "paths.*.*.requestBody.content.*.schema.minimum",
+      "actions": ["decrease", "increase", "set", "unset"]
+    },
+    {
+      "pattern": "paths.*.*.requestBody.content.*.schema.multipleOf",
+      "actions": ["decrease", "increase", "set", "unset"]
+    },
+    {
+      "pattern": "paths.*.*.requestBody.content.*.schema.nullable",
+      "actions": ["set", "unset"]
+    },
+    {
+      "pattern": "paths.*.*.requestBody.content.*.schema.oneOf.*",
+      "actions": ["add", "remove"]
+    },
+    {
+      "pattern": "paths.*.*.requestBody.content.*.schema.pattern",
+      "actions": ["change", "set", "unset"]
+    },
+    {
+      "pattern": "paths.*.*.requestBody.content.*.schema.patternProperties.*",
+      "actions": ["add", "remove"]
+    },
+    {
+      "pattern": "paths.*.*.requestBody.content.*.schema.prefixItems.*",
+      "actions": ["add", "remove"]
+    },
+    {
+      "pattern": "paths.*.*.requestBody.content.*.schema.properties.*",
+      "actions": ["add", "remove"]
+    },
+    {
+      "pattern": "paths.*.*.requestBody.content.*.schema.propertyNames",
+      "actions": ["set", "unset"]
+    },
+    {
+      "pattern": "paths.*.*.requestBody.content.*.schema.readOnly",
+      "actions": ["set", "unset"]
+    },
+    {
+      "pattern": "paths.*.*.requestBody.content.*.schema.required",
+      "actions": ["add", "remove"]
+    },
+    {
+      "pattern": "paths.*.*.requestBody.content.*.schema.then",
+      "actions": ["set", "unset"]
+    },
+    {
+      "pattern": "paths.*.*.requestBody.content.*.schema.type",
+      "actions": ["add", "remove"]
+    },
+    {
+      "pattern": "paths.*.*.requestBody.content.*.schema.unevaluatedItems",
+      "actions": ["set", "unset"]
+    },
+    {
+      "pattern": "paths.*.*.requestBody.content.*.schema.unevaluatedProperties",
+      "actions": ["set", "unset"]
+    },
+    {
+      "pattern": "paths.*.*.requestBody.content.*.schema.uniqueItems",
+      "actions": ["set", "unset"]
+    },
+    {
+      "pattern": "paths.*.*.requestBody.content.*.schema.writeOnly",
+      "actions": ["set", "unset"]
+    },
+    {
+      "pattern": "paths.*.*.requestBody.content.*.schema.x-*",
+      "actions": ["add", "change"]
+    },
+    {
+      "pattern": "paths.*.*.requestBody.required",
+      "actions": ["set", "unset"]
+    },
+    {
+      "pattern": "paths.*.*.responses.*",
+      "actions": ["add", "remove"]
+    },
+    {
+      "pattern": "paths.*.*.responses.*.content.*",
+      "actions": ["add", "remove"]
+    },
+    {
+      "pattern": "paths.*.*.responses.*.content.*.itemSchema",
+      "actions": ["set", "unset"]
+    },
+    {
+      "pattern": "paths.*.*.responses.*.content.*.schema",
+      "actions": ["set", "unset"]
+    },
+    {
+      "pattern": "paths.*.*.responses.*.content.*.schema.allOf.*",
+      "actions": ["add", "remove"]
+    },
+    {
+      "pattern": "paths.*.*.responses.*.content.*.schema.anyOf.*",
+      "actions": ["add", "remove"]
+    },
+    {
+      "pattern": "paths.*.*.responses.*.content.*.schema.const",
+      "actions": ["change", "set", "unset"]
+    },
+    {
+      "pattern": "paths.*.*.responses.*.content.*.schema.contains",
+      "actions": ["set", "unset"]
+    },
+    {
+      "pattern": "paths.*.*.responses.*.content.*.schema.contentEncoding",
+      "actions": ["change", "set", "unset"]
+    },
+    {
+      "pattern": "paths.*.*.responses.*.content.*.schema.contentMediaType",
+      "actions": ["change", "set", "unset"]
+    },
+    {
+      "pattern": "paths.*.*.responses.*.content.*.schema.contentSchema",
+      "actions": ["set", "unset"]
+    },
+    {
+      "pattern": "paths.*.*.responses.*.content.*.schema.default",
+      "actions": ["change", "set", "unset"]
+    },
+    {
+      "pattern": "paths.*.*.responses.*.content.*.schema.dependentRequired.*",
+      "actions": ["add", "remove"]
+    },
+    {
+      "pattern": "paths.*.*.responses.*.content.*.schema.dependentSchemas.*",
+      "actions": ["add", "remove"]
+    },
+    {
+      "pattern": "paths.*.*.responses.*.content.*.schema.deprecated",
+      "actions": ["set", "unset"]
+    },
+    {
+      "pattern": "paths.*.*.responses.*.content.*.schema.discriminator",
+      "actions": ["set", "unset"]
+    },
+    {
+      "pattern": "paths.*.*.responses.*.content.*.schema.discriminator.mapping.*",
+      "actions": ["add", "change", "remove"]
+    },
+    {
+      "pattern": "paths.*.*.responses.*.content.*.schema.discriminator.propertyName",
+      "actions": ["change"]
+    },
+    {
+      "pattern": "paths.*.*.responses.*.content.*.schema.else",
+      "actions": ["set", "unset"]
+    },
+    {
+      "pattern": "paths.*.*.responses.*.content.*.schema.enum",
+      "actions": ["add", "remove"]
+    },
+    {
+      "pattern": "paths.*.*.responses.*.content.*.schema.exclusiveMaximum",
+      "actions": ["decrease", "increase", "set", "unset"]
+    },
+    {
+      "pattern": "paths.*.*.responses.*.content.*.schema.exclusiveMinimum",
+      "actions": ["decrease", "increase", "set", "unset"]
+    },
+    {
+      "pattern": "paths.*.*.responses.*.content.*.schema.format",
+      "actions": ["change", "set", "unset"]
+    },
+    {
+      "pattern": "paths.*.*.responses.*.content.*.schema.if",
+      "actions": ["set", "unset"]
+    },
+    {
+      "pattern": "paths.*.*.responses.*.content.*.schema.maxContains",
+      "actions": ["decrease", "increase", "set", "unset"]
+    },
+    {
+      "pattern": "paths.*.*.responses.*.content.*.schema.maxItems",
+      "actions": ["decrease", "increase", "set", "unset"]
+    },
+    {
+      "pattern": "paths.*.*.responses.*.content.*.schema.maxLength",
+      "actions": ["decrease", "increase", "set", "unset"]
+    },
+    {
+      "pattern": "paths.*.*.responses.*.content.*.schema.maxProperties",
+      "actions": ["decrease", "increase", "set", "unset"]
+    },
+    {
+      "pattern": "paths.*.*.responses.*.content.*.schema.maximum",
+      "actions": ["decrease", "increase", "set", "unset"]
+    },
+    {
+      "pattern": "paths.*.*.responses.*.content.*.schema.minContains",
+      "actions": ["decrease", "increase", "set", "unset"]
+    },
+    {
+      "pattern": "paths.*.*.responses.*.content.*.schema.minItems",
+      "actions": ["decrease", "increase", "set", "unset"]
+    },
+    {
+      "pattern": "paths.*.*.responses.*.content.*.schema.minLength",
+      "actions": ["decrease", "increase", "set", "unset"]
+    },
+    {
+      "pattern": "paths.*.*.responses.*.content.*.schema.minProperties",
+      "actions": ["decrease", "increase", "set", "unset"]
+    },
+    {
+      "pattern": "paths.*.*.responses.*.content.*.schema.minimum",
+      "actions": ["decrease", "increase", "set", "unset"]
+    },
+    {
+      "pattern": "paths.*.*.responses.*.content.*.schema.multipleOf",
+      "actions": ["decrease", "increase", "set", "unset"]
+    },
+    {
+      "pattern": "paths.*.*.responses.*.content.*.schema.nullable",
+      "actions": ["set", "unset"]
+    },
+    {
+      "pattern": "paths.*.*.responses.*.content.*.schema.oneOf.*",
+      "actions": ["add", "remove"]
+    },
+    {
+      "pattern": "paths.*.*.responses.*.content.*.schema.pattern",
+      "actions": ["change", "set", "unset"]
+    },
+    {
+      "pattern": "paths.*.*.responses.*.content.*.schema.patternProperties.*",
+      "actions": ["add", "remove"]
+    },
+    {
+      "pattern": "paths.*.*.responses.*.content.*.schema.prefixItems.*",
+      "actions": ["add", "remove"]
+    },
+    {
+      "pattern": "paths.*.*.responses.*.content.*.schema.properties.*",
+      "actions": ["add", "remove"]
+    },
+    {
+      "pattern": "paths.*.*.responses.*.content.*.schema.propertyNames",
+      "actions": ["set", "unset"]
+    },
+    {
+      "pattern": "paths.*.*.responses.*.content.*.schema.readOnly",
+      "actions": ["set", "unset"]
+    },
+    {
+      "pattern": "paths.*.*.responses.*.content.*.schema.required",
+      "actions": ["add", "remove"]
+    },
+    {
+      "pattern": "paths.*.*.responses.*.content.*.schema.then",
+      "actions": ["set", "unset"]
+    },
+    {
+      "pattern": "paths.*.*.responses.*.content.*.schema.type",
+      "actions": ["add", "remove"]
+    },
+    {
+      "pattern": "paths.*.*.responses.*.content.*.schema.unevaluatedItems",
+      "actions": ["set", "unset"]
+    },
+    {
+      "pattern": "paths.*.*.responses.*.content.*.schema.unevaluatedProperties",
+      "actions": ["set", "unset"]
+    },
+    {
+      "pattern": "paths.*.*.responses.*.content.*.schema.uniqueItems",
+      "actions": ["unset"]
+    },
+    {
+      "pattern": "paths.*.*.responses.*.content.*.schema.writeOnly",
+      "actions": ["set", "unset"]
+    },
+    {
+      "pattern": "paths.*.*.responses.*.content.*.schema.x-*",
+      "actions": ["add", "change"]
+    },
+    {
+      "pattern": "paths.*.*.responses.*.headers.*",
+      "actions": ["add", "remove"]
+    },
+    {
+      "pattern": "paths.*.*.responses.*.headers.*.required",
+      "actions": ["unset"]
+    },
+    {
+      "pattern": "paths.*.*.responses.*.headers.*.schema.exclusiveMaximum",
+      "actions": ["decrease", "increase", "set", "unset"]
+    },
+    {
+      "pattern": "paths.*.*.responses.*.headers.*.schema.exclusiveMinimum",
+      "actions": ["decrease", "increase", "set", "unset"]
+    },
+    {
+      "pattern": "paths.*.*.responses.*.headers.*.schema.format",
+      "actions": ["change", "set", "unset"]
+    },
+    {
+      "pattern": "paths.*.*.responses.*.headers.*.schema.maxContains",
+      "actions": ["decrease", "increase", "set", "unset"]
+    },
+    {
+      "pattern": "paths.*.*.responses.*.headers.*.schema.maxItems",
+      "actions": ["decrease", "increase", "set", "unset"]
+    },
+    {
+      "pattern": "paths.*.*.responses.*.headers.*.schema.maxLength",
+      "actions": ["decrease", "increase", "set", "unset"]
+    },
+    {
+      "pattern": "paths.*.*.responses.*.headers.*.schema.maxProperties",
+      "actions": ["decrease", "increase", "set", "unset"]
+    },
+    {
+      "pattern": "paths.*.*.responses.*.headers.*.schema.maximum",
+      "actions": ["decrease", "increase", "set", "unset"]
+    },
+    {
+      "pattern": "paths.*.*.responses.*.headers.*.schema.minContains",
+      "actions": ["decrease", "increase", "set", "unset"]
+    },
+    {
+      "pattern": "paths.*.*.responses.*.headers.*.schema.minItems",
+      "actions": ["decrease", "increase", "set", "unset"]
+    },
+    {
+      "pattern": "paths.*.*.responses.*.headers.*.schema.minLength",
+      "actions": ["decrease", "increase", "set", "unset"]
+    },
+    {
+      "pattern": "paths.*.*.responses.*.headers.*.schema.minProperties",
+      "actions": ["decrease", "increase", "set", "unset"]
+    },
+    {
+      "pattern": "paths.*.*.responses.*.headers.*.schema.minimum",
+      "actions": ["decrease", "increase", "set", "unset"]
+    },
+    {
+      "pattern": "paths.*.*.responses.*.headers.*.schema.multipleOf",
+      "actions": ["set", "unset"]
+    },
+    {
+      "pattern": "paths.*.*.responses.*.headers.*.schema.nullable",
+      "actions": ["set", "unset"]
+    },
+    {
+      "pattern": "paths.*.*.responses.*.headers.*.schema.type",
+      "actions": ["add", "remove"]
+    },
+    {
+      "pattern": "paths.*.*.security.*",
+      "actions": ["add", "remove"]
+    },
+    {
+      "pattern": "paths.*.*.security.*.*",
+      "actions": ["add", "remove"]
+    },
+    {
+      "pattern": "paths.*.*.tags",
+      "actions": ["add", "remove"]
+    },
+    {
+      "pattern": "paths.*.*.x-*",
+      "actions": ["add", "change", "remove"]
+    },
+    {
+      "pattern": "paths.*.parameters.*",
+      "actions": ["add"]
+    },
+    {
+      "pattern": "security.*",
+      "actions": ["add", "remove"]
+    },
+    {
+      "pattern": "security.*.*",
+      "actions": ["add", "remove"]
+    },
+    {
+      "pattern": "webhooks.*",
+      "actions": ["add", "remove"]
+    },
+    {
+      "pattern": "webhooks.*.*",
+      "actions": ["add", "remove"]
+    }
+  ]
+}

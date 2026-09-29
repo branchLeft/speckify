@@ -62,15 +62,34 @@ export type ToolchainImpactEntry = z.infer<typeof toolchainImpactEntrySchema>;
 
 export const toolchainImpactFileSchema = z.array(toolchainImpactEntrySchema);
 
-/**
- * The committed covered-keywords file's shape:
- * `data/oasdiff-<version>.covered-keywords.json` -- every JSON-Schema/
- * OpenAPI keyword oasdiff's own rule catalogue judges at all, derived from
- * the rule catalogue's own `locations` claims (see
- * `scripts/generate-oasdiff-covered-keywords.mjs`).
- */
-export const coveredKeywordsFileSchema = z.object({
+/** `data/oasdiff-<version>.location-claims.json`, generated from the rule catalogue. */
+export const locationClaimsFileSchema = z.object({
   oasdiffVersion: z.string(),
-  keywords: z.array(z.string()),
+  claims: z.array(z.object({ pattern: z.string().min(1), actions: z.array(z.string()).min(1) })),
 });
-export type CoveredKeywordsFile = z.infer<typeof coveredKeywordsFileSchema>;
+export type LocationClaimsFile = z.infer<typeof locationClaimsFileSchema>;
+
+/** Where in a body schema a collapsed location sits; see location-coverage.md §4. */
+export const schemaClassSchema = z.enum([
+  'root',
+  'root+allOf',
+  'property',
+  'property+allOf',
+  'subschema',
+  'subschema+allOf',
+]);
+export type SchemaClass = z.infer<typeof schemaClassSchema>;
+
+/** `data/oasdiff-<version>.silent-claims.json`, hand-curated from empirical runs. */
+export const silentClaimsFileSchema = z.object({
+  oasdiffVersion: z.string(),
+  entries: z.array(
+    z.object({
+      pattern: z.string().min(1),
+      actions: z.array(z.string()).min(1),
+      classes: z.array(schemaClassSchema).min(1),
+      reason: z.string().min(1),
+    }),
+  ),
+});
+export type SilentClaimsFile = z.infer<typeof silentClaimsFileSchema>;

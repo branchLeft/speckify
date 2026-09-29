@@ -1,9 +1,16 @@
+import { join } from 'node:path';
+import { fileURLToPath } from 'node:url';
+
 import { describe, expect, it, vi } from 'vitest';
 
 import { LintError } from './lint/index.js';
-import { computeContractPlan, renderChangelogMarkdown } from './plan.js';
+import { computeContractPlan, renderChangelogMarkdown, type ContractPlan } from './plan.js';
 import type { OasdiffChange, ProcessRunner } from './oasdiff/index.js';
-import type { ClassificationMap } from './version/index.js';
+import {
+  OASDIFF_LOCATION_CLAIMS_FILENAME,
+  OASDIFF_SILENT_CLAIMS_FILENAME,
+} from './oasdiff/version.js';
+import { loadOasdiffCoverage, type ClassificationMap } from './version/index.js';
 
 const map: ClassificationMap = {
   'response-required-property-removed': 'major',
@@ -12,17 +19,13 @@ const map: ClassificationMap = {
   'request-property-minlength-tightened': 'minor',
 };
 
-/**
- * A small, self-contained stand-in for the real
- * `data/oasdiff-<version>.covered-keywords.json` -- oasdiff genuinely has
- * rules that look at `type`/`properties`/`minLength`/`parameters` (and
- * many more; see the committed data file), and genuinely has none that
- * look at `additionalProperties` or `servers`/`url` (confirmed by
- * `scripts/generate-oasdiff-covered-keywords.mjs` against the real 1.32.1
- * rule catalogue). Kept minimal and hand-rolled here, like `map` above, so
- * this file's expectations don't drift with the real data file.
- */
-const coveredKeywords = new Set(['type', 'properties', 'minLength', 'parameters', 'required']);
+const dataDir = fileURLToPath(new URL('../data/', import.meta.url));
+
+/** The real, committed location coverage Speckify ships (see version/location-coverage.md). */
+const coverage = await loadOasdiffCoverage(
+  join(dataDir, OASDIFF_LOCATION_CLAIMS_FILENAME),
+  join(dataDir, OASDIFF_SILENT_CLAIMS_FILENAME),
+);
 
 function runProcessReturning(changes: OasdiffChange[]): ProcessRunner {
   return vi.fn(async () => Promise.resolve({ stdout: JSON.stringify(changes), stderr: '' }));
@@ -60,7 +63,7 @@ describe('computeContractPlan', () => {
         bundledSpec: invalidSpec,
         previous: null,
         classificationMap: map,
-        coveredKeywords: new Set<string>(),
+        coverage,
         toolchainImpactBump: 'none',
         oasdiffPath: '/bin/oasdiff',
         runProcess,
@@ -83,7 +86,7 @@ describe('computeContractPlan', () => {
         bundledSpec: invalidSpec,
         previous: { version: '1.2.0', bundledSpec: publishedSpecV1_2_0, speckifyVersion: null },
         classificationMap: map,
-        coveredKeywords: new Set<string>(),
+        coverage,
         toolchainImpactBump: 'none',
         oasdiffPath: '/bin/oasdiff',
         runProcess,
@@ -99,7 +102,7 @@ describe('computeContractPlan', () => {
       bundledSpec: bundledSpecV1,
       previous: null,
       classificationMap: map,
-      coveredKeywords: new Set<string>(),
+      coverage,
       toolchainImpactBump: 'none',
       oasdiffPath: '/bin/oasdiff',
       runProcess,
@@ -124,7 +127,7 @@ describe('computeContractPlan', () => {
       bundledSpec: bundledSpecV1,
       previous: { version: '1.2.0', bundledSpec: publishedSpecV1_2_0, speckifyVersion: null },
       classificationMap: map,
-      coveredKeywords: new Set<string>(),
+      coverage,
       toolchainImpactBump: 'none',
       oasdiffPath: '/bin/oasdiff',
       runProcess: runProcessReturning(changes),
@@ -142,7 +145,7 @@ describe('computeContractPlan', () => {
       bundledSpec: bundledSpecV1,
       previous: { version: '1.2.0', bundledSpec: publishedSpecV1_2_0, speckifyVersion: null },
       classificationMap: map,
-      coveredKeywords: new Set<string>(),
+      coverage,
       toolchainImpactBump: 'none',
       oasdiffPath: '/bin/oasdiff',
       runProcess: runProcessReturning(changes),
@@ -163,7 +166,7 @@ describe('computeContractPlan', () => {
       bundledSpec: revisedSpec,
       previous: { version: '1.2.0', bundledSpec: publishedSpecV1_2_0, speckifyVersion: null },
       classificationMap: map,
-      coveredKeywords: new Set<string>(),
+      coverage,
       toolchainImpactBump: 'none',
       oasdiffPath: '/bin/oasdiff',
       runProcess: runProcessReturning([]),
@@ -179,7 +182,7 @@ describe('computeContractPlan', () => {
       bundledSpec: bundledSpecV1,
       previous: { version: '1.2.0', bundledSpec: publishedSpecV1_2_0, speckifyVersion: null },
       classificationMap: map,
-      coveredKeywords: new Set<string>(),
+      coverage,
       toolchainImpactBump: 'none',
       oasdiffPath: '/bin/oasdiff',
       runProcess: runProcessReturning([]),
@@ -234,7 +237,7 @@ describe('computeContractPlan', () => {
       bundledSpec: currentSpec,
       previous: { version: '1.2.0', bundledSpec: previousSpec, speckifyVersion: null },
       classificationMap: map,
-      coveredKeywords: new Set<string>(),
+      coverage,
       toolchainImpactBump: 'none',
       oasdiffPath: '/bin/oasdiff',
       // oasdiff missed the tightened schema, as if the binary had a real gap.
@@ -264,7 +267,7 @@ describe('computeContractPlan', () => {
       bundledSpec: currentSpec,
       previous: { version: '1.2.0', bundledSpec: previousSpec, speckifyVersion: null },
       classificationMap: map,
-      coveredKeywords: new Set<string>(),
+      coverage,
       toolchainImpactBump: 'none',
       oasdiffPath: '/bin/oasdiff',
       runProcess: runProcessReturning([]),
@@ -291,7 +294,7 @@ describe('computeContractPlan', () => {
       bundledSpec: currentSpec,
       previous: { version: '1.2.0', bundledSpec: previousSpec, speckifyVersion: null },
       classificationMap: map,
-      coveredKeywords: new Set<string>(),
+      coverage,
       toolchainImpactBump: 'none',
       oasdiffPath: '/bin/oasdiff',
       runProcess: runProcessReturning([]),
@@ -318,7 +321,7 @@ describe('computeContractPlan', () => {
       bundledSpec: currentSpec,
       previous: { version: '1.2.0', bundledSpec: previousSpec, speckifyVersion: null },
       classificationMap: map,
-      coveredKeywords: new Set<string>(),
+      coverage,
       toolchainImpactBump: 'none',
       oasdiffPath: '/bin/oasdiff',
       runProcess: runProcessReturning([]),
@@ -337,7 +340,7 @@ describe('computeContractPlan', () => {
       bundledSpec: bundledSpecV1,
       previous: { version: '1.2.0', bundledSpec: publishedSpecV1_2_0, speckifyVersion: null },
       classificationMap: map,
-      coveredKeywords: new Set<string>(),
+      coverage,
       toolchainImpactBump: 'major',
       oasdiffPath: '/bin/oasdiff',
       runProcess: runProcessReturning(changes),
@@ -347,7 +350,7 @@ describe('computeContractPlan', () => {
     expect(plan.version).toBe('2.0.0');
   });
 
-  it('forces major for a structural change at a keyword oasdiff has no rule for, even alongside a real, correctly-classified change oasdiff DOES report (N3b)', async () => {
+  it('forces major for a structural change at a location oasdiff has no rule for, even alongside a real, correctly-classified change oasdiff DOES report (N3b)', async () => {
     const previousSpec = JSON.stringify({
       openapi: '3.0.3',
       info: { title: 'Widgets', version: '1.2.0' },
@@ -425,7 +428,7 @@ describe('computeContractPlan', () => {
       bundledSpec: currentSpec,
       previous: { version: '1.2.0', bundledSpec: previousSpec, speckifyVersion: null },
       classificationMap: map,
-      coveredKeywords,
+      coverage,
       toolchainImpactBump: 'none',
       // oasdiff sees (and correctly classifies as minor) the new response
       // property, but says nothing about additionalProperties -- it has no
@@ -488,7 +491,7 @@ describe('computeContractPlan', () => {
                   schema: {
                     type: 'object',
                     properties: {
-                      // Only this nested, uncovered keyword differs -- a
+                      // Only this nested, uncovered location differs -- a
                       // stripper that deletes the "title" property outright
                       // (rather than only stripping *annotation-position*
                       // doc keys) would make both sides look identical here
@@ -510,7 +513,7 @@ describe('computeContractPlan', () => {
       bundledSpec: currentSpec,
       previous: { version: '1.2.0', bundledSpec: previousSpec, speckifyVersion: null },
       classificationMap: map,
-      coveredKeywords,
+      coverage,
       toolchainImpactBump: 'none',
       // oasdiff has no rule for additionalProperties, so it stays silent.
       oasdiffPath: '/bin/oasdiff',
@@ -521,7 +524,7 @@ describe('computeContractPlan', () => {
     expect(plan.version).toBe('2.0.0');
   });
 
-  it("trusts oasdiff's own classification when every structural change is at a covered keyword (N3b)", async () => {
+  it("trusts oasdiff's own classification when every structural change is at a covered location (N3b)", async () => {
     const previousSpec = JSON.stringify({
       openapi: '3.0.3',
       info: { title: 'Widgets', version: '1.2.0' },
@@ -556,7 +559,7 @@ describe('computeContractPlan', () => {
                 'application/json': {
                   schema: {
                     type: 'object',
-                    // minLength tightened: a covered keyword, so oasdiff's
+                    // minLength tightened: a covered location, so oasdiff's
                     // own classification (minor, per `map`) stands rather
                     // than being forced to major.
                     properties: { name: { type: 'string', minLength: 5 } },
@@ -575,7 +578,7 @@ describe('computeContractPlan', () => {
       bundledSpec: currentSpec,
       previous: { version: '1.2.0', bundledSpec: previousSpec, speckifyVersion: null },
       classificationMap: map,
-      coveredKeywords,
+      coverage,
       toolchainImpactBump: 'none',
       oasdiffPath: '/bin/oasdiff',
       runProcess: runProcessReturning([
@@ -591,6 +594,92 @@ describe('computeContractPlan', () => {
 
     expect(plan.bump).toBe('minor');
     expect(plan.version).toBe('1.3.0');
+  });
+});
+
+describe('computeContractPlan: location coverage (offline, stubbed oasdiff output)', () => {
+  function spec(version: string, itemsMaxLength: number, notes: boolean): string {
+    const responseProperties: Record<string, unknown> = { id: { type: 'string' } };
+    if (notes) responseProperties.notes = { type: 'string' };
+    return JSON.stringify({
+      openapi: '3.0.3',
+      info: { title: 'Things', version },
+      paths: {
+        '/things': {
+          get: {
+            operationId: 'listThings',
+            parameters: [
+              {
+                name: 'tags',
+                in: 'query',
+                schema: { type: 'array', items: { type: 'string', maxLength: itemsMaxLength } },
+              },
+            ],
+            responses: {
+              '200': {
+                description: 'ok',
+                content: {
+                  'application/json': {
+                    schema: { type: 'object', properties: responseProperties },
+                  },
+                },
+              },
+            },
+          },
+        },
+      },
+    });
+  }
+
+  const optionalPropertyAdded: OasdiffChange = {
+    id: 'response-optional-property-added',
+    text: "added the optional property 'notes'",
+    level: 1,
+    operation: 'GET',
+    path: '/things',
+  };
+
+  async function planFor(
+    bundledSpec: string,
+    previousSpec: string,
+    changes: OasdiffChange[],
+  ): Promise<ContractPlan> {
+    return computeContractPlan({
+      contract: 'things',
+      bundledSpec,
+      previous: { version: '1.2.3', bundledSpec: previousSpec, speckifyVersion: null },
+      classificationMap: map,
+      coverage,
+      toolchainImpactBump: 'none',
+      oasdiffPath: '/bin/oasdiff',
+      runProcess: runProcessReturning(changes),
+    });
+  }
+
+  it('forces major for an unjudged parameter items.maxLength beside a judged minor change', async () => {
+    const plan = await planFor(spec('0.0.0', 5, true), spec('1.2.3', 50, false), [
+      optionalPropertyAdded,
+    ]);
+    expect(plan.version).toBe('2.0.0');
+    expect(plan.uncovered.map((u) => [u.edit.location.join('.'), u.reason])).toEqual([
+      ['paths./things.get.parameters.query:tags.schema.items.maxLength', 'no-claim'],
+    ]);
+  });
+
+  it('keeps the judged minor when that is the only change', async () => {
+    const plan = await planFor(spec('0.0.0', 50, true), spec('1.2.3', 50, false), [
+      optionalPropertyAdded,
+    ]);
+    expect(plan.version).toBe('1.3.0');
+    expect(plan.uncovered).toEqual([]);
+  });
+
+  it('forces major when oasdiff reported nothing for the operation a covered edit is in', async () => {
+    const plan = await planFor(spec('0.0.0', 50, true), spec('1.2.3', 50, false), [
+      { ...optionalPropertyAdded, path: '/elsewhere' },
+    ]);
+    expect(plan.version).toBe('2.0.0');
+    expect(plan.uncovered.map((u) => u.reason)).toEqual(['unreported-operation']);
   });
 });
 

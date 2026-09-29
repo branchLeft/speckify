@@ -5,7 +5,14 @@ export {
   type LoadClassificationMapOptions,
 } from './classification-map.js';
 export { classify } from './classify.js';
-export { loadCoveredKeywords, type LoadCoveredKeywordsOptions } from './covered-keywords.js';
+export {
+  findUncoveredEdits,
+  loadOasdiffCoverage,
+  type LoadOasdiffCoverageOptions,
+  type OasdiffCoverage,
+  type UncoveredEdit,
+} from './location-coverage.js';
+export { diffDocuments, prepareDocument, type Edit } from './structural-diff.js';
 export { VersionError } from './errors.js';
 export {
   loadToolchainImpact,
@@ -17,7 +24,8 @@ export type {
   ClassificationMap,
   ClassificationRule,
   ClassifyResult,
-  CoveredKeywordsFile,
+  LocationClaimsFile,
+  SilentClaimsFile,
   OasdiffCheck,
   ToolchainImpactEntry,
 } from './types.js';
