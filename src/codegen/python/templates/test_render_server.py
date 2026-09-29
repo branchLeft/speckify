@@ -30,6 +30,17 @@ CREATE_PET = {
     "responses": [{"statusCode": "201", "model": "Pet"}],
 }
 
+GET_ITEM = {
+    "operationId": "getItem",
+    "method": "GET",
+    "path": "/items/{item_id}",
+    "pathParams": [{"name": "item_id", "pyName": "item_id", "required": True, "pyType": "int"}],
+    "queryParams": [],
+    "headerParams": [],
+    "requestBody": {"kind": "none"},
+    "responses": [{"statusCode": "200", "model": None}],
+}
+
 UPLOAD_BLOB = {
     "operationId": "uploadBlob",
     "method": "POST",
@@ -59,7 +70,7 @@ def generated_package(tmp_path: Path) -> typing.Any:
     (package_dir / "__init__.py").write_text("", encoding="utf-8")
     (package_dir / "models.py").write_text(MODELS_PY, encoding="utf-8")
 
-    operations = parse_operations([CREATE_PET, UPLOAD_BLOB])
+    operations = parse_operations([CREATE_PET, UPLOAD_BLOB, GET_ITEM])
     write_server_module(operations, package_dir / "server")
 
     sys.path.insert(0, str(tmp_path))
@@ -219,3 +230,68 @@ def test_before_handle_hook_runs_before_body_parsing(generated_package: typing.A
     client.post("/pets", json={"petType": "cat", "meowVolume": 3})
 
     assert calls == ["before_handle", "handler"]
+
+
+def test_malformed_json_body_returns_400_not_500(generated_package: typing.Any) -> None:
+    class TestHandlers:
+        async def create_pet(self, *, body: typing.Any) -> typing.Any:
+            raise AssertionError("handler must not run for a malformed body")
+
+        async def upload_blob(
+            self, *, signature: str, timestamp: str, body: typing.AsyncIterator[bytes]
+        ) -> typing.Any:
+            raise NotImplementedError
+
+        async def get_item(self, *, item_id: int) -> typing.Any:
+            raise NotImplementedError
+
+    app = FastAPI()
+    app.include_router(generated_package.create_router(TestHandlers()))
+    client = TestClient(app)
+
+    response = client.post(
+        "/pets",
+        content=b"{not valid json",
+        headers={"content-type": "application/json"},
+    )
+
+    assert response.status_code == 400
+    assert response.status_code != 500
+
+
+def test_before_handle_runs_before_path_parameter_parsing(generated_package: typing.Any) -> None:
+    """Proves the fix, not just the happy path: `before_handle` must run even
+    when the path parameter that follows it would fail to parse. If
+    `before_handle` ran *after* FastAPI's own parameter parsing (the bug this
+    restructure fixes), the request would never reach the handler-side code
+    at all for an invalid `item_id`, and `calls` would stay empty."""
+
+    calls: list[str] = []
+
+    class TestHandlers:
+        async def create_pet(self, *, body: typing.Any) -> typing.Any:
+            raise NotImplementedError
+
+        async def upload_blob(
+            self, *, signature: str, timestamp: str, body: typing.AsyncIterator[bytes]
+        ) -> typing.Any:
+            raise NotImplementedError
+
+        async def get_item(self, *, item_id: int) -> typing.Any:
+            calls.append("handler")
+            raise AssertionError("handler must not run for an unparseable item_id")
+
+    async def before_handle(request: typing.Any) -> None:
+        calls.append("before_handle")
+
+    app = FastAPI()
+    app.include_router(generated_package.create_router(TestHandlers(), before_handle=before_handle))
+    client = TestClient(app)
+
+    # "not-an-int" fails item_id's int coercion, which must happen strictly
+    # after before_handle, and must reject with 422 rather than reach the
+    # handler.
+    response = client.get("/items/not-an-int")
+
+    assert calls == ["before_handle"]
+    assert response.status_code == 422
