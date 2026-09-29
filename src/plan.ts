@@ -45,6 +45,75 @@ function stampVersion(bundledSpecJson: string, version: string): string {
   return toCanonicalJson(doc);
 }
 
+/** The placeholder every fresh bundle stamps into `info.version`; see `bundle/index.ts`. */
+const PLACEHOLDER_VERSION = '0.0.0';
+
+/**
+ * Keys that never carry semantic meaning for a client: prose annotations
+ * oasdiff (correctly) does not diff on. Stripped from both sides before
+ * the doc-only-difference fallback check in {@link computeContractPlan},
+ * never before the real oasdiff diff itself.
+ */
+const DOC_ONLY_KEYS = new Set([
+  'description',
+  'summary',
+  'example',
+  'examples',
+  'externalDocs',
+  'title',
+]);
+
+function stripDocOnlyKeys(value: unknown): unknown {
+  if (Array.isArray(value)) {
+    return value.map(stripDocOnlyKeys);
+  }
+  if (value !== null && typeof value === 'object') {
+    const result: Record<string, unknown> = {};
+    for (const [key, val] of Object.entries(value as Record<string, unknown>)) {
+      if (DOC_ONLY_KEYS.has(key)) {
+        continue;
+      }
+      result[key] = stripDocOnlyKeys(val);
+    }
+    return result;
+  }
+  return value;
+}
+
+function withPlaceholderVersion(doc: Record<string, unknown>): Record<string, unknown> {
+  const info = doc.info;
+  if (info === null || typeof info !== 'object') {
+    return doc;
+  }
+  return { ...doc, info: { ...(info as Record<string, unknown>), version: PLACEHOLDER_VERSION } };
+}
+
+/**
+ * Normalises a bundled spec's `info.version` to the shared placeholder, so
+ * the real oasdiff diff (and the raw-text-equality check that gates the
+ * fallback below) never sees a difference that is purely "this is the spec
+ * we last published at version X" vs "this is a fresh bundle, unstamped".
+ */
+function normalizeInfoVersionForComparison(bundledSpecJson: string): string {
+  const doc = JSON.parse(bundledSpecJson) as Record<string, unknown>;
+  return toCanonicalJson(withPlaceholderVersion(doc));
+}
+
+/**
+ * True only when two specs are identical once `info.version` is normalised
+ * and doc-only annotations are stripped from both. This is the fail-safe
+ * fallback for "oasdiff reported no changes, but the spec text differs":
+ * oasdiff missing a real, client-visible change must never read as "no
+ * changes" (a republish of an unchanged spec, or an under-bump) — so
+ * anything beyond a doc-only/version difference bumps MAJOR instead of the
+ * PATCH this path used to apply unconditionally.
+ */
+function isDocOnlyDifference(previousSpecJson: string, currentSpecJson: string): boolean {
+  const previous = withPlaceholderVersion(JSON.parse(previousSpecJson) as Record<string, unknown>);
+  const current = withPlaceholderVersion(JSON.parse(currentSpecJson) as Record<string, unknown>);
+  return toCanonicalJson(stripDocOnlyKeys(previous)) === toCanonicalJson(stripDocOnlyKeys(current));
+}
+
 /**
  * Computes one contract's plan: lint, diff against the last published spec,
  * bump, and the resulting version. See `plan.md` for the first-publish and
@@ -66,8 +135,17 @@ export async function computeContractPlan(input: ContractPlanInput): Promise<Con
     try {
       const basePath = join(tempDir, 'base.json');
       const revisionPath = join(tempDir, 'revision.json');
-      await writeFile(basePath, input.previous.bundledSpec, 'utf8');
-      await writeFile(revisionPath, input.bundledSpec, 'utf8');
+      // Both sides are diffed with info.version normalised to the same
+      // placeholder (B4): otherwise the version bump we are computing would
+      // itself show up as a diff (e.g. oasdiff's own api-version-not-bumped
+      // check), and a real published spec's stamped version would never
+      // equal a fresh bundle's 0.0.0 even when nothing else changed.
+      await writeFile(
+        basePath,
+        normalizeInfoVersionForComparison(input.previous.bundledSpec),
+        'utf8',
+      );
+      await writeFile(revisionPath, normalizeInfoVersionForComparison(input.bundledSpec), 'utf8');
 
       changes = await runOasdiffChangelog({
         oasdiffPath: input.oasdiffPath,
@@ -81,10 +159,21 @@ export async function computeContractPlan(input: ContractPlanInput): Promise<Con
 
     const classified = classify(changes, input.classificationMap);
     unknownRuleIds = classified.unknownRuleIds;
-    specBump =
-      changes.length === 0 && input.previous.bundledSpec !== input.bundledSpec
-        ? 'patch' // the spec text changed (e.g. a description) but oasdiff saw no semantic diff
-        : classified.bump;
+    const textDiffersOnceVersionIsNormalized =
+      normalizeInfoVersionForComparison(input.previous.bundledSpec) !==
+      normalizeInfoVersionForComparison(input.bundledSpec);
+    if (changes.length === 0 && textDiffersOnceVersionIsNormalized) {
+      // oasdiff saw no semantic diff, but the spec text differs beyond just
+      // info.version. Only patch-bump when that difference really is
+      // doc-only (e.g. a description); anything else means oasdiff missed a
+      // real change, and under-bumping that is worse than over-bumping, so
+      // fail safe to MAJOR.
+      specBump = isDocOnlyDifference(input.previous.bundledSpec, input.bundledSpec)
+        ? 'patch'
+        : 'major';
+    } else {
+      specBump = classified.bump;
+    }
   }
 
   const bump = maxBump([specBump, input.toolchainImpactBump]);

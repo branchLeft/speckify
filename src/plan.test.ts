@@ -20,6 +20,17 @@ const bundledSpecV1 = JSON.stringify({
   paths: {},
 });
 
+// A real published record's stored spec carries its actual published
+// version, never the 0.0.0 placeholder a fresh bundle always uses. Using
+// a 0.0.0-versioned fixture as `previous.bundledSpec` (as this file used
+// to) hides B4's normalisation entirely: the two specs would already
+// share the same info.version by accident.
+const publishedSpecV1_2_0 = JSON.stringify({
+  openapi: '3.0.3',
+  info: { title: 'Widgets', version: '1.2.0' },
+  paths: {},
+});
+
 describe('computeContractPlan', () => {
   it('fails lint before ever running oasdiff, for a first publish', async () => {
     const runProcess = vi.fn();
@@ -55,7 +66,7 @@ describe('computeContractPlan', () => {
       computeContractPlan({
         contract: 'orders-api',
         bundledSpec: invalidSpec,
-        previous: { version: '1.2.0', bundledSpec: bundledSpecV1 },
+        previous: { version: '1.2.0', bundledSpec: publishedSpecV1_2_0 },
         classificationMap: map,
         toolchainImpactBump: 'none',
         oasdiffPath: '/bin/oasdiff',
@@ -94,7 +105,7 @@ describe('computeContractPlan', () => {
     const plan = await computeContractPlan({
       contract: 'orders-api',
       bundledSpec: bundledSpecV1,
-      previous: { version: '1.2.0', bundledSpec: bundledSpecV1 },
+      previous: { version: '1.2.0', bundledSpec: publishedSpecV1_2_0 },
       classificationMap: map,
       toolchainImpactBump: 'none',
       oasdiffPath: '/bin/oasdiff',
@@ -111,7 +122,7 @@ describe('computeContractPlan', () => {
     const plan = await computeContractPlan({
       contract: 'orders-api',
       bundledSpec: bundledSpecV1,
-      previous: { version: '1.2.0', bundledSpec: bundledSpecV1 },
+      previous: { version: '1.2.0', bundledSpec: publishedSpecV1_2_0 },
       classificationMap: map,
       toolchainImpactBump: 'none',
       oasdiffPath: '/bin/oasdiff',
@@ -131,7 +142,7 @@ describe('computeContractPlan', () => {
     const plan = await computeContractPlan({
       contract: 'orders-api',
       bundledSpec: revisedSpec,
-      previous: { version: '1.2.0', bundledSpec: bundledSpecV1 },
+      previous: { version: '1.2.0', bundledSpec: publishedSpecV1_2_0 },
       classificationMap: map,
       toolchainImpactBump: 'none',
       oasdiffPath: '/bin/oasdiff',
@@ -146,7 +157,142 @@ describe('computeContractPlan', () => {
     const plan = await computeContractPlan({
       contract: 'orders-api',
       bundledSpec: bundledSpecV1,
-      previous: { version: '1.2.0', bundledSpec: bundledSpecV1 },
+      previous: { version: '1.2.0', bundledSpec: publishedSpecV1_2_0 },
+      classificationMap: map,
+      toolchainImpactBump: 'none',
+      oasdiffPath: '/bin/oasdiff',
+      runProcess: runProcessReturning([]),
+    });
+
+    expect(plan.bump).toBe('none');
+    expect(plan.version).toBe('1.2.0');
+  });
+
+  it('bumps major when oasdiff reports nothing but additionalProperties tightened true→false (fail-safe: oasdiff missed it)', async () => {
+    const previousSpec = JSON.stringify({
+      openapi: '3.0.3',
+      info: { title: 'Widgets', version: '1.2.0' },
+      paths: {
+        '/widgets': {
+          post: {
+            operationId: 'createWidget',
+            requestBody: {
+              content: {
+                'application/json': {
+                  schema: { type: 'object', additionalProperties: true },
+                },
+              },
+            },
+            responses: { '200': { description: 'ok' } },
+          },
+        },
+      },
+    });
+    const currentSpec = JSON.stringify({
+      openapi: '3.0.3',
+      info: { title: 'Widgets', version: '0.0.0' },
+      paths: {
+        '/widgets': {
+          post: {
+            operationId: 'createWidget',
+            requestBody: {
+              content: {
+                'application/json': {
+                  schema: { type: 'object', additionalProperties: false },
+                },
+              },
+            },
+            responses: { '200': { description: 'ok' } },
+          },
+        },
+      },
+    });
+
+    const plan = await computeContractPlan({
+      contract: 'orders-api',
+      bundledSpec: currentSpec,
+      previous: { version: '1.2.0', bundledSpec: previousSpec },
+      classificationMap: map,
+      toolchainImpactBump: 'none',
+      oasdiffPath: '/bin/oasdiff',
+      // oasdiff missed the tightened schema, as if the binary had a real gap.
+      runProcess: runProcessReturning([]),
+    });
+
+    expect(plan.bump).toBe('major');
+    expect(plan.version).toBe('2.0.0');
+  });
+
+  it('bumps major when oasdiff reports nothing but the servers URL changed (fail-safe: oasdiff missed it)', async () => {
+    const previousSpec = JSON.stringify({
+      openapi: '3.0.3',
+      info: { title: 'Widgets', version: '1.2.0' },
+      servers: [{ url: 'https://api.example.com/v1' }],
+      paths: {},
+    });
+    const currentSpec = JSON.stringify({
+      openapi: '3.0.3',
+      info: { title: 'Widgets', version: '0.0.0' },
+      servers: [{ url: 'https://api.example.com/v2' }],
+      paths: {},
+    });
+
+    const plan = await computeContractPlan({
+      contract: 'orders-api',
+      bundledSpec: currentSpec,
+      previous: { version: '1.2.0', bundledSpec: previousSpec },
+      classificationMap: map,
+      toolchainImpactBump: 'none',
+      oasdiffPath: '/bin/oasdiff',
+      runProcess: runProcessReturning([]),
+    });
+
+    expect(plan.bump).toBe('major');
+    expect(plan.version).toBe('2.0.0');
+  });
+
+  it('bumps patch (not major) when the only unreported difference is a description', async () => {
+    const previousSpec = JSON.stringify({
+      openapi: '3.0.3',
+      info: { title: 'Widgets', version: '1.2.0', description: 'Old description' },
+      paths: {},
+    });
+    const currentSpec = JSON.stringify({
+      openapi: '3.0.3',
+      info: { title: 'Widgets', version: '0.0.0', description: 'New, friendlier description' },
+      paths: {},
+    });
+
+    const plan = await computeContractPlan({
+      contract: 'orders-api',
+      bundledSpec: currentSpec,
+      previous: { version: '1.2.0', bundledSpec: previousSpec },
+      classificationMap: map,
+      toolchainImpactBump: 'none',
+      oasdiffPath: '/bin/oasdiff',
+      runProcess: runProcessReturning([]),
+    });
+
+    expect(plan.bump).toBe('patch');
+    expect(plan.version).toBe('1.2.1');
+  });
+
+  it('publishes nothing for an identical spec vs a realistically-stamped previous version (B4)', async () => {
+    const previousSpec = JSON.stringify({
+      openapi: '3.0.3',
+      info: { title: 'Widgets', version: '1.2.0' },
+      paths: {},
+    });
+    const currentSpec = JSON.stringify({
+      openapi: '3.0.3',
+      info: { title: 'Widgets', version: '0.0.0' },
+      paths: {},
+    });
+
+    const plan = await computeContractPlan({
+      contract: 'orders-api',
+      bundledSpec: currentSpec,
+      previous: { version: '1.2.0', bundledSpec: previousSpec },
       classificationMap: map,
       toolchainImpactBump: 'none',
       oasdiffPath: '/bin/oasdiff',
@@ -164,7 +310,7 @@ describe('computeContractPlan', () => {
     const plan = await computeContractPlan({
       contract: 'orders-api',
       bundledSpec: bundledSpecV1,
-      previous: { version: '1.2.0', bundledSpec: bundledSpecV1 },
+      previous: { version: '1.2.0', bundledSpec: publishedSpecV1_2_0 },
       classificationMap: map,
       toolchainImpactBump: 'major',
       oasdiffPath: '/bin/oasdiff',
