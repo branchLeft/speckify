@@ -1,0 +1,15 @@
+contracts:
+  - name: pet-shelter
+    spec: ./openapi.yaml
+    typescript:
+      package: '@example/pet-shelter'
+      client: true
+      server: false
+    python:
+      package: pet-shelter
+      client: true
+      server: false
+
+publish:
+  githubPackages:
+    owner: example
