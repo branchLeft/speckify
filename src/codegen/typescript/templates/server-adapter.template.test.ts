@@ -306,4 +306,31 @@ describe('createRequestListener', () => {
       expect(seen).toEqual(['{"name":"Rex"}']);
     });
   });
+
+  it('runs beforeHandle before path/query/header parsing, not just before the body', async () => {
+    const seen: string[] = [];
+    const route: RouteDefinition = {
+      id: 'getWidget',
+      method: 'GET',
+      path: '/widgets/{id}',
+      bodyMode: 'none',
+      // "not-a-real-id" fails this schema. If beforeHandle ran after path
+      // parsing (as it used to for every route, not only a body-bearing
+      // one), the adapter would already have sent 400 and returned before
+      // ever reaching beforeHandle -- it would never run at all for this
+      // request.
+      pathSchema: z.object({ id: z.enum(['1', '2', '3']) }),
+    };
+    const listener = createRequestListener(
+      { getWidget: () => Promise.resolve<HandledResponse>({ status: 200, body: {} }) },
+      [route],
+      { beforeHandle: (_req, matchedRoute) => void seen.push(matchedRoute.id) },
+    );
+
+    await withServer(listener, async (baseUrl) => {
+      const res = await fetch(`${baseUrl}/widgets/not-a-real-id`);
+      expect(res.status).toBe(400);
+      expect(seen).toEqual(['getWidget']);
+    });
+  });
 });

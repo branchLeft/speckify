@@ -73,10 +73,13 @@ export interface ListenerOptions {
    */
   readonly maxJsonBodyBytes?: number;
   /**
-   * Runs before body parsing, for callers that need to verify a request
-   * signature from headers. `rawBody` carries the exact bytes for a JSON
-   * body (signing covers the raw body, not the parsed value); it is
-   * `undefined` for an octet-stream body, which is never buffered here.
+   * Runs before any request parsing at all -- path/query/header coercion
+   * and validation, and body parsing -- so a caller verifying a request
+   * signature (or doing auth) sees the request exactly as it arrived and
+   * gets the first chance to reject it, ahead of Speckify's own
+   * validation. `rawBody` carries the exact bytes for a JSON body (signing
+   * covers the raw body, not the parsed value); it is `undefined` for an
+   * octet-stream body, which is never buffered here.
    */
   readonly beforeHandle?: (
     rawRequest: IncomingMessage,
@@ -317,6 +320,33 @@ async function handleRequest(
     sendProblem(res, 404, 'Not Found');
     return;
   }
+
+  // beforeHandle runs before ANY of Speckify's own request handling --
+  // path/query/header coercion and validation, and body parsing -- not
+  // only before body parsing. A caller verifying a request signature (or
+  // doing auth) needs to see the request exactly as it arrived and needs
+  // the chance to reject it before Speckify's own validation can reject or
+  // transform it on its behalf; running it later meant it never ran at all
+  // for a request whose path/query/headers failed validation, since the
+  // adapter had already sent 400 and returned. The raw JSON body -- the
+  // one thing not yet available this early -- is read up front too (still
+  // ahead of every other parsing step) so the single beforeHandle call
+  // keeps carrying it for a caller checking a body signature.
+  let rawJsonBody: Buffer | undefined;
+  if (route.bodyMode === 'json') {
+    const maxJsonBodyBytes = options.maxJsonBodyBytes ?? DEFAULT_MAX_JSON_BODY_BYTES;
+    try {
+      rawJsonBody = await readJsonBody(req, maxJsonBodyBytes);
+    } catch (error) {
+      if (error instanceof PayloadTooLargeError) {
+        sendProblem(res, 413, 'Payload Too Large');
+        return;
+      }
+      throw error;
+    }
+  }
+  await options.beforeHandle?.(req, route, rawJsonBody);
+
   const rawPathParams = matchPath(route.path, url.pathname) ?? {};
   let pathParams: Record<string, unknown> = coerceSingleValuedByShape(
     route.pathSchema,
@@ -356,21 +386,10 @@ async function handleRequest(
 
   let body: unknown;
   if (route.bodyMode === 'octet-stream') {
-    await options.beforeHandle?.(req, route, undefined);
     body = req;
   } else if (route.bodyMode === 'json') {
-    const maxJsonBodyBytes = options.maxJsonBodyBytes ?? DEFAULT_MAX_JSON_BODY_BYTES;
-    let raw: Buffer;
-    try {
-      raw = await readJsonBody(req, maxJsonBodyBytes);
-    } catch (error) {
-      if (error instanceof PayloadTooLargeError) {
-        sendProblem(res, 413, 'Payload Too Large');
-        return;
-      }
-      throw error;
-    }
-    await options.beforeHandle?.(req, route, raw);
+    // rawJsonBody was already read above, ahead of beforeHandle.
+    const raw = rawJsonBody ?? Buffer.alloc(0);
     if (raw.length === 0) {
       body = undefined;
     } else {
@@ -390,7 +409,6 @@ async function handleRequest(
       body = result.data;
     }
   } else {
-    await options.beforeHandle?.(req, route, undefined);
     body = undefined;
   }
 
