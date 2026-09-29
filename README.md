@@ -155,3 +155,9 @@ See [`CONTRIBUTING.md`](CONTRIBUTING.md).
 ## Licence
 
 MIT, see [LICENSE](./LICENSE).
+
+### Third-party material
+
+`data/` ships two files that are oasdiff's own content, not Speckify's,
+under the Apache License 2.0 — see [`data/README.md`](data/README.md) for
+what each file is and how it's regenerated.
