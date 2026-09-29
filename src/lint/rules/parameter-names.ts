@@ -89,7 +89,12 @@ export function checkParameterNames(doc: Doc): LintFinding[] {
     if (!isRecord(pathItem)) continue;
     const pathPointer = `/paths/${escapePointerSegment(path)}`;
     const pathEntries = readEntries(doc, pathItem.parameters, pathPointer, false);
-    findings.push(...collisions(pathEntries, pathEntries.map(() => true)));
+    findings.push(
+      ...collisions(
+        pathEntries,
+        pathEntries.map(() => true),
+      ),
+    );
 
     for (const method of HTTP_METHODS) {
       const operation = pathItem[method];
@@ -97,7 +102,12 @@ export function checkParameterNames(doc: Doc): LintFinding[] {
       const own = readEntries(doc, operation.parameters, `${pathPointer}/${method}`, true);
       const inherited = pathEntries.filter((entry) => !own.some((o) => sameParameter(o, entry)));
       const merged = [...inherited, ...own];
-      findings.push(...collisions(merged, merged.map((entry) => entry.operationLevel)));
+      findings.push(
+        ...collisions(
+          merged,
+          merged.map((entry) => entry.operationLevel),
+        ),
+      );
     }
   }
   return findings;
