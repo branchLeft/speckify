@@ -1,3 +1,5 @@
+import { compare, valid } from 'semver';
+
 import { toCanonicalJson } from '../bundle/canonical-json.js';
 import { RecordError } from './errors.js';
 import { extractTarGzEntry } from './extract-tar-entry.js';
@@ -18,6 +20,25 @@ interface NpmPackument {
 
 function isNpmPackument(value: unknown): value is NpmPackument {
   return typeof value === 'object' && value !== null;
+}
+
+/**
+ * The highest valid semver among a packument's own `versions` keys.
+ * `dist-tags.latest` is a separately-set, mutable pointer -- a republish of
+ * an old version, a manual `npm dist-tag` slip, or a registry quirk can
+ * leave it behind what's actually the highest published version. "The
+ * registry is the record" means computing the true highest version, the
+ * same way `reconcile.ts` already does across targets, not trusting a tag
+ * that can drift from it.
+ */
+function highestPublishedVersion(packument: NpmPackument): string | null {
+  const versions = Object.keys(packument.versions ?? {}).filter((version) => valid(version));
+  if (versions.length === 0) {
+    return null;
+  }
+  return versions.reduce((highest, candidate) =>
+    compare(candidate, highest) > 0 ? candidate : highest,
+  );
 }
 
 /** Reads the generating Speckify version back from a downloaded package.json's `speckify.speckifyVersion`. */
@@ -79,9 +100,11 @@ export function createNpmRegistryRecord(options: NpmRegistryOptions): RegistryRe
       throw new RecordError(`npm registry returned a malformed packument for "${packageName}"`);
     }
 
-    const version = packument['dist-tags']?.latest;
-    if (version === undefined) {
-      throw new RecordError(`npm registry packument for "${packageName}" has no dist-tags.latest`);
+    const version = highestPublishedVersion(packument);
+    if (version === null) {
+      throw new RecordError(
+        `npm registry packument for "${packageName}" has no published versions`,
+      );
     }
 
     const tarballUrl = packument.versions?.[version]?.dist?.tarball;

@@ -129,6 +129,38 @@ describe('createNpmRegistryRecord', () => {
     expect(result?.speckifyVersion).toBeNull();
   });
 
+  // S3: dist-tags.latest is a mutable, separately-set pointer -- it can lag
+  // behind (a republish of an old version, a manual `npm dist-tag` slip, a
+  // registry quirk) what's actually the highest published version. Speckify
+  // treats "the registry is the record", so it must compute the true
+  // highest semver among `versions`, the same way reconcile.ts already does
+  // across targets, rather than trusting a tag that can drift.
+  it('resolves the highest published semver, not a stale dist-tags.latest', async () => {
+    const tarball = await makeTarballWithSpec({ openapi: '3.0.3', info: { version: '0.0.0' } });
+
+    const fetchImpl: FetchLike = vi.fn(async (url: string) => {
+      if (url.endsWith('.tgz')) {
+        return Promise.resolve(new Response(new Uint8Array(tarball), { status: 200 }));
+      }
+      return Promise.resolve(
+        jsonResponse({
+          // dist-tags.latest is stale, pointing at 1.2.0 -- 2.0.0 is
+          // actually published and higher.
+          'dist-tags': { latest: '1.2.0' },
+          versions: {
+            '1.2.0': { dist: { tarball: 'https://npm.example/x-1.2.0.tgz' } },
+            '2.0.0': { dist: { tarball: 'https://npm.example/x-2.0.0.tgz' } },
+            '1.9.0': { dist: { tarball: 'https://npm.example/x-1.9.0.tgz' } },
+          },
+        }),
+      );
+    });
+    const record = createNpmRegistryRecord({ registryUrl: 'https://npm.example', fetchImpl });
+
+    const result = await record.latest('@acme/orders-api');
+    expect(result?.version).toBe('2.0.0');
+  });
+
   it('throws RecordError when the registry responds with a non-404 error', async () => {
     const fetchImpl: FetchLike = vi.fn(async () =>
       Promise.resolve(new Response('', { status: 500 })),
@@ -160,16 +192,18 @@ describe('createNpmRegistryRecord', () => {
     }
   });
 
-  it('throws RecordError when the packument has no dist-tags.latest', async () => {
+  it('throws RecordError when the packument has no published versions', async () => {
     const fetchImpl: FetchLike = vi.fn(async () => Promise.resolve(jsonResponse({})));
     const record = createNpmRegistryRecord({ registryUrl: 'https://npm.example', fetchImpl });
 
-    await expect(record.latest('@acme/orders-api')).rejects.toThrow(/dist-tags\.latest/);
+    await expect(record.latest('@acme/orders-api')).rejects.toThrow(/no published versions/);
   });
 
-  it('throws RecordError when the latest version has no tarball URL', async () => {
+  it('throws RecordError when the highest version has no tarball URL', async () => {
     const fetchImpl: FetchLike = vi.fn(async () =>
-      Promise.resolve(jsonResponse({ 'dist-tags': { latest: '1.0.0' }, versions: {} })),
+      Promise.resolve(
+        jsonResponse({ 'dist-tags': { latest: '1.0.0' }, versions: { '1.0.0': {} } }),
+      ),
     );
     const record = createNpmRegistryRecord({ registryUrl: 'https://npm.example', fetchImpl });
 
