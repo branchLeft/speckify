@@ -8,6 +8,7 @@ dependencies = [
   "openapi-python-client==0.29.1",
   "pydantic>=2.13,<3",
   "jinja2>=3.1,<4",
+  "griffelib==2.3.0",
 ]
 
 [dependency-groups]

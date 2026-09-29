@@ -1,0 +1,49 @@
+{
+  "openapi": "3.0.3",
+  "info": {
+    "title": "T",
+    "version": "1.0.0"
+  },
+  "paths": {
+    "/things": {
+      "post": {
+        "operationId": "createThing",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["a", "b"],
+                "properties": {
+                  "a": {
+                    "type": "string"
+                  },
+                  "b": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "ok"
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "Marker": {
+        "type": "object",
+        "properties": {
+          "m": {
+            "type": "string"
+          }
+        }
+      }
+    }
+  }
+}

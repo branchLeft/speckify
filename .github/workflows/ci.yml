@@ -47,11 +47,12 @@ jobs:
       - name: Build
         run: pnpm run build
 
-      # The generated Python server's templates carry their own pytest suite;
-      # vitest never runs it, so without this step it only runs by hand.
-      - name: Test Python server templates
+      # The generated Python server's templates and the surface diff's griffe
+      # extractor carry their own pytest suites; vitest never runs them, so
+      # without this step they only run by hand.
+      - name: Test Python server templates and surface extractor
         working-directory: python
-        run: uv run --frozen pytest ../src/codegen/python/templates -q
+        run: uv run --frozen pytest ../src/codegen/python/templates ../src/surface/python -q
 
   actionlint:
     runs-on: ubuntu-latest

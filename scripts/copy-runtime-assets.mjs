@@ -30,6 +30,11 @@ const assets = [
       !path.includes('fixtures') &&
       !path.includes('test_render_server.py'),
   },
+  {
+    // The generated-surface diff's griffe extractor, run by `uv run python`.
+    from: join(repoRoot, 'src', 'surface', 'python', 'extract_surface.py'),
+    to: join(repoRoot, 'dist', 'surface', 'python', 'extract_surface.py'),
+  },
 ];
 
 for (const asset of assets) {

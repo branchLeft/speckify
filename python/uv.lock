@@ -200,6 +200,15 @@ wheels = [
 ]
 
 [[package]]
+name = "griffelib"
+version = "2.3.0"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/27/af/018c10bc9edd42b6ef6db2e96b09542050d5253f9b195e74bc910b2d13ab/griffelib-2.3.0.tar.gz", hash = "sha256:7b0952caf5bca6afa4bb5ee8c6a2d183fe3f21b62efc5f6c7243cb2b26d2d115", size = 234534, upload-time = "2026-09-04T15:08:17.472Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/41/63/e876e789525063c840ccfa8857febdabd6523bcef9ce7eb979b9305ea895/griffelib-2.3.0-py3-none-any.whl", hash = "sha256:1b8f9cd525681c26b1d6d574faa1371651e8459ca51d209684f50b8096ae06e0", size = 169423, upload-time = "2026-09-04T15:08:12.956Z" },
+]
+
+[[package]]
 name = "h11"
 version = "0.16.0"
 source = { registry = "https://pypi.org/simple" }
@@ -780,6 +789,7 @@ version = "0.0.0"
 source = { virtual = "." }
 dependencies = [
     { name = "datamodel-code-generator" },
+    { name = "griffelib" },
     { name = "jinja2" },
     { name = "openapi-python-client" },
     { name = "pydantic" },
@@ -798,6 +808,7 @@ dev = [
 [package.metadata]
 requires-dist = [
     { name = "datamodel-code-generator", specifier = "==0.83.0" },
+    { name = "griffelib", specifier = "==2.3.0" },
     { name = "jinja2", specifier = ">=3.1,<4" },
     { name = "openapi-python-client", specifier = "==0.29.1" },
     { name = "pydantic", specifier = ">=2.13,<3" },

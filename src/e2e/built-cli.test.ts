@@ -40,6 +40,10 @@ const networkAvailable = await reachable('https://registry.npmjs.org');
 describe.skipIf(!networkAvailable)('the built CLI (node dist/cli.js build)', () => {
   it('generates and builds server code for both languages from dist, using templates dist must carry', async () => {
     await execFileAsync('npm', ['run', 'build'], { cwd: repoRoot });
+    // A first publish never runs the surface diff, so its extractor is checked directly.
+    await expect(
+      readFile(join(repoRoot, 'dist', 'surface', 'python', 'extract_surface.py'), 'utf8'),
+    ).resolves.toContain('import griffe');
 
     const workDir = await mkdtemp(join(tmpdir(), 'speckify-built-cli-'));
     try {
