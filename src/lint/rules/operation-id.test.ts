@@ -63,4 +63,33 @@ describe('checkOperationIds', () => {
       { ruleId: RULE_ID, pointer: '/paths/~1widgets/get', message: 'operation has no operationId' },
     ]);
   });
+
+  it.each([
+    ['createThing', 'CreateThing'],
+    ['createThing', 'create_thing'],
+    ['create-thing', 'createThing'],
+    ['getHTTPThing', 'get_http_thing'],
+  ])('refuses %s beside %s: they collide once case and separators are normalised', (a, b) => {
+    const doc = {
+      paths: {
+        '/things': { post: { operationId: a } },
+        '/other': { post: { operationId: b } },
+      },
+    };
+    const findings = checkOperationIds(doc);
+    expect(findings).toHaveLength(1);
+    expect(findings[0]?.pointer).toBe('/paths/~1other/post/operationId');
+    expect(findings[0]?.message).toContain(`"${b}"`);
+    expect(findings[0]?.message).toContain(`"${a}"`);
+    expect(findings[0]?.message).toContain('/paths/~1things/post/operationId');
+  });
+
+  it('allows operationIds that differ in more than case and separators', () => {
+    const doc = {
+      paths: {
+        '/things': { post: { operationId: 'createThing' }, get: { operationId: 'createThings' } },
+      },
+    };
+    expect(checkOperationIds(doc)).toEqual([]);
+  });
 });

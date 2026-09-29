@@ -2,6 +2,7 @@ import { LintError } from './errors.js';
 import { checkNoPatternProperties } from './rules/no-pattern-properties.js';
 import { checkOperationIds } from './rules/operation-id.js';
 import { checkOpenApiVersion } from './rules/openapi-version.js';
+import { checkParameterNames } from './rules/parameter-names.js';
 import type { LintFinding } from './types.js';
 
 /** Runs every Speckify lint rule against a parsed bundled document. */
@@ -11,6 +12,7 @@ export function lintDocument(doc: unknown): LintFinding[] {
   return [
     ...checkOpenApiVersion(docRecord),
     ...checkOperationIds(docRecord),
+    ...checkParameterNames(docRecord as Record<string, unknown>),
     ...checkNoPatternProperties(doc),
   ];
 }

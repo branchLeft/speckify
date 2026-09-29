@@ -27,12 +27,21 @@ describe('lintDocument', () => {
     const doc = {
       openapi: '2.0',
       paths: {
-        '/widgets': { get: {} },
+        '/widgets': {
+          get: {},
+          post: {
+            operationId: 'createWidget',
+            parameters: [
+              { name: 'page_size', in: 'query' },
+              { name: 'Page-Size', in: 'header' },
+            ],
+          },
+        },
       },
     };
     const findings = lintDocument(doc);
     const ruleIds = findings.map((f) => f.ruleId).sort();
-    expect(ruleIds).toEqual(['openapi-version', 'operation-id']);
+    expect(ruleIds).toEqual(['openapi-version', 'operation-id', 'parameter-names']);
   });
 });
 

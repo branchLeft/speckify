@@ -6,7 +6,9 @@ from its freshly bundled spec.
 ## Lint runs first
 
 The bundled spec is linted before anything else. A lint failure — an
-unsupported `openapi` version, a missing or duplicate `operationId`, a
+unsupported `openapi` version, a missing or duplicate `operationId`
+(including two ids equal once case and separators are ignored), two
+parameters of one operation with names equal in the same way, a
 `patternProperties` schema — throws `LintError` and never reaches oasdiff,
 so a spec codegen can't handle never gets a version stamped into it at all.
 
