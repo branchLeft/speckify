@@ -84,6 +84,57 @@ describe('computeContractPlan', () => {
     expect(runProcess).not.toHaveBeenCalled();
   });
 
+  it('refuses (never bumps minor) a response schema gaining a property that collides with a generated Python model member', async () => {
+    // The cycle-7 blocker: GET /things gaining an optional
+    // `additional_properties` property is exactly what oasdiff and the
+    // surface diff would otherwise wave through as minor — lint must stop
+    // it before either ever runs.
+    const runProcess = vi.fn();
+    const specWithCollidingProperty = JSON.stringify({
+      openapi: '3.0.3',
+      info: { title: 'Widgets', version: '0.0.0' },
+      paths: {
+        '/things': {
+          get: {
+            operationId: 'listThings',
+            responses: {
+              '200': {
+                description: 'ok',
+                content: {
+                  'application/json': {
+                    schema: {
+                      type: 'object',
+                      properties: { additional_properties: { type: 'string' } },
+                    },
+                  },
+                },
+              },
+            },
+          },
+        },
+      },
+    });
+
+    const attempt = computeContractPlan({
+      contract: 'orders-api',
+      bundledSpec: specWithCollidingProperty,
+      previous: { version: '1.2.0', bundledSpec: publishedSpecV1_2_0, speckifyVersion: null },
+      classificationMap: map,
+      toolchainImpactBump: 'none',
+      surfaceDiff: unchangedSurface,
+      oasdiffPath: '/bin/oasdiff',
+      runProcess,
+    });
+
+    await expect(attempt).rejects.toThrow(LintError);
+    await attempt.catch((error: unknown) => {
+      expect((error as LintError).findings.map((f) => f.ruleId)).toContain(
+        'reserved-python-model-member',
+      );
+    });
+    expect(runProcess).not.toHaveBeenCalled();
+  });
+
   it('is a first publish when there is no previous record: always 1.0.0, no oasdiff run', async () => {
     const runProcess = vi.fn();
     const plan = await computeContractPlan({

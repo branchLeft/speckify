@@ -13,7 +13,7 @@ import { runUv, type UvRunnerDeps } from './uv.js';
  * `model.py.jinja` to make every generated attrs model keyword-only. See
  * `templates/openapi-python-client/model.py.jinja` for why.
  */
-const CUSTOM_TEMPLATE_PATH = fileURLToPath(
+export const CUSTOM_TEMPLATE_PATH = fileURLToPath(
   new URL('./templates/openapi-python-client/', import.meta.url),
 );
 

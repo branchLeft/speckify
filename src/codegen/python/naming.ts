@@ -109,5 +109,7 @@ export function pythonIdentifier(
     splitPythonWords(sanitized).join('_').toLowerCase(),
     reservedWords,
   );
-  return !looksLikeIdentifier(snakeCased) || leadingUnderscore ? `${prefix}${snakeCased}` : snakeCased;
+  return !looksLikeIdentifier(snakeCased) || leadingUnderscore
+    ? `${prefix}${snakeCased}`
+    : snakeCased;
 }
