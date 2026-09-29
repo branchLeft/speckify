@@ -1,0 +1,48 @@
+openapi: 3.1.0
+info:
+  title: Enums And Formats Fixture
+  version: 1.0.0
+paths:
+  /events/{id}:
+    get:
+      operationId: getEvent
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: An event
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Event'
+components:
+  schemas:
+    Event:
+      type: object
+      required:
+        - id
+        - status
+        - priority
+        - occurredAt
+      properties:
+        id:
+          type: string
+        status:
+          type: string
+          enum:
+            - pending
+            - active
+            - closed
+        priority:
+          type: integer
+          format: int32
+        occurredAt:
+          type: string
+          format: date-time
+        retries:
+          type: integer
+          format: int64
