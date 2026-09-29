@@ -3,3 +3,9 @@ dist/
 coverage/
 *.log
 .DS_Store
+launcher/.venv/
+launcher/.pytest_cache/
+launcher/dist/
+launcher/build/
+examples/**/.speckify/
+*.egg-info/
