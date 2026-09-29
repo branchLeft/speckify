@@ -129,12 +129,6 @@ async function buildPlanContext(configPath: string): Promise<PlanContext> {
   };
 }
 
-function notImplemented(command: string): never {
-  throw new Error(
-    `speckify ${command} is not implemented yet: this phase builds the seams codegen and publishing plug into, not those commands themselves.`,
-  );
-}
-
 const program = new Command();
 program.name('speckify').description('Bundle, version and publish an OpenAPI contract.');
 
