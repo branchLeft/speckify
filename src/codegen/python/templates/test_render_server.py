@@ -120,6 +120,20 @@ ECHO_JSON = {
     "responses": [{"statusCode": "200", "model": None}],
 }
 
+NO_PARAMS_NO_BODY = {
+    # Reproduces the bug: no path/query/header params and no request body,
+    # so nothing followed handlers.py.jinja's unconditional bare `*,` —
+    # `async def get_version(self, *,)` is a SyntaxError.
+    "operationId": "getVersion",
+    "method": "GET",
+    "path": "/version",
+    "pathParams": [],
+    "queryParams": [],
+    "headerParams": [],
+    "requestBody": {"kind": "none"},
+    "responses": [{"statusCode": "200", "model": None}],
+}
+
 UPLOAD_BLOB = {
     "operationId": "uploadBlob",
     "method": "POST",
@@ -150,7 +164,16 @@ def generated_package(tmp_path: Path) -> typing.Any:
     (package_dir / "models.py").write_text(MODELS_PY, encoding="utf-8")
 
     operations = parse_operations(
-        [CREATE_PET, UPLOAD_BLOB, GET_ITEM, LIST_WIDGETS, CREATE_WIDGET, PATCH_WIDGET, ECHO_JSON]
+        [
+            CREATE_PET,
+            UPLOAD_BLOB,
+            GET_ITEM,
+            LIST_WIDGETS,
+            CREATE_WIDGET,
+            PATCH_WIDGET,
+            ECHO_JSON,
+            NO_PARAMS_NO_BODY,
+        ]
     )
     write_server_module(operations, package_dir / "server")
 
@@ -173,6 +196,41 @@ def test_render_writes_the_three_expected_files(tmp_path: Path) -> None:
     write_server_module(operations, output_dir)
 
     assert {p.name for p in output_dir.iterdir()} == {"__init__.py", "handlers.py", "router.py"}
+
+
+def test_operation_with_no_params_and_no_body_imports_and_routes(
+    generated_package: typing.Any,
+) -> None:
+    """The bug: `async def get_version(self, *,)` is a SyntaxError, so the
+    whole generated package fails to import before any test can even reach
+    this handler. Reaching this point at all is half the proof; routing a
+    real request through it is the other half."""
+    handlers_source = (Path(generated_package.__file__).parent / "handlers.py").read_text()
+    start = handlers_source.index("async def get_version(")
+    signature = handlers_source[start : handlers_source.index("->", start)]
+    assert "*" not in signature
+    assert "self," in signature
+
+    class TestHandlers:
+        async def create_pet(self, *, body: typing.Any) -> typing.Any:
+            raise NotImplementedError
+
+        async def upload_blob(
+            self, *, signature: str, timestamp: str, body: typing.AsyncIterator[bytes]
+        ) -> typing.Any:
+            raise NotImplementedError
+
+        async def get_version(self) -> typing.Any:
+            return generated_package.handlers.GetVersionResponse200(body={"version": "1.0.0"})
+
+    app = FastAPI()
+    app.include_router(generated_package.create_router(TestHandlers()))
+    client = TestClient(app)
+
+    response = client.get("/version")
+
+    assert response.status_code == 200
+    assert response.json() == {"version": "1.0.0"}
 
 
 def test_generated_handlers_module_has_one_protocol_method_per_operation(

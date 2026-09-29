@@ -35,9 +35,12 @@ class Handlers(typing.Protocol):
     pass
 {% endif %}
 {% for op in operations %}
+{% set has_body = op.request_body.kind in ('json', 'octet-stream') %}
     async def {{ op.handler_name }}(
         self,
+{% if op.all_params or has_body %}
         *,
+{% endif %}
 {% for p in op.all_params %}
 {% if p.is_array %}
         {{ p.py_name }}: list[{{ p.py_type }}],

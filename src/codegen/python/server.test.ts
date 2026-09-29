@@ -43,4 +43,25 @@ describe.skipIf(!uvAvailable)(describeTitle, () => {
     expect(handlers).toContain('body: typing.AsyncIterator[bytes]');
     expect(handlers).toContain('class Handlers(typing.Protocol):');
   }, 30_000);
+
+  it('emits no parameters at all for an operation with no params and no body, not a bare `*,`', async () => {
+    // getVersion (combined.bundled.yaml) takes neither parameters nor a
+    // request body: handlers.py.jinja used to unconditionally emit a bare
+    // `*,` before the parameter list, which for this shape left nothing
+    // after it (`async def get_version(self, *,)`) — a SyntaxError that
+    // made the whole generated package fail to import. The full
+    // import-and-route proof is `test_render_server.py`'s
+    // `no_params_no_body` case, run by the Python suite this covers.
+    targetDir = await mkdtemp(join(tmpdir(), 'speckify-server-'));
+    const bundledSpec = loadFixtureAsBundledSpec('combined.bundled.yaml');
+
+    await generateServer(bundledSpec, { toolchainDir: TOOLCHAIN_DIR, targetDir });
+
+    const handlers = await readFile(join(targetDir, 'server', 'handlers.py'), 'utf8');
+    const start = handlers.indexOf('async def get_version(');
+    expect(start).toBeGreaterThan(-1);
+    const signature = handlers.slice(start, handlers.indexOf('->', start));
+    expect(signature).not.toContain('*');
+    expect(signature).toContain('self,');
+  }, 30_000);
 });
