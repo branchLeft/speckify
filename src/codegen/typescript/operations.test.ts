@@ -30,6 +30,9 @@ describe('extractOperations', () => {
         hasDocumentedErrors: true,
         isOctetStreamBody: false,
         hasRequestBody: false,
+        hasPathParams: false,
+        hasQueryParams: false,
+        hasHeaderParams: false,
       },
       {
         operationId: 'uploadBlob',
@@ -38,8 +41,45 @@ describe('extractOperations', () => {
         hasDocumentedErrors: false,
         isOctetStreamBody: true,
         hasRequestBody: true,
+        hasPathParams: false,
+        hasQueryParams: false,
+        hasHeaderParams: false,
       },
     ]);
+  });
+
+  it('records the sole 2xx status that has a content schema as successStatus', () => {
+    const [op] = extractOperations({
+      paths: {
+        '/things/{id}': {
+          get: {
+            operationId: 'getThing',
+            parameters: [
+              { name: 'id', in: 'path' },
+              { name: 'q', in: 'query' },
+              { name: 'X-Trace', in: 'header' },
+            ],
+            responses: {
+              '200': { content: { 'application/json': {} } },
+              '404': {},
+            },
+          },
+        },
+      },
+    });
+
+    expect(op?.successStatus).toBe(200);
+    expect(op?.hasPathParams).toBe(true);
+    expect(op?.hasQueryParams).toBe(true);
+    expect(op?.hasHeaderParams).toBe(true);
+  });
+
+  it('leaves successStatus undefined when the 2xx response has no content', () => {
+    const [op] = extractOperations({
+      paths: { '/pets': { post: { operationId: 'createPet', responses: { '204': {} } } } },
+    });
+
+    expect(op?.successStatus).toBeUndefined();
   });
 
   it('treats a request body with a json content type as non-octet-stream', () => {

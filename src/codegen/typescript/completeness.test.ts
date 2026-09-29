@@ -4,7 +4,17 @@ import { IncompleteGenerationError } from './errors.js';
 import type { OperationInfo } from './operations.js';
 
 function op(operationId: string): OperationInfo {
-  return { operationId, method: 'get', path: '/x', hasDocumentedErrors: false, isOctetStreamBody: false, hasRequestBody: false };
+  return {
+    operationId,
+    method: 'get',
+    path: '/x',
+    hasDocumentedErrors: false,
+    isOctetStreamBody: false,
+    hasRequestBody: false,
+    hasPathParams: false,
+    hasQueryParams: false,
+    hasHeaderParams: false,
+  };
 }
 
 describe('assertGenerationComplete', () => {

@@ -2,7 +2,11 @@ import http from 'node:http';
 import type { AddressInfo } from 'node:net';
 import { z } from 'zod';
 import { describe, expect, it } from 'vitest';
-import { createRequestListener, type HandledResponse, type RouteDefinition } from './server-adapter.template.js';
+import {
+  createRequestListener,
+  type HandledResponse,
+  type RouteDefinition,
+} from './server-adapter.template.js';
 
 async function withServer(
   listener: (req: http.IncomingMessage, res: http.ServerResponse) => void,
@@ -90,9 +94,10 @@ describe('createRequestListener', () => {
       bodyMode: 'none',
       pathSchema: z.object({ id: z.string().uuid() }),
     };
-    const listener = createRequestListener({ getEvent: () => Promise.resolve<HandledResponse>({ status: 200, body: {} }) }, [
-      route,
-    ]);
+    const listener = createRequestListener(
+      { getEvent: () => Promise.resolve<HandledResponse>({ status: 200, body: {} }) },
+      [route],
+    );
 
     await withServer(listener, async (baseUrl) => {
       const res = await fetch(`${baseUrl}/events/not-a-uuid`);

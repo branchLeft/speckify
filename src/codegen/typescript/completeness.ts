@@ -12,14 +12,19 @@ import type { OperationInfo } from './operations.js';
  */
 export function assertGenerationComplete(
   operations: readonly OperationInfo[],
-  generated: { readonly sdkFunctionNames: ReadonlySet<string>; readonly handlerMethodNames?: ReadonlySet<string> },
+  generated: {
+    readonly sdkFunctionNames: ReadonlySet<string>;
+    readonly handlerMethodNames?: ReadonlySet<string>;
+  },
 ): void {
   const missingSdk = operations
     .map((op) => toCamelCase(op.operationId))
     .filter((name) => !generated.sdkFunctionNames.has(name));
 
   const missingHandlers = generated.handlerMethodNames
-    ? operations.map((op) => toCamelCase(op.operationId)).filter((name) => !generated.handlerMethodNames?.has(name))
+    ? operations
+        .map((op) => toCamelCase(op.operationId))
+        .filter((name) => !generated.handlerMethodNames?.has(name))
     : [];
 
   const missing = [...new Set([...missingSdk, ...missingHandlers])];

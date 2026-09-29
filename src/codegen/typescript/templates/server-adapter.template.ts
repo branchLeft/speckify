@@ -143,7 +143,9 @@ async function handleRequest(
   const url = new URL(req.url ?? '/', 'http://localhost');
   const method = (req.method ?? 'GET').toUpperCase();
 
-  const route = routes.find((candidate) => candidate.method === method && matchPath(candidate.path, url.pathname));
+  const route = routes.find(
+    (candidate) => candidate.method === method && matchPath(candidate.path, url.pathname),
+  );
   if (!route) {
     sendProblem(res, 404, 'Not Found');
     return;
@@ -251,11 +253,13 @@ export function createRequestListener(
 ): (req: IncomingMessage, res: ServerResponse) => void {
   const validateResponses = options.validateResponses ?? true;
   return (req: IncomingMessage, res: ServerResponse) => {
-    void handleRequest(req, res, handlers, routes, validateResponses, options).catch((error: unknown) => {
-      options.onError?.(error, req);
-      if (!res.headersSent) {
-        sendProblem(res, 500, 'Internal Server Error');
-      }
-    });
+    void handleRequest(req, res, handlers, routes, validateResponses, options).catch(
+      (error: unknown) => {
+        options.onError?.(error, req);
+        if (!res.headersSent) {
+          sendProblem(res, 500, 'Internal Server Error');
+        }
+      },
+    );
   };
 }
