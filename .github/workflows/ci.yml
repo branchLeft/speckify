@@ -47,6 +47,12 @@ jobs:
       - name: Build
         run: pnpm run build
 
+      # The generated Python server's templates carry their own pytest suite;
+      # vitest never runs it, so without this step it only runs by hand.
+      - name: Test Python server templates
+        working-directory: python
+        run: uv run --frozen pytest ../src/codegen/python/templates -q
+
   actionlint:
     runs-on: ubuntu-latest
     timeout-minutes: 5
