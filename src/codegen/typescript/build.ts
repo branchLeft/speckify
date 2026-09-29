@@ -8,15 +8,11 @@ const require = createRequire(import.meta.url);
 
 /**
  * Resolves the on-disk directory a package installed, from Speckify's own
- * module resolution -- never a hardcoded path relative to this repo.
- * Resolving `<name>/package.json` (rather than the package's main entry)
- * works even for a package with no importable entry point, and walks
- * whatever node_modules tree actually holds it: this repo's own, a parent
- * repo's when Speckify is installed as a dependency, or a pnpm/npx content
- * store when Speckify itself was installed from a tarball or via npx.
- *
- * @throws if `name` cannot be resolved from here -- meaning Speckify's own
- * install is missing a declared runtime dependency, not a caller error.
+ * module resolution. Resolves `<name>/package.json` to work with any
+ * installation context (development, npm install, or tool install).
+ * @throws if `name` cannot be resolved — Speckify's install is missing the
+ * declared runtime dependency, not a caller error.
+ * See build.md for installation context details.
  */
 function resolvePackageDir(name: string): string {
   return path.dirname(require.resolve(`${name}/package.json`));

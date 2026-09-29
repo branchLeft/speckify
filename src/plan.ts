@@ -73,16 +73,10 @@ const DOC_ONLY_KEYS = new Set([
 ]);
 
 /**
- * Keys whose *children* are arbitrary, producer-chosen names -- a property
- * name, a schema name, a path template, a status code, a media type, a
- * security scheme name, a discriminator mapping key -- never a fixed
- * JSON-Schema/OpenAPI keyword. `stripDocOnlyKeys` must not treat a child
- * key here as a doc-only annotation just because it happens to spell
- * "title" or "description" (a property can be legitimately named either);
- * `collectChangedKeywords` must not treat a child key here as "the keyword
- * that changed" (adding or removing a property, a schema, a path, ... is
- * not a keyword-level edit at all, and is exactly what oasdiff's ordinary
- * rules already cover).
+ * Keys whose children are arbitrary names (property, schema, path, status,
+ * media type, security scheme, discriminator key) — never fixed keywords.
+ * See plan.md for how stripDocOnlyKeys and collectChangedKeywords handle
+ * these: name-only changes are oasdiff's concern, not keyword-level edits.
  */
 const NAME_MAP_KEYS = new Set([
   'paths',
@@ -136,21 +130,10 @@ function stripDocOnlyKeys(value: unknown, parentIsNameMap = false): unknown {
 }
 
 /**
- * Walks two doc-stripped, version-normalised spec trees and collects every
- * JSON-Schema/OpenAPI *keyword* whose value differs between them --
- * `additionalProperties`, `servers`, `minLength`, `type`, and so on.
- *
- * A {@link NAME_MAP_KEYS} container's own children are never reported by
- * name: adding, removing or renaming a property/schema/path/... is not a
- * keyword-level edit, and is exactly what oasdiff's ordinary generated
- * rules already classify. Only a genuine change to a *shared* child's
- * value recurses further (so a property present on both sides can still
- * surface a keyword change inside its own schema); a child present on only
- * one side is a plain addition/removal and is not descended into.
- *
- * An array-valued keyword (`servers`, `required`, `enum`, an operation's
- * `parameters`, ...) is compared as one atomic unit: any element-level
- * difference reports the keyword itself, not a position inside the array.
+ * Collects every JSON-Schema/OpenAPI keyword whose value differs between two
+ * spec trees. Name map containers (properties, schemas, paths) skip
+ * name-only changes. Array keywords compare as atomic units. See plan.md for
+ * algorithm details and how this feeds oasdiff coverage fallback logic.
  */
 function collectChangedKeywords(a: unknown, b: unknown, parentIsNameMap = false): Set<string> {
   const changed = new Set<string>();

@@ -321,17 +321,10 @@ async function handleRequest(
     return;
   }
 
-  // beforeHandle runs before ANY of Speckify's own request handling --
-  // path/query/header coercion and validation, and body parsing -- not
-  // only before body parsing. A caller verifying a request signature (or
-  // doing auth) needs to see the request exactly as it arrived and needs
-  // the chance to reject it before Speckify's own validation can reject or
-  // transform it on its behalf; running it later meant it never ran at all
-  // for a request whose path/query/headers failed validation, since the
-  // adapter had already sent 400 and returned. The raw JSON body -- the
-  // one thing not yet available this early -- is read up front too (still
-  // ahead of every other parsing step) so the single beforeHandle call
-  // keeps carrying it for a caller checking a body signature.
+  // beforeHandle runs before path/query/header and body parsing so callers
+  // can verify request signatures and reject requests before Speckify's own
+  // validation runs. Raw JSON body is read up front too, still before all
+  // other parsing, so beforeHandle can check body signatures.
   let rawJsonBody: Buffer | undefined;
   if (route.bodyMode === 'json') {
     const maxJsonBodyBytes = options.maxJsonBodyBytes ?? DEFAULT_MAX_JSON_BODY_BYTES;

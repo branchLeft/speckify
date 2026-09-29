@@ -459,15 +459,11 @@ program
   });
 
 /**
- * Reads one dotted-path value out of an already-validated config object
- * (e.g. "publish.githubPackages.owner"), for the `config get` command below.
- * Exported for its own unit test, independent of the CLI/config-loading
- * plumbing around it.
- *
- * @returns the value at `path` if every segment resolves to a plain
- * object except the last, and the final value is a string; `undefined`
- * otherwise (a missing path, or one that resolves to something other than
- * a string).
+ * Reads one dotted-path value (e.g., "publish.githubPackages.owner") from
+ * an already-validated config object. Returns string or undefined if the
+ * path does not resolve to a string. See cli.md for details.
+ * @returns the value at `path`, or `undefined` if any segment is not a plain
+ * object (except the last) or the final value is not a string.
  */
 export function getConfigStringValue(config: SpeckifyConfig, path: string): string | undefined {
   let current: unknown = config;
@@ -501,19 +497,9 @@ configCommand
     console.log(value);
   });
 
-// Guarded so this file can be imported (e.g. `resolveToolchainImpactBump`
-// from a unit test) without also parsing the importing process's own argv
-// as a speckify invocation.
-//
-// process.argv[1] is compared through its realpath, not raw: npm always
-// installs a package's `bin` entry as a symlink
-// (node_modules/.bin/speckify -> ../speckify/dist/cli.js), so a real
-// install invokes this file via that symlink. Node resolves import.meta.url
-// through the symlink to this file's real path, but leaves process.argv[1]
-// as the symlink path the shell actually ran -- comparing the two without
-// resolving both the same way never matches for an installed package, so
-// this branch silently never runs and the CLI exits 0 having parsed
-// nothing.
+// Guard allows imports (e.g., resolveToolchainImpactBump in tests) without
+// parsing argv. npm bin symlink paths need realpath on both sides to match.
+// See cli.md for why comparing raw argv[1] fails.
 async function isRunningAsMain(): Promise<boolean> {
   const argvPath = process.argv[1];
   if (argvPath === undefined) {

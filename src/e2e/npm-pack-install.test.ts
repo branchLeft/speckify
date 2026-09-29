@@ -27,20 +27,11 @@ const uvAvailable = await hasUv();
 const networkAvailable = await reachable('https://registry.npmjs.org');
 
 /**
- * Proves the *published* package actually starts and runs, not just the
- * repo's own checkout. `pnpm install` in this repo hoists every
- * devDependency into `node_modules` too, so a runtime import of a package
- * only declared as a devDependency (or a symlink built from this repo's own
- * node_modules layout) passes every other test here while being unusable
- * once installed for real: a consumer's `npm install speckify` never
- * fetches devDependencies, and speckify's own working directory does not
- * exist inside their node_modules tree.
- *
- * This is slow (a real `npm pack`, a real `npm install` from the tarball,
- * and — when `uv` is on PATH — a real `speckify build` running the pinned
- * Python toolchain) and needs network; it is gated the same way
- * `built-cli.test.ts` is, so it still runs for real in CI rather than being
- * silently skipped there, while staying skippable offline.
+ * Proves the published package works, not just the repo checkout. pnpm's
+ * hoisting means devDependencies mask real issues. This test uses npm pack
+ * and installs from tarball to catch consumer integration problems. Slow and
+ * needs network; gated like built-cli.test.ts for CI/offline handling.
+ * See npm-pack-install.md for details.
  */
 describe.skipIf(!networkAvailable)('the published npm package, installed from a tarball', () => {
   it('starts and builds both languages after a clean `npm install` of the packed tarball', async () => {
