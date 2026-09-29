@@ -1,5 +1,33 @@
 {
-  "response-required-property-removed": "major",
-  "request-property-added": "minor",
-  "description-changed": "patch"
+  "oasdiffVersion": "1.32.1",
+  "perspective": "test fixture, not the real map",
+  "rules": [
+    {
+      "id": "response-required-property-removed",
+      "oasdiffLevel": "ERR",
+      "direction": "response",
+      "effect": "violation",
+      "bump": "major",
+      "reason": "removing a required response property breaks an existing client",
+      "source": "test-fixture"
+    },
+    {
+      "id": "request-property-added",
+      "oasdiffLevel": "INFO",
+      "direction": "request",
+      "effect": "widens",
+      "bump": "minor",
+      "reason": "an additive, optional request property is backward compatible",
+      "source": "test-fixture"
+    },
+    {
+      "id": "description-changed",
+      "oasdiffLevel": "INFO",
+      "direction": "none",
+      "effect": "none",
+      "bump": "patch",
+      "reason": "a description-only change has no wire effect",
+      "source": "test-fixture"
+    }
+  ]
 }

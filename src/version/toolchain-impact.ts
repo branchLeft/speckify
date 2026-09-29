@@ -1,15 +1,9 @@
-import { readFile } from 'node:fs/promises';
-
 import { gt, lte } from 'semver';
 
-import { VersionError } from './errors.js';
-import {
-  classificationMapSchema,
-  toolchainImpactFileSchema,
-  type ClassificationMap,
-  type ToolchainImpactEntry,
-} from './types.js';
 import { maxBump } from './bump.js';
+import { VersionError } from './errors.js';
+import { readJsonFile } from './json-file.js';
+import { toolchainImpactFileSchema, type ToolchainImpactEntry } from './types.js';
 import type { Bump } from './types.js';
 
 /**
@@ -56,39 +50,4 @@ export async function loadToolchainImpact(filePath: string): Promise<ToolchainIm
     );
   }
   return result.data;
-}
-
-/**
- * Loads and validates an oasdiff rule id → {@link Bump} classification map
- * from a JSON file.
- *
- * @throws {VersionError} if the file cannot be read or parsed as JSON, or
- * fails schema validation.
- */
-export async function loadClassificationMap(filePath: string): Promise<ClassificationMap> {
-  const raw = await readJsonFile(filePath);
-  const result = classificationMapSchema.safeParse(raw);
-  if (!result.success) {
-    throw new VersionError(
-      `${filePath} is not a valid classification map: ${result.error.message}`,
-    );
-  }
-  return result.data;
-}
-
-async function readJsonFile(filePath: string): Promise<unknown> {
-  let text: string;
-  try {
-    text = await readFile(filePath, 'utf8');
-  } catch (error) {
-    const reason = error instanceof Error ? error.message : String(error);
-    throw new VersionError(`could not read ${filePath}: ${reason}`);
-  }
-
-  try {
-    return JSON.parse(text) as unknown;
-  } catch (error) {
-    const reason = error instanceof Error ? error.message : String(error);
-    throw new VersionError(`${filePath} is not valid JSON: ${reason}`);
-  }
 }

@@ -6,9 +6,10 @@ import { fileURLToPath } from 'node:url';
 
 import { extractTarGzEntry } from '../record/extract-tar-entry.js';
 import { OasdiffError } from './errors.js';
+import { OASDIFF_VERSION } from './version.js';
 import type { FetchLike } from '../record/types.js';
 
-export const OASDIFF_VERSION = '1.32.1';
+export { OASDIFF_VERSION } from './version.js';
 
 const defaultChecksumsPath = join(dirname(fileURLToPath(import.meta.url)), 'checksums.json');
 

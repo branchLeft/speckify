@@ -3,7 +3,7 @@ import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 
 import { VersionError } from './errors.js';
-import { loadClassificationMap, loadToolchainImpact, toolchainImpact } from './toolchain-impact.js';
+import { loadToolchainImpact, toolchainImpact } from './toolchain-impact.js';
 import type { ToolchainImpactEntry } from './types.js';
 
 const fixturesDir = fileURLToPath(new URL('./fixtures/', import.meta.url));
@@ -45,27 +45,6 @@ describe('loadToolchainImpact', () => {
 
   it('throws VersionError for a file that fails schema validation', async () => {
     await expect(loadToolchainImpact(`${fixturesDir}classification-map.json`)).rejects.toThrow(
-      VersionError,
-    );
-  });
-});
-
-describe('loadClassificationMap', () => {
-  it('loads and validates the committed fixture', async () => {
-    const result = await loadClassificationMap(`${fixturesDir}classification-map.json`);
-    expect(result).toEqual({
-      'response-required-property-removed': 'major',
-      'request-property-added': 'minor',
-      'description-changed': 'patch',
-    });
-  });
-
-  it('throws VersionError for invalid JSON', async () => {
-    await expect(loadClassificationMap(`${fixturesDir}invalid.json`)).rejects.toThrow(VersionError);
-  });
-
-  it('throws VersionError for a map with an invalid bump value', async () => {
-    await expect(loadClassificationMap(`${fixturesDir}invalid-map.json`)).rejects.toThrow(
       VersionError,
     );
   });

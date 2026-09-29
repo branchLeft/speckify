@@ -1,0 +1,35 @@
+[
+  {
+    "id": "response-required-property-removed",
+    "level": "error",
+    "direction": "response",
+    "area": "schema",
+    "kind": "existence",
+    "actions": ["remove"],
+    "effect": "violation",
+    "locations": ["paths.*.*.responses.*.content.*.schema.properties.*:remove"],
+    "description": "required property removed from response body (test fixture)"
+  },
+  {
+    "id": "request-property-added",
+    "level": "info",
+    "direction": "request",
+    "area": "schema",
+    "kind": "existence",
+    "actions": ["add"],
+    "effect": "widens",
+    "locations": ["paths.*.*.requestBody.content.*.schema.properties.*:add"],
+    "description": "property added to request body (test fixture)"
+  },
+  {
+    "id": "description-changed",
+    "level": "info",
+    "direction": "none",
+    "area": "schema",
+    "kind": "structure",
+    "actions": ["change"],
+    "effect": "none",
+    "locations": ["*.description:change"],
+    "description": "description changed (test fixture)"
+  }
+]

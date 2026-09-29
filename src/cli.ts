@@ -8,7 +8,7 @@ import { Command } from 'commander';
 
 import { bundleSpec } from './bundle/index.js';
 import { loadConfig, type Contract, type SpeckifyConfig } from './config/index.js';
-import { resolveOasdiffBinary } from './oasdiff/index.js';
+import { OASDIFF_CLASSIFICATION_MAP_FILENAME, resolveOasdiffBinary } from './oasdiff/index.js';
 import {
   createNpmRegistryRecord,
   createPyPiRegistryRecord,
@@ -95,7 +95,10 @@ async function buildPlanContext(configPath: string): Promise<PlanContext> {
   const config = await loadConfig(resolvedConfigPath);
   const configDir = dirname(resolvedConfigPath);
 
-  const classificationMapPath = resolve(configDir, 'data/oasdiff.classification.json');
+  // The classification map is Speckify's own artifact, shipped with the
+  // package (`data/`), not something a consuming repo provides alongside
+  // its speckify.yaml.
+  const classificationMapPath = resolve(packageRoot, 'data', OASDIFF_CLASSIFICATION_MAP_FILENAME);
   const toolchainImpactPath = resolve(configDir, 'toolchain-impact.json');
 
   const [classificationMap, toolchainImpactEntries, currentSpeckifyVersion, oasdiffPath] =

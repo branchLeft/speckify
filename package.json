@@ -11,7 +11,8 @@
     "node": ">=22"
   },
   "files": [
-    "dist"
+    "dist",
+    "data"
   ],
   "scripts": {
     "build": "tsc -p tsconfig.build.json && cp src/oasdiff/checksums.json dist/oasdiff/checksums.json",

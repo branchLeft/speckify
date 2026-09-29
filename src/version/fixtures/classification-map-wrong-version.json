@@ -1,5 +1,5 @@
 {
-  "oasdiffVersion": "1.32.1",
+  "oasdiffVersion": "1.0.0",
   "perspective": "test fixture, not the real map",
   "rules": [
     {
@@ -7,8 +7,8 @@
       "oasdiffLevel": "ERR",
       "direction": "none",
       "effect": "violation",
-      "bump": "huge",
-      "reason": "invalid bump value, for the schema-validation-failure test",
+      "bump": "major",
+      "reason": "pinned to a different oasdiff version than the one under test",
       "source": "test-fixture"
     }
   ]
