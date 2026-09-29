@@ -88,7 +88,16 @@ call, is in [`docs/versioning.md`](docs/versioning.md).
 **GitHub Packages** (TypeScript): the workflow's own `GITHUB_TOKEN` is
 enough — no extra secret. `publish.githubPackages.owner` in
 `speckify.yaml` must be the org or user the token can publish packages
-under, and every `typescript.package` must be scoped to it.
+under, and every `typescript.package` must be scoped to it. The action
+reads that `owner` itself and passes it to `actions/setup-node` as
+`scope`, alongside `registry-url: https://npm.pkg.github.com` — that combination
+is what makes `NODE_AUTH_TOKEN` actually authenticate `npm publish`
+(setup-node writes the `.npmrc` line that interpolates it; the token
+alone, set only as an environment variable, authenticates nothing).
+Scoping it to `@<owner>` rather than setting it as the job's default
+registry keeps a plain `npm install`/`pnpm install` of a public package
+(Speckify's own dependencies, at build time) resolving from the public
+registry as normal.
 
 **PyPI** (Python): add this repository as a trusted publisher on the PyPI
 project (Settings → Publishing → GitHub), naming this repo, the

@@ -15,11 +15,44 @@ inputs:
 runs:
   using: composite
   steps:
+    # `NODE_AUTH_TOKEN` being set on a later step's environment does nothing
+    # by itself: npm only uses it where an .npmrc line interpolates it for a
+    # specific registry host, which is what setup-node's `registry-url`
+    # writes. `scope` is read from the caller's own speckify.yaml here (its
+    # `publish.githubPackages.owner`) so that .npmrc entry is scoped to
+    # `@<owner>:registry=...`, rather than setup-node overwriting the
+    # *default* registry for every command in this job -- which would break
+    # `pnpm install --frozen-lockfile` resolving Speckify's own public
+    # dependencies (zod, commander, ...) a few steps below.
+    - name: Read the npm scope from the caller's config
+      id: npm-scope
+      shell: bash
+      working-directory: ${{ github.workspace }}
+      run: |
+        owner=$(grep -A5 'githubPackages:' "${{ inputs.config }}" 2>/dev/null \
+          | grep 'owner:' | head -1 | sed -E "s/^[^:]*owner:[[:space:]]*//" | tr -d '"'"'")
+        echo "scope=${owner:+@$owner}" >> "$GITHUB_OUTPUT"
+
     # Runs from ${{ github.action_path }} — wherever this action's own repo
     # was checked out at the pinned SHA/tag a caller resolved — so a SHA pin
     # on this action runs exactly that commit's code, with no npm fetch of
     # Speckify itself at run time.
-    - name: Set up Node
+    #
+    # Two variants, not one step with a possibly-empty `scope`: setup-node
+    # treats an empty `scope` as "none given" and instead points the job's
+    # *default* registry at `registry-url` -- which would break resolving
+    # Speckify's own public dependencies a few steps below, for any caller
+    # whose config has no typescript/githubPackages target at all.
+    - name: Set up Node (with GitHub Packages auth, scoped to the caller's owner)
+      if: steps.npm-scope.outputs.scope != ''
+      uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+      with:
+        node-version-file: ${{ github.action_path }}/.nvmrc
+        registry-url: https://npm.pkg.github.com
+        scope: ${{ steps.npm-scope.outputs.scope }}
+
+    - name: Set up Node (no npm publish target in this config)
+      if: steps.npm-scope.outputs.scope == ''
       uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
       with:
         node-version-file: ${{ github.action_path }}/.nvmrc
