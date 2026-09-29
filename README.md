@@ -63,6 +63,14 @@ reference.
   last publish" on a later run — see
   [`docs/versioning.md`](docs/versioning.md).
 
+## How it works
+
+[`docs/design.html`](docs/design.html) explains the technical design with
+diagrams: where Speckify sits, the life of a spec, the version gate, the
+generated-code comparison, publishing and the supply chain. Open it in a
+browser. It was written by Claude Opus 5.5, an AI model made by Anthropic,
+and says so at the top.
+
 ## How versioning works
 
 Speckify never asks you to pick a version. On every pull request it:

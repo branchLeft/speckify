@@ -1,0 +1,1140 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Speckify technical design</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link
+      rel="stylesheet"
+      href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=Roboto+Mono:wght@400;500&family=Space+Grotesk:wght@400;500;700&family=Syne:wght@500&display=swap"
+    />
+    <style>
+      /* branchLeft design system: dark is the default on :root, light is opt-in via [data-theme="light"]. */
+      :root {
+        color-scheme: dark;
+        --bl-color-bg: #000000;
+        --bl-color-fg: #ffffff;
+        --bl-color-active: #ff006e;
+        --bl-color-muted: #bfbfbf;
+        --bl-color-border: #bfbfbf;
+        --bl-color-hairline: #ffffff1f;
+        --bl-color-danger: #e95935;
+        --bl-value-opensource: #3b9fd6;
+        --panel: #ffffff0d;
+        --code-bg: #ffffff14;
+        --bl-font-display: 'Space Grotesk', ui-sans-serif, system-ui, sans-serif;
+        --bl-font-wordmark: 'Syne', ui-sans-serif, system-ui, sans-serif;
+        --bl-font-sans: 'IBM Plex Sans', ui-sans-serif, system-ui, sans-serif;
+        --bl-font-mono: 'Roboto Mono', ui-monospace, monospace;
+        --bl-space-xs: 0.5rem;
+        --bl-space-sm: 1rem;
+        --bl-space-md: 1.5rem;
+        --bl-space-lg: 2rem;
+        --bl-space-xl: 3rem;
+      }
+      :root[data-theme='light'] {
+        color-scheme: light;
+        --bl-color-bg: #ffffff;
+        --bl-color-fg: #000000;
+        --bl-color-active: #d6005c;
+        --bl-color-muted: #404040;
+        --bl-color-border: #404040;
+        --bl-color-hairline: #0000001f;
+        --bl-color-danger: #70202c;
+        --bl-value-opensource: #247cad;
+        --panel: #0000000a;
+        --code-bg: #00000010;
+      }
+      * {
+        box-sizing: border-box;
+      }
+      html,
+      body {
+        background: var(--bl-color-bg);
+        color: var(--bl-color-fg);
+        font-family: var(--bl-font-sans);
+        font-size: 1rem;
+        line-height: 1.5;
+        margin: 0;
+      }
+      .page {
+        max-width: 62rem;
+        margin: 0 auto;
+        padding-inline: 1rem;
+        padding-block: var(--bl-space-xl) 6rem;
+      }
+      h1,
+      h2,
+      h3 {
+        font-family: var(--bl-font-display);
+        font-weight: 400;
+        line-height: 1.1;
+        text-wrap: balance;
+      }
+      h1 {
+        font-size: 2.25rem;
+        margin: var(--bl-space-sm) 0;
+      }
+      h2 {
+        font-size: 1.875rem;
+        margin: var(--bl-space-xl) 0 var(--bl-space-sm);
+        padding-top: var(--bl-space-md);
+        border-top: 1px solid var(--bl-color-hairline);
+      }
+      h3 {
+        font-size: 1.25rem;
+        margin: var(--bl-space-lg) 0 var(--bl-space-xs);
+      }
+      p,
+      li,
+      td {
+        line-height: 1.6;
+      }
+      p,
+      li {
+        max-width: 70ch;
+      }
+      a {
+        color: var(--bl-color-active);
+      }
+      a:focus-visible {
+        outline: 2px solid var(--bl-color-active);
+        outline-offset: 2px;
+      }
+      strong {
+        font-weight: 600;
+      }
+      code {
+        font-family: var(--bl-font-mono);
+        font-size: 0.875em;
+        background: var(--code-bg);
+        padding: 0.05em 0.3em;
+        border-radius: 0.25rem;
+      }
+      pre {
+        font-family: var(--bl-font-mono);
+        font-size: 0.875rem;
+        line-height: 1.6;
+        background: var(--code-bg);
+        padding: var(--bl-space-sm);
+        border-radius: 0.375rem;
+        overflow-x: auto;
+      }
+      pre code {
+        background: none;
+        padding: 0;
+      }
+      small,
+      .muted {
+        color: var(--bl-color-muted);
+      }
+      .wordmark {
+        font-family: var(--bl-font-wordmark);
+        font-weight: 500;
+        font-size: 3.75rem;
+        line-height: 1;
+        margin: 0;
+      }
+      .eyebrow {
+        font-family: var(--bl-font-mono);
+        font-size: 0.8rem;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+        color: var(--bl-color-active);
+      }
+      .lede {
+        font-size: 1.15rem;
+        max-width: 62ch;
+      }
+      .disclosure {
+        border: 1px solid var(--bl-color-border);
+        border-radius: 0.375rem;
+        padding: var(--bl-space-sm) var(--bl-space-md);
+        margin: var(--bl-space-md) 0;
+        background: var(--panel);
+      }
+      .disclosure p {
+        margin: 0.25rem 0;
+      }
+      .tbl {
+        overflow-x: auto;
+        margin: var(--bl-space-sm) 0;
+      }
+      table {
+        border-collapse: collapse;
+        width: 100%;
+        font-size: 0.925rem;
+      }
+      th,
+      td {
+        text-align: left;
+        vertical-align: top;
+        padding: 0.5rem 0.75rem;
+        border-bottom: 1px solid var(--bl-color-hairline);
+      }
+      th {
+        font-family: var(--bl-font-display);
+        font-weight: 500;
+        border-bottom: 1px solid var(--bl-color-border);
+      }
+      td code {
+        white-space: nowrap;
+      }
+      .diagram {
+        overflow-x: auto;
+        margin: var(--bl-space-md) 0;
+        padding: var(--bl-space-sm);
+        border: 1px solid var(--bl-color-hairline);
+        border-radius: 0.375rem;
+      }
+      .diagram pre.mermaid {
+        background: none;
+        margin: 0;
+        padding: 0;
+        text-align: center;
+      }
+      figcaption {
+        font-size: 0.875rem;
+        color: var(--bl-color-muted);
+        margin-top: var(--bl-space-xs);
+      }
+      .grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(16rem, 1fr));
+        gap: var(--bl-space-sm);
+        margin: var(--bl-space-sm) 0;
+      }
+      .principle {
+        border-top: 2px solid var(--bl-color-active);
+        padding-top: var(--bl-space-xs);
+      }
+      .principle h3 {
+        margin-top: 0;
+        font-size: 1.05rem;
+      }
+      .principle p {
+        margin: 0.25rem 0 0;
+        font-size: 0.95rem;
+      }
+      nav.toc ol {
+        columns: 2 16rem;
+        padding-left: 1.25rem;
+      }
+      nav.toc li {
+        margin-bottom: 0.25rem;
+      }
+      .oss {
+        color: var(--bl-value-opensource);
+      }
+      @media (prefers-reduced-motion: reduce) {
+        * {
+          transition: none !important;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <main class="page">
+      <p class="eyebrow">Technical design · for contributors and adopters</p>
+      <p class="wordmark">speckify</p>
+      <h1>How Speckify works</h1>
+      <p class="lede">
+        Speckify turns an OpenAPI contract, kept in the repository of the service that owns it, into
+        versioned TypeScript and Python packages. Nobody picks the version: it is computed from what
+        changed, and it is built so that a breaking change can never ship under a compatible version
+        number. This page explains how, piece by piece, so you can trust the result without reading
+        every line of code.
+      </p>
+
+      <aside class="disclosure" role="note" aria-label="AI authorship disclosure">
+        <p>
+          <strong>AI-generated document.</strong> This page was written by
+          <strong>Claude Opus 5.5</strong>, an AI model made by Anthropic, from Speckify's source
+          code and its in-repo design notes. The code it describes was also written by Claude models
+          (Opus 5.5 and Sonnet 5), working as orchestrated agents, and was checked through eight
+          rounds of adversarial AI review. Only a human maintainer merges it.
+        </p>
+        <p>
+          Treat it as you would any design document: verify against the code it links to, and open
+          an issue if the two disagree. It describes the
+          <code>speckify-0.1.0</code> branch as of 2026-09-30.
+        </p>
+      </aside>
+
+      <nav class="toc" aria-label="Contents">
+        <ol>
+          <li><a href="#principles">Design principles</a></li>
+          <li><a href="#context">Where Speckify sits</a></li>
+          <li><a href="#lifecycle">The life of a spec</a></li>
+          <li><a href="#adopting">Adopting it</a></li>
+          <li><a href="#plan">The plan pipeline</a></li>
+          <li><a href="#gate">The version gate</a></li>
+          <li><a href="#surface">Comparing the generated code</a></li>
+          <li><a href="#codegen">What gets generated</a></li>
+          <li><a href="#publish">Publishing and the record</a></li>
+          <li><a href="#supply">Supply chain</a></li>
+          <li><a href="#deps">Dependencies</a></li>
+          <li><a href="#tests">How it is tested</a></li>
+          <li><a href="#source">Source map</a></li>
+          <li><a href="#limits">Limits and open work</a></li>
+        </ol>
+      </nav>
+
+      <h2 id="principles">Design principles</h2>
+      <div class="grid">
+        <div class="principle">
+          <h3>The spec lives with its producer</h3>
+          <p>
+            A spec sits beside the routes that serve it. Speckify holds no specs; it is a tool each
+            producing repository adopts with one config file and one workflow file.
+          </p>
+        </div>
+        <div class="principle">
+          <h3>Nobody types a version</h3>
+          <p>
+            The version is computed from the difference between the spec being published and the
+            spec that was last published. <code>info.version</code>
+            in the source is ignored.
+          </p>
+        </div>
+        <div class="principle">
+          <h3>Over-bump, never under-bump</h3>
+          <p>
+            When Speckify cannot prove a change is safe for existing clients, it calls it major. An
+            unnecessary major costs a consumer an upgrade decision; a missed one breaks their build.
+          </p>
+        </div>
+        <div class="principle">
+          <h3>The registry is the record</h3>
+          <p>
+            "What did we last publish?" is answered by the package registry, from the spec stored
+            inside the last published package. Git tags are written for convenience and never read
+            back.
+          </p>
+        </div>
+        <div class="principle">
+          <h3>Measure what consumers use</h3>
+          <p>
+            Consumers depend on generated code, not on YAML. So Speckify compares the generated
+            packages' public surfaces too, not only the spec.
+          </p>
+        </div>
+        <div class="principle">
+          <h3>Fail loudly</h3>
+          <p>
+            A generator that drops an operation, a tool that fails, a type that will not resolve:
+            each stops the run with a clear error rather than passing silently.
+          </p>
+        </div>
+      </div>
+
+      <h2 id="context">Where Speckify sits</h2>
+      <p>
+        Speckify runs inside a producer repository's own GitHub Actions workflow. It reads that
+        repository's spec, talks to two package registries, and drives a set of pinned code
+        generators and analysis tools. Consumers never run Speckify; they install the packages it
+        publishes.
+      </p>
+      <figure class="diagram">
+        <pre class="mermaid">
+flowchart LR
+  subgraph producer["Producer repository"]
+    spec["openapi.yaml<br/>beside the routes"]
+    cfg["speckify.yaml"]
+    wf["speckify.yml workflow<br/>check + publish jobs"]
+  end
+  subgraph speck["branchLeft/speckify (MIT)"]
+    action["Composite Action<br/>pinned by commit SHA"]
+    cli["speckify CLI"]
+  end
+  subgraph tools["Pinned tools"]
+    oas["oasdiff 1.32.1"]
+    hey["hey-api openapi-ts"]
+    opc["openapi-python-client"]
+    dcg["datamodel-code-generator"]
+    tsc["TypeScript compiler API"]
+    grf["griffe"]
+  end
+  ghp[("GitHub Packages<br/>npm")]
+  pypi[("PyPI")]
+  rel["GitHub Release<br/>+ tag"]
+  consumer["Consumer repository<br/>pins a version"]
+  wf --> action --> cli
+  spec --> cli
+  cfg --> cli
+  cli --> tools
+  cli -- "read last published<br/>version and spec" --> ghp
+  cli -- "read last published" --> pypi
+  cli -- "publish" --> ghp
+  cli -- "publish (OIDC)" --> pypi
+  cli -. "convenience only" .-> rel
+  consumer -- "npm install" --> ghp
+  consumer -- "pip install" --> pypi
+</pre>
+        <figcaption>
+          Solid arrows are data Speckify depends on. The dotted arrow is written but never read
+          back.
+        </figcaption>
+      </figure>
+
+      <h2 id="lifecycle">The life of a spec</h2>
+      <p>
+        From the author's point of view there are only two moments: opening a pull request, where
+        Speckify says what version it would publish and why, and merging it, where it publishes.
+      </p>
+      <figure class="diagram">
+        <pre class="mermaid">
+sequenceDiagram
+  autonumber
+  actor A as Spec author
+  participant PR as Pull request
+  participant CK as check job
+  participant R as Registries
+  participant PB as publish job
+  actor C as Consumer
+  A->>PR: edit openapi.yaml, open PR
+  PR->>CK: pull_request event
+  CK->>R: fetch last published version + its openapi.json
+  CK->>CK: bundle, lint, diff, judge, compare generated code
+  CK->>PR: one comment: proposed version, changelog, reasons
+  A->>PR: owner reviews and merges
+  PR->>PB: push to main
+  PB->>R: fetch the record again
+  PB->>PB: plan, then build packages at the computed version
+  PB->>R: publish each target missing that version
+  PB-->>PR: tag contract@vX.Y.Z and a GitHub Release
+  C->>R: upgrade the pin when ready
+</pre
+        >
+        <figcaption>
+          The publish job recomputes the plan from the registry rather than trusting the pull
+          request's comment, so a failed or partial publish is repaired by the next run.
+        </figcaption>
+      </figure>
+      <p>
+        A spec file under Speckify moves through a small set of states. The only human decision is
+        the merge.
+      </p>
+      <figure class="diagram">
+        <pre class="mermaid">
+stateDiagram-v2
+  direction LR
+  [*] --> Draft: author edits
+  Draft --> Refused: lint fails
+  Refused --> Draft: author fixes
+  Draft --> Proposed: check job comments a version
+  Proposed --> Draft: more edits
+  Proposed --> Merged: owner merges
+  Merged --> Published: publish job
+  Merged --> Partial: one registry fails
+  Partial --> Published: next run reconciles
+  Published --> [*]
+</pre
+        >
+      </figure>
+
+      <h2 id="adopting">Adopting it</h2>
+      <p>
+        <code>npx speckify init --owner your-org</code> finds <code>openapi*.yaml</code> or
+        <code>openapi*.json</code> files and writes two files.
+      </p>
+      <pre><code># speckify.yaml, beside the code that owns the contract
+contracts:
+  - name: orders-api
+    spec: ./openapi.yaml
+    typescript: { package: '@your-org/orders-api', client: true, server: false }
+    python: { package: orders-api, client: true, server: true }
+publish:
+  githubPackages: { owner: your-org }</code></pre>
+      <p>
+        The second file is <code>.github/workflows/speckify.yml</code>. It has a
+        <code>check</code> job on pull requests and a <code>publish</code> job on pushes to the
+        default branch. Both call Speckify's composite Action directly, pinned to a commit SHA that
+        <code>init</code> resolves at run time. The publish job runs in a
+        <code>release</code> environment, under a <code>concurrency</code> group so two merges
+        cannot publish at once, with only the permissions it needs: <code>contents: write</code>,
+        <code>packages: write</code> and <code>id-token: write</code>.
+      </p>
+      <p>
+        The publish job lives in the adopter's own file on purpose. PyPI's trusted publishing
+        matches the workflow file that requested the token, and a reusable workflow's token names
+        the reusable workflow instead, so it can never match. Speckify's own reusable workflow is
+        kept for
+        <code>check</code> only.
+      </p>
+      <p>
+        The Action builds Speckify from its own checkout at that SHA, with
+        <code>pnpm install --frozen-lockfile</code>, so a pinned Action runs exactly that commit's
+        code and fetches no Speckify package at run time.
+      </p>
+
+      <h2 id="plan">The plan pipeline</h2>
+      <p>
+        Every <code>check</code> and <code>publish</code> run computes a plan for each contract: its
+        changelog, its bump and its next version. The plan is the heart of Speckify.
+      </p>
+      <figure class="diagram">
+        <pre class="mermaid">
+flowchart TD
+  A["Bundle the spec<br/>inline external $refs, sort keys"] --> B{"Lint"}
+  B -- "fails" --> X["Stop with a clear error<br/>no version is computed"]
+  B -- "passes" --> C["Read the record<br/>last published version + its openapi.json"]
+  C --> D{"Published before?"}
+  D -- "no" --> F["First publish: 1.0.0"]
+  D -- "yes" --> E["Normalise both: info.version to 0.0.0"]
+  E --> G{"Identical?"}
+  G -- "yes" --> N["Nothing to publish"]
+  G -- "no" --> H1["oasdiff, always --flatten-allof<br/>then the classification map"]
+  G -- "no" --> H2["Structural diff<br/>judged against the allow-list"]
+  G -- "no" --> H3["Generate both versions<br/>compare client surfaces"]
+  G -- "no" --> H4["Toolchain impact<br/>of the Speckify release"]
+  H1 --> M["bump = the highest of the four"]
+  H2 --> M
+  H3 --> M
+  H4 --> M
+  M --> V["Next version + changelog"]
+</pre>
+        <figcaption>
+          The four judges run independently. Any of them can raise the bump; none can lower
+          another's verdict.
+        </figcaption>
+      </figure>
+
+      <h3>Bundle</h3>
+      <p>
+        <code>src/bundle</code> uses <code>@apidevtools/json-schema-ref-parser</code> to inline
+        every external <code>$ref</code>, so the rest of the pipeline always compares one complete
+        document with another. It refuses a <code>$ref</code> that escapes the repository root
+        (symlinks are resolved first) and never fetches a remote <code>$ref</code>. It strips
+        <code>$id</code> and <code>$schema</code> from inlined schemas, which would otherwise
+        confuse the Python model generator, and writes canonical, key-sorted JSON.
+      </p>
+
+      <h3>Lint</h3>
+      <p>
+        Lint runs before anything else and refuses a spec no generator can turn into working code.
+        Each finding names a JSON pointer.
+      </p>
+      <div class="tbl">
+        <table>
+          <thead>
+            <tr>
+              <th>Rule</th>
+              <th>Why</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>OpenAPI 3.0.x or 3.1.x only</td>
+              <td>The generators and oasdiff support these.</td>
+            </tr>
+            <tr>
+              <td>
+                Every operation has a unique <code>operationId</code>, including after case and
+                separators are ignored
+              </td>
+              <td>
+                <code>createThing</code> and <code>CreateThing</code> both become Python's
+                <code>create_thing</code>; one would silently call the other's endpoint.
+              </td>
+            </tr>
+            <tr>
+              <td>No two parameters of one operation collide after normalisation</td>
+              <td>
+                A header <code>Page-Size</code> beside a query <code>page_size</code> renames a
+                Python argument.
+              </td>
+            </tr>
+            <tr>
+              <td>No <code>patternProperties</code></td>
+              <td>
+                Every validator generator tested drops it silently, so the generated server would
+                validate less than the spec says.
+              </td>
+            </tr>
+            <tr>
+              <td>No property whose Python name collides with a generated model's own members</td>
+              <td>
+                A property called <code>to_dict</code> breaks every call on that model. The reserved
+                list is derived from the pinned generator itself.
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <h3>Read the record</h3>
+      <p>
+        <code>src/record</code> asks each registry the contract publishes to for its highest
+        published version, downloads that package, and extracts the <code>openapi.json</code> stored
+        inside it, along with the Speckify version that built it. If a contract's languages have
+        drifted apart because one publish failed, the highest version wins as the baseline.
+      </p>
+
+      <h2 id="gate">The version gate</h2>
+      <p>The bump is the highest of four independent judgements:</p>
+      <pre><code>bump = max(allow-list, oasdiff classification, toolchain impact, client surface)</code></pre>
+
+      <h3>Why an allow-list</h3>
+      <p>
+        Early designs trusted oasdiff's labels for each change and patched the places where they
+        were missing or wrong. Review kept finding more such places: a keyword oasdiff does not
+        check at some location, a narrowing it labels as a widening, a subtree its
+        <code>allOf</code> flattening drops. A list of known holes can never be shown complete, so
+        the default was inverted. Speckify diffs the two specs itself, and every edit is
+        <strong>major</strong> unless it matches a short list of shapes known to be safe.
+      </p>
+      <figure class="diagram">
+        <pre class="mermaid">
+flowchart LR
+  E["One structural edit<br/>location + action"] --> D{"Documentation only?"}
+  D -- "yes" --> P["patch"]
+  D -- "no" --> L{"Matches an allow-list rule<br/>in every direction it reaches?"}
+  L -- "yes" --> MI["minor"]
+  L -- "no" --> MA["major"]
+</pre>
+      </figure>
+      <p>
+        Before diffing, both documents are prepared the same way. Documentation keys are stripped
+        only where they are annotations, so a property that happens to be called
+        <code>title</code> is still data. Every local <code>$ref</code> is inlined where it is used,
+        so a change to a shared component shows up at each place it reaches. Retargeting a
+        <code>$ref</code> leaves a marker, because it renames a generated type.
+      </p>
+
+      <h3>Direction</h3>
+      <p>
+        The same change can be safe one way and breaking the other. Relaxing
+        <code>maxLength</code> lets a client send more, which is safe; in a response, it means a
+        client can receive something it was not built for.
+      </p>
+      <div class="tbl">
+        <table>
+          <thead>
+            <tr>
+              <th>Where the edit is</th>
+              <th>Direction</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>Parameters, request bodies</td>
+              <td>request</td>
+            </tr>
+            <tr>
+              <td>Response bodies and headers</td>
+              <td>response</td>
+            </tr>
+            <tr>
+              <td>Callbacks and webhooks</td>
+              <td>inverted; nothing is allowed there in v1, so any change is major</td>
+            </tr>
+            <tr>
+              <td>A component used on both sides</td>
+              <td>judged at every use; minor only if allowed in every direction</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+      <p>
+        Schema rules apply only at plain positions, reached through
+        <code>properties</code>, <code>items</code>, <code>allOf</code> and
+        <code>additionalProperties</code>. Under <code>anyOf</code>, <code>oneOf</code>,
+        <code>not</code> or a conditional, relaxing one part can narrow the whole, so nothing there
+        is allowed.
+      </p>
+
+      <h3>The allow-list</h3>
+      <div class="tbl">
+        <table>
+          <thead>
+            <tr>
+              <th>Rule</th>
+              <th>Direction</th>
+              <th>Why it is safe</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><code>operation-added</code></td>
+              <td>none</td>
+              <td>No existing call can reach it.</td>
+            </tr>
+            <tr>
+              <td><code>optional-parameter-added</code></td>
+              <td>request</td>
+              <td>Existing calls omit it and stay valid.</td>
+            </tr>
+            <tr>
+              <td><code>request-optional-property-added</code></td>
+              <td>request</td>
+              <td>Existing bodies omit it and stay valid.</td>
+            </tr>
+            <tr>
+              <td><code>request-constraint-relaxed</code></td>
+              <td>request</td>
+              <td>Every request valid before is still valid.</td>
+            </tr>
+            <tr>
+              <td><code>parameter-became-optional</code></td>
+              <td>request</td>
+              <td>Existing calls still send it.</td>
+            </tr>
+            <tr>
+              <td><code>response-optional-property-added</code></td>
+              <td>response</td>
+              <td>Clients ignore a field they do not know.</td>
+            </tr>
+            <tr>
+              <td><code>response-optional-header-added</code></td>
+              <td>response</td>
+              <td>Clients ignore a header they do not know.</td>
+            </tr>
+            <tr>
+              <td><code>unreferenced-schema-added</code></td>
+              <td>none</td>
+              <td>Adds a generated type and changes none.</td>
+            </tr>
+            <tr>
+              <td><code>deprecated-set</code></td>
+              <td>any</td>
+              <td>An announcement; nothing changes on the wire.</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+      <p>
+        Everything else is major, including any new request constraint, any relaxation in a
+        response, anything under a callback, and any change to
+        <code>servers</code> or security. The full rules and their exact matching are in
+        <code>src/version/allow-list.md</code>.
+      </p>
+
+      <h3>oasdiff and the classification map</h3>
+      <p>
+        oasdiff 1.32.1 still runs on every plan, always with
+        <code>--flatten-allof</code>; without the flag a breaking change inside an
+        <code>allOf</code> is reported one level too low. Its changes become the changelog, and each
+        is looked up in a committed classification map that covers every one of that release's 755
+        rules. The map was drafted from oasdiff's source and reviewed row by row. A rule the map
+        does not know counts as major, and a test fails the build if the pinned oasdiff grows a rule
+        the map does not cover. If oasdiff itself fails, the plan stops.
+      </p>
+
+      <h3>Toolchain impact</h3>
+      <p>
+        A Speckify release can change generated code without any spec change.
+        <code>data/toolchain-impact.json</code> records each release's declared impact on consumers,
+        and the plan compares the Speckify version that built the previous package with the current
+        one.
+      </p>
+
+      <h2 id="surface">Comparing the generated code</h2>
+      <p>
+        A spec can change in a way the allow-list judges safe and still break generated code. A new
+        schema named <code>pet</code> beside <code>Pet</code> renames an existing generated type. So
+        every plan with a previous version regenerates both versions with the current toolchain and
+        compares their public surfaces, using each language's own structural model of its symbols.
+        No generated source text is parsed.
+      </p>
+      <figure class="diagram">
+        <pre class="mermaid">
+flowchart TD
+  P["Previous spec<br/>from the registry"] --> G1["Generate with the<br/>current toolchain"]
+  N["New spec"] --> G2["Generate with the<br/>current toolchain"]
+  G1 --> TS["TypeScript: one ts.Program<br/>over both packages' .d.ts files"]
+  G2 --> TS
+  G1 --> PY["Python: griffe object tree<br/>of both packages"]
+  G2 --> PY
+  TS --> S{"Client or server<br/>surface?"}
+  PY --> S
+  S -- "client" --> B["Joins the bump"]
+  S -- "server" --> R["Reported only"]
+</pre>
+      </figure>
+      <h3>TypeScript</h3>
+      <p>
+        Both packages' declaration files load into one TypeScript program, so a single type checker
+        can relate a previous type to a current one. Exports come from
+        <code>checker.getExportsOfModule</code> for each entry point in <code>package.json</code>'s
+        <code>exports</code> map. Compatibility uses the checker's own
+        <code>isTypeAssignableTo</code>, so no type rules are reimplemented. Direction comes from
+        use: types reached as parameters are inputs and must accept everything they accepted before;
+        types reached as return values are outputs and must not produce anything new. Zod schemas
+        are compared by <code>z.output&lt;typeof schema&gt;</code>. Any import the checker cannot
+        resolve stops the run, because an unresolved type becomes <code>any</code> and would make
+        every change look compatible.
+      </p>
+      <h3>Python</h3>
+      <p>
+        <a href="https://mkdocstrings.github.io/griffe/">griffe</a> loads each package statically
+        from its syntax tree. Speckify records modules, public names, parameter kinds and order, and
+        model constructors. Generated models are keyword-only: Speckify overrides one
+        openapi-python-client template to add <code>kw_only=True</code>. So adding a field anywhere
+        in a model cannot break a caller by shifting positional arguments.
+      </p>
+      <h3>Why the server side only reports</h3>
+      <p>
+        The version is judged from the point of view of an existing client. A generated server
+        package is used only by the producer who changed the spec, in the same pull request, so a
+        break there is caught by their own build. Server changes appear in the pull request comment
+        but never raise the version.
+      </p>
+
+      <h2 id="codegen">What gets generated</h2>
+      <figure class="diagram">
+        <pre class="mermaid">
+flowchart LR
+  B["Bundled spec<br/>at version X.Y.Z"] --> T["TypeScript package"]
+  B --> Y["Python package"]
+  T --> T1[". client SDK"]
+  T --> T2["./types"]
+  T --> T3["./zod validators"]
+  T --> T4["./server Handlers +<br/>node:http adapter"]
+  Y --> Y1["client<br/>openapi-python-client"]
+  Y --> Y2["models<br/>pydantic v2"]
+  Y --> Y3["server Handlers Protocol +<br/>FastAPI router"]
+</pre>
+        <figcaption>
+          Every package also carries <code>openapi.json</code> (the bundled spec, stamped with its
+          version), <code>CHANGELOG.md</code>, and the Speckify version that built it.
+        </figcaption>
+      </figure>
+      <p>
+        Server code is an interface you implement, never stubs you edit. A spec change then shows up
+        as a type error in your service instead of a merge conflict in generated code.
+      </p>
+      <ul>
+        <li>
+          <strong>TypeScript server.</strong> A <code>Handlers</code> interface with one method per
+          operation and a <code>node:http</code> adapter that matches routes, coerces and validates
+          parameters with the zod schemas, and caps JSON bodies at 1 MiB by default. A
+          <code>beforeHandle</code> hook runs before any parsing, so request signatures can be
+          checked first. <code>application/octet-stream</code> bodies are passed through as a
+          stream, never buffered.
+        </li>
+        <li>
+          <strong>Python server.</strong> A <code>Handlers</code> <code>Protocol</code> with one
+          async method per operation, and <code>create_router(handlers)</code> returning a FastAPI
+          router. It validates parameters and JSON bodies before your handler runs;
+          <code>docs/server-boilerplate.md</code> lists exactly what is and is not checked.
+        </li>
+        <li>
+          <strong>Completeness guards.</strong> Generators have silently dropped operations before.
+          After generating, Speckify checks that every <code>operationId</code> produced a client
+          function and a handler method, and fails if one is missing.
+        </li>
+      </ul>
+
+      <h2 id="publish">Publishing and the record</h2>
+      <p>
+        Publishing reconciles each registry with the plan rather than replaying a diff. A target
+        that already has the version is skipped, which makes re-running a failed publish safe.
+      </p>
+      <figure class="diagram">
+        <pre class="mermaid">
+flowchart TD
+  S["Planned version X.Y.Z"] --> Q{"Does this registry<br/>already have X.Y.Z?"}
+  Q -- "no" --> P["Publish it"]
+  Q -- "yes" --> C{"Is its openapi.json the<br/>spec we just built?"}
+  C -- "yes" --> K["Skip: already published"]
+  C -- "no" --> F["Fail loudly: another publish<br/>raced this one; rerun"]
+  P --> T["Tag and GitHub Release<br/>a failure here only warns"]
+</pre>
+      </figure>
+      <ul>
+        <li>
+          <strong>npm packages</strong> go to GitHub Packages under the configured owner. GitHub
+          Packages requires the package scope to equal the owner, so Speckify checks that when it
+          loads the config and again just before publishing.
+        </li>
+        <li>
+          <strong>Python packages</strong> go to PyPI through trusted publishing. The workflow's
+          OIDC identity is exchanged for a short-lived upload credential, so no PyPI token is ever
+          stored.
+        </li>
+        <li>
+          <strong>Nothing is overwritten.</strong> Registries refuse to republish a version, and
+          Speckify never deletes or force-updates one.
+        </li>
+      </ul>
+
+      <h2 id="supply">Supply chain</h2>
+      <div class="tbl">
+        <table>
+          <thead>
+            <tr>
+              <th>Control</th>
+              <th>What it prevents</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>
+                Every GitHub Action pinned by commit SHA, checked against its tag by
+                <code>scripts/verify-action-pins.mjs</code>
+              </td>
+              <td>A moved tag running different code.</td>
+            </tr>
+            <tr>
+              <td>
+                oasdiff downloaded at a pinned version, checked against the release's archive
+                checksum and a committed checksum of the extracted binary, on every use, with an
+                atomic write to the cache
+              </td>
+              <td>A tampered download or cache running unverified.</td>
+            </tr>
+            <tr>
+              <td>
+                Python generators pinned in <code>python/uv.lock</code> and run with
+                <code>uv run --frozen</code>
+              </td>
+              <td>A generator upgrade changing output unnoticed.</td>
+            </tr>
+            <tr>
+              <td>
+                Drift tests on the classification map, the reserved Python names and the vendor
+                extensions each generator reads
+              </td>
+              <td>A tool upgrade silently invalidating Speckify's assumptions.</td>
+            </tr>
+            <tr>
+              <td>
+                Speckify itself published to npm with provenance and to PyPI through trusted
+                publishing, from a signed <code>v*.*.*</code> tag
+              </td>
+              <td>Tampered or untraceable releases.</td>
+            </tr>
+            <tr>
+              <td>No token needed to install or build Speckify from source</td>
+              <td>Contributors needing private credentials.</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <h2 id="deps">Dependencies</h2>
+      <div class="tbl">
+        <table>
+          <thead>
+            <tr>
+              <th>Dependency</th>
+              <th>Pinned</th>
+              <th>Role</th>
+              <th>Licence</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>oasdiff</td>
+              <td>1.32.1</td>
+              <td>OpenAPI diff; writes the changelog and feeds the classification map</td>
+              <td>Apache-2.0</td>
+            </tr>
+            <tr>
+              <td>@hey-api/openapi-ts</td>
+              <td>0.99.0</td>
+              <td>TypeScript client, types and zod schemas</td>
+              <td>MIT</td>
+            </tr>
+            <tr>
+              <td>typescript</td>
+              <td>5.9.3</td>
+              <td>Compiles generated packages and powers the TypeScript surface diff</td>
+              <td>Apache-2.0</td>
+            </tr>
+            <tr>
+              <td>zod</td>
+              <td>4.6.5</td>
+              <td>Runtime validation in generated packages; Speckify's config schema</td>
+              <td>MIT</td>
+            </tr>
+            <tr>
+              <td>@apidevtools/json-schema-ref-parser</td>
+              <td>16.0.3</td>
+              <td>Bundling external <code>$ref</code>s</td>
+              <td>MIT</td>
+            </tr>
+            <tr>
+              <td>openapi-python-client</td>
+              <td>0.29.1</td>
+              <td>Python client</td>
+              <td>MIT</td>
+            </tr>
+            <tr>
+              <td>datamodel-code-generator</td>
+              <td>0.83.0</td>
+              <td>Python pydantic v2 models</td>
+              <td>MIT</td>
+            </tr>
+            <tr>
+              <td>griffelib</td>
+              <td>2.3.0</td>
+              <td>Python surface diff</td>
+              <td>ISC</td>
+            </tr>
+            <tr>
+              <td>uv</td>
+              <td>via setup-uv</td>
+              <td>Runs the pinned Python toolchain and builds wheels</td>
+              <td>Apache-2.0 / MIT</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+      <p class="muted">
+        TypeScript is pinned at 5.9.3 because TypeScript 7 crashes the pinned hey-api. Pins move
+        deliberately, with a toolchain-impact entry for the Speckify release that moves them.
+      </p>
+
+      <h2 id="tests">How it is tested</h2>
+      <p>
+        Unit tests that mirror their own implementation prove little, so the suite leans on real
+        tools and on independent checks.
+      </p>
+      <ul>
+        <li>
+          <strong>Real tools, in CI.</strong> The real oasdiff binary, the real generators, a real
+          <code>npm pack</code> and clean install of Speckify, and wheels installed into clean
+          environments. CI runs them; none are skipped.
+        </li>
+        <li>
+          <strong>Independent oracles.</strong> A property test generates tens of thousands of
+          random edits and checks the gate against a separately written oracle: nothing the oracle
+          calls unsafe may come out below major.
+        </li>
+        <li>
+          <strong>Every past bug is a test.</strong> Each under-bump found in review is a scenario,
+          run alone and alongside an unrelated harmless change, against both stubbed and real
+          oasdiff.
+        </li>
+        <li>
+          <strong>Sabotage.</strong> Each control was broken on purpose to see its tests go red,
+          then restored, before it was trusted.
+        </li>
+      </ul>
+
+      <h2 id="source">Source map</h2>
+      <div class="tbl">
+        <table>
+          <thead>
+            <tr>
+              <th>Path</th>
+              <th>Responsibility</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><code>src/cli.ts</code></td>
+              <td>
+                Commands: <code>init</code>, <code>check</code>, <code>plan</code>,
+                <code>build</code>, <code>publish</code>, <code>config get</code>
+              </td>
+            </tr>
+            <tr>
+              <td><code>src/config</code></td>
+              <td><code>speckify.yaml</code> schema and loader</td>
+            </tr>
+            <tr>
+              <td><code>src/bundle</code></td>
+              <td>Bundling, normalisation, <code>$ref</code> containment</td>
+            </tr>
+            <tr>
+              <td><code>src/lint</code></td>
+              <td>The lint rules</td>
+            </tr>
+            <tr>
+              <td><code>src/record</code></td>
+              <td>Reading the last published version and spec from each registry</td>
+            </tr>
+            <tr>
+              <td><code>src/oasdiff</code></td>
+              <td>Resolving, verifying and running oasdiff</td>
+            </tr>
+            <tr>
+              <td><code>src/version</code></td>
+              <td>The structural diff, the allow-list, the classification map, bumps</td>
+            </tr>
+            <tr>
+              <td><code>src/surface</code></td>
+              <td>The generated-surface diff, TypeScript and Python</td>
+            </tr>
+            <tr>
+              <td><code>src/plan.ts</code></td>
+              <td>Composing all of the above into one plan per contract</td>
+            </tr>
+            <tr>
+              <td><code>src/codegen</code></td>
+              <td>TypeScript and Python package generation and builds</td>
+            </tr>
+            <tr>
+              <td><code>src/publish</code>, <code>src/github</code>, <code>src/comment</code></td>
+              <td>Publishing, releases and the pull request comment</td>
+            </tr>
+            <tr>
+              <td><code>src/init</code></td>
+              <td>Writing the adopter's config and workflow</td>
+            </tr>
+            <tr>
+              <td><code>data/</code></td>
+              <td>The classification map, the oasdiff rule catalogue, toolchain impact</td>
+            </tr>
+            <tr>
+              <td><code>action.yml</code>, <code>.github/workflows</code></td>
+              <td>The composite Action, CI and the release workflow</td>
+            </tr>
+            <tr>
+              <td><code>launcher/</code></td>
+              <td>The PyPI <code>speckify</code> launcher, which runs the npm CLI</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <h2 id="limits">Limits and open work</h2>
+      <ul>
+        <li>TypeScript and Python only. No Go.</li>
+        <li>
+          No standalone JSON Schema contracts yet; JSON Schema is supported inside OpenAPI 3.1
+          documents.
+        </li>
+        <li>Registries other than GitHub Packages and PyPI are out of scope.</li>
+        <li>
+          Speckify over-bumps by design. Some compatible changes, such as adding a value to an enum
+          used only in requests, currently come out major.
+        </li>
+        <li>
+          Regenerating the previous package with the current toolchain isolates the spec's effect,
+          so a generator upgrade's own effect relies on the toolchain-impact declaration. Nothing
+          yet forces that declaration when a pin moves.
+        </li>
+        <li>
+          Property names built from Unicode lookalike characters can slip past the reserved-name
+          lint.
+        </li>
+      </ul>
+      <p class="muted">
+        Open follow-ups are tracked in the project's issues. Contributions are welcome: see
+        <code>CONTRIBUTING.md</code>.
+      </p>
+
+      <aside class="disclosure" role="note" aria-label="AI authorship disclosure, repeated">
+        <p>
+          Written by <strong>Claude Opus 5.5</strong> (Anthropic). Speckify is
+          <span class="oss">open source</span> under the MIT licence.
+        </p>
+      </aside>
+    </main>
+    <script src="https://cdn.jsdelivr.net/npm/mermaid@11.4.1/dist/mermaid.min.js"></script>
+    <script>
+      const light = document.documentElement.dataset.theme === 'light';
+      mermaid.initialize({
+        startOnLoad: false,
+        theme: light ? 'neutral' : 'dark',
+        securityLevel: 'strict',
+      });
+      mermaid.run({ querySelector: 'pre.mermaid:not([data-processed])' });
+    </script>
+  </body>
+</html>
