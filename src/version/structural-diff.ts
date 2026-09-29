@@ -34,17 +34,12 @@ export interface PreparedDocument {
 
 const PLACEHOLDER_VERSION = '0.0.0';
 
-const DOC_ONLY_KEYS = new Set([
-  'description',
-  'summary',
-  'example',
-  'examples',
-  'externalDocs',
-  'title',
-]);
+// A schema's `title` is not here: datamodel-code-generator can name a
+// generated class after it, so editing one can rename a public type.
+const DOC_ONLY_KEYS = new Set(['description', 'summary', 'example', 'examples', 'externalDocs']);
 
 const ROOT_ANNOTATION_KEYS = new Set(['tags']);
-const INFO_ANNOTATION_KEYS = new Set(['contact', 'license', 'termsOfService']);
+const INFO_ANNOTATION_KEYS = new Set(['contact', 'license', 'termsOfService', 'title']);
 
 /** Keys whose children are producer-chosen names, never keywords. */
 const NAME_MAP_KEYS = new Set([

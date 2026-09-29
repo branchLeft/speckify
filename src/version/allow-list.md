@@ -33,8 +33,10 @@ Both documents are prepared the same way before diffing
 
 1. `info.version` is normalised to the `0.0.0` placeholder.
 2. Documentation-only keys are stripped in annotation position: `description`,
-   `summary`, `title`, `example`, `examples` and `externalDocs`. So are the root
-   `tags` list and `info.contact`, `info.license` and `info.termsOfService`.
+   `summary`, `example`, `examples` and `externalDocs`. So are the root `tags`
+   list and `info.contact`, `info.license`, `info.termsOfService` and
+   `info.title`. A schema's `title` is not stripped: a generator can name a
+   class after it, so editing one can rename a public type.
    A key is in annotation position unless it is a member name of a name map.
    A property called `title` is data, and so is everything inside a
    `default`, `const` or `enum` value.

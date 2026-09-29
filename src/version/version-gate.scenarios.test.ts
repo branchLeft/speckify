@@ -450,6 +450,19 @@ describe('every review-cycle scenario is major, against stubbed oasdiff output',
     expect(summary(await plan(base, described, stub([])))).toBe('patch 1.2.4');
     expect(summary(await plan(base, build({}, '0.0.0', false), stub([])))).toBe('none 1.2.3');
   });
+
+  it('a schema title edit is major (it can rename a generated class); info.title stays patch', async () => {
+    const titled = (title: string): Side => ({ post: body(obj({ a: S() }, { title })) });
+    const base = build(titled('Thing'), '1.2.3', false);
+    expect(summary(await plan(base, build(titled('Widget'), '0.0.0', false), stub([])))).toBe(
+      'major 2.0.0',
+    );
+    const renamedApi = {
+      ...build(titled('Thing'), '0.0.0', false),
+      info: { title: 'Widgets', version: '0.0.0' },
+    };
+    expect(summary(await plan(base, renamedApi, stub([])))).toBe('patch 1.2.4');
+  });
 });
 
 /** One scenario per allow-list rule, each expected minor on its own. */

@@ -60,7 +60,7 @@ For each contract, on every `speckify check` or `speckify publish` run:
    two specs itself, structurally, on dereferenced documents, and judges
    every edit on its own:
 
-   - a documentation-only difference (a description, summary, title,
+   - a documentation-only difference (a description, summary, the API's title,
      example, or a vendor extension no pinned generator reads) is
      **`patch`**;
    - an edit matching one of a short list of change shapes known to be
