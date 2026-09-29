@@ -196,6 +196,21 @@ describe('compareTypeScriptPackages', { timeout: 60_000 }, () => {
     );
     await expect(compare(broken, broken)).rejects.toThrow(/could not resolve every import/);
   });
+
+  it('fails loudly on an unresolved import reached only through a file that is not itself an entry point', async () => {
+    // The entry point re-exports a plain sibling file the package.json
+    // `exports` map never names, so it's only in the program because
+    // `index.d.ts` pulled it in transitively — exactly what
+    // `assertModulesResolved` missed when it checked entry files only.
+    const dir = await pkg("export * from './helper.js';\nexport {};\n");
+    await writeFile(
+      path.join(dir, 'dist', 'helper.d.ts'),
+      "import type { Ghost } from 'speckify-does-not-exist';\nexport declare const haunted: Ghost;\n",
+    );
+    await expect(compareTypeScriptPackages(dir, dir)).rejects.toThrow(
+      /could not resolve every import/,
+    );
+  });
 });
 
 describe('removedProperties', () => {

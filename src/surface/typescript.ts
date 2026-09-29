@@ -81,6 +81,25 @@ function moduleSpecifierOf(node: ts.Node): ts.Expression | undefined {
 }
 
 /**
+ * Every source file in `program` that belongs to one of `dirs` (a compared
+ * package's own root), excluding anything under a `node_modules` inside it
+ * (third-party packages like zod, or `@types/node`) and, since they live
+ * outside `dirs` entirely, TypeScript's own lib `.d.ts` files. An entry
+ * point's transitively imported files are only reachable this way — the
+ * program indexes them, but they're never themselves in `files`.
+ */
+function packageSourceFiles(program: ts.Program, dirs: readonly string[]): string[] {
+  return program
+    .getSourceFiles()
+    .map((source) => source.fileName)
+    .filter(
+      (fileName) =>
+        dirs.some((dir) => fileName.startsWith(dir + path.sep)) &&
+        !fileName.includes(`${path.sep}node_modules${path.sep}`),
+    );
+}
+
+/**
  * Throws when one of `files` imports a module the checker could not
  * resolve, rather than let it silently type-check as `any` — mutually
  * assignable with everything, so the real edit compares as "no change".
@@ -195,7 +214,11 @@ async function buildModels(
   const entryFiles = [...sides.previous.entries.values(), ...sides.current.entries.values()];
   const options = compilerOptions(currentDir);
   const first = ts.createProgram(entryFiles, options);
-  assertModulesResolved(first, entryFiles, 'first pass');
+  assertModulesResolved(
+    first,
+    packageSourceFiles(first, [sides.previous.dir, sides.current.dir]),
+    'first pass',
+  );
   const fromZod = (type: ts.Type): boolean =>
     (type.aliasSymbol ?? type.getSymbol())?.declarations?.some((declaration) =>
       declaration.getSourceFile().fileName.startsWith(zodDir + path.sep),
