@@ -42,15 +42,15 @@ pnpm install
 
 ## Project layout
 
-| Path                                                                                | Owns                                                             |
-| ----------------------------------------------------------------------------------- | ---------------------------------------------------------------- |
-| `src/bundle`, `src/lint`, `src/oasdiff`, `src/version`, `src/record`, `src/plan.ts` | Bundling, linting, diffing, classification, the registry record  |
-| `src/codegen/typescript`, `src/codegen/python`                                      | Client/server package generation                                 |
-| `src/publish`, `src/github`, `src/comment`                                          | Publishing to GitHub Packages / PyPI, releases, the PR comment   |
-| `src/init`                                                                          | `speckify init`                                                  |
-| `action.yml`, `.github/workflows`                                                   | The composite action and reusable workflow a producer repo calls |
-| `launcher/`                                                                         | The PyPI launcher package (`pip install speckify`)               |
-| `examples/`                                                                         | A small contract used by the docs and an end-to-end test         |
+| Path                                                                                | Owns                                                                                                                                                                              |
+| ----------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `src/bundle`, `src/lint`, `src/oasdiff`, `src/version`, `src/record`, `src/plan.ts` | Bundling, linting, diffing, classification, the registry record                                                                                                                   |
+| `src/codegen/typescript`, `src/codegen/python`                                      | Client/server package generation                                                                                                                                                  |
+| `src/publish`, `src/github`, `src/comment`                                          | Publishing to GitHub Packages / PyPI, releases, the PR comment                                                                                                                    |
+| `src/init`                                                                          | `speckify init`                                                                                                                                                                   |
+| `action.yml`, `.github/workflows`                                                   | The composite action a producer repo's own `check`/`publish` jobs call directly, plus a check-only reusable workflow (never for `publish` — PyPI can't trust-publish through one) |
+| `launcher/`                                                                         | The PyPI launcher package (`pip install speckify`)                                                                                                                                |
+| `examples/`                                                                         | A small contract used by the docs and an end-to-end test                                                                                                                          |
 
 ## Running the example end to end
 

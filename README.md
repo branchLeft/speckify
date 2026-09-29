@@ -18,7 +18,8 @@ npx speckify init --owner your-github-org
 
 This detects `openapi*.yaml` / `openapi*.json`, writes a starter
 `speckify.yaml` (one contract per spec found), and writes
-`.github/workflows/speckify.yml` wired to Speckify's reusable workflow.
+`.github/workflows/speckify.yml`: a `check` job and a `publish` job, each
+calling Speckify's composite action directly, pinned to a single commit.
 Commit both, open a pull request, and Speckify comments the version it
 would publish and why. Merge, and it publishes.
 
@@ -100,9 +101,19 @@ registry keeps a plain `npm install`/`pnpm install` of a public package
 registry as normal.
 
 **PyPI** (Python): add this repository as a trusted publisher on the PyPI
-project (Settings → Publishing → GitHub), naming this repo, the
-`speckify.yml` workflow file, and the `release` environment if one is
-configured. No PyPI token is ever stored as a secret.
+project (Settings → Publishing → GitHub), naming **this repo**, its own
+`.github/workflows/speckify.yml` (the file `speckify init` wrote here,
+whose `publish` job calls Speckify's composite action directly), and the
+`release` environment — the `publish` job always runs under it. No PyPI
+token is ever stored as a secret.
+
+PyPI's trusted-publishing docs are explicit that a _reusable_ workflow
+cannot be the workflow a Trusted Publisher is configured against (the
+OIDC token a `workflow_call`-invoked job receives names the reusable
+workflow, not the caller). `branchLeft/speckify`'s own
+`.github/workflows/speckify.yml` is a reusable workflow, but it is
+check-only for exactly this reason — never point a Trusted Publisher at
+it, and never add a `publish` job back into it.
 
 ## Limitations
 

@@ -1,9 +1,18 @@
-name: speckify (reusable)
+name: speckify (reusable, check only)
 
-# Callable from any producer repo via `workflow_call` — see `speckify init`,
-# which writes the caller file this is meant to be used from. `check` runs
-# on the PR and comments the proposed version bump; `publish` runs on push
-# to the default branch and ships it.
+# Callable from any producer repo via `workflow_call` for the `check` gate
+# only — see `speckify init`, which no longer uses this for `publish`.
+#
+# PyPI's trusted-publishing docs are explicit that a reusable workflow
+# cannot be the workflow a Trusted Publisher is configured against: a job
+# invoked via `workflow_call` gets an OIDC token whose `job_workflow_ref`
+# claim names *this* workflow, not the caller's own file, so PyPI's
+# trusted-publisher match (the caller repo + the caller's own workflow
+# filename) can never succeed for a job that runs here. `speckify init`
+# therefore writes a caller workflow whose `publish` job calls Speckify's
+# composite action directly instead. This reusable workflow is kept only
+# for `check` (which publishes nothing, so the constraint doesn't apply)
+# — never wire a `publish` job into it again.
 #
 # `inputs.ref` is the exact Speckify commit (or tag, if SHA resolution
 # fell back) the caller resolved when it wrote its `uses:` pin, passed
@@ -53,31 +62,3 @@ jobs:
           config: ${{ inputs.config }}
         env:
           GITHUB_TOKEN: ${{ github.token }}
-
-  publish:
-    if: github.event_name == 'push' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch)
-    runs-on: ubuntu-latest
-    timeout-minutes: 15
-    permissions:
-      contents: write
-      packages: write
-      id-token: write
-    steps:
-      - name: Checkout the caller repository
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-
-      - name: Checkout Speckify
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          repository: branchLeft/speckify
-          ref: ${{ inputs.ref }}
-          path: .speckify
-
-      - name: speckify publish
-        uses: ./.speckify
-        with:
-          command: publish
-          config: ${{ inputs.config }}
-        env:
-          GITHUB_TOKEN: ${{ github.token }}
-          NODE_AUTH_TOKEN: ${{ github.token }}

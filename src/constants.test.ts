@@ -17,8 +17,9 @@ describe('SPECKIFY_REPO', () => {
       tag: 'v1.2.0',
       configPath: 'speckify.yaml',
     });
-    expect(yamlText).toContain(
-      `uses: branchLeft/speckify/.github/workflows/speckify.yml@${FORTY_HEX} # v1.2.0`,
-    );
+    // B10: the generated workflow calls the composite action directly, not
+    // Speckify's reusable workflow (which PyPI's trusted publishing can't
+    // be configured against) -- see workflow-template.test.ts.
+    expect(yamlText).toContain(`uses: branchLeft/speckify@${FORTY_HEX} # v1.2.0`);
   });
 });
