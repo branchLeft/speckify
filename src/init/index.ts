@@ -1,3 +1,4 @@
+export { readAgentSkillTemplate } from './agent-skill-template.js';
 export { contractNameFromSpecFile, renderSpeckifyConfigYaml } from './config-template.js';
 export { detectOpenapiSpecs } from './detect.js';
 export { InitError } from './errors.js';

@@ -2,6 +2,7 @@ import { mkdir, stat, writeFile } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
 
 import type { FetchLike } from '../record/index.js';
+import { readAgentSkillTemplate } from './agent-skill-template.js';
 import { renderSpeckifyConfigYaml } from './config-template.js';
 import { detectOpenapiSpecs } from './detect.js';
 import { InitError } from './errors.js';
@@ -19,6 +20,8 @@ export interface RunInitOptions {
   speckifyRepo: string;
   configPath?: string | undefined;
   force?: boolean | undefined;
+  /** Skips writing the `.claude/skills/speckify/SKILL.md` agent skill. */
+  noAgentSkill?: boolean | undefined;
   fetchImpl?: FetchLike | undefined;
 }
 
@@ -28,6 +31,10 @@ export interface RunInitResult {
   contracts: string[];
   /** Set when the workflow ref fell back to a tag instead of a resolved SHA. */
   warning?: string;
+  /** Set to the written path, or `undefined` when skipped or already present. */
+  agentSkillPath?: string;
+  /** True when an existing agent skill file was kept rather than overwritten. */
+  agentSkillKept?: boolean;
 }
 
 async function exists(path: string): Promise<boolean> {
@@ -49,6 +56,9 @@ async function refuseExisting(path: string, force: boolean): Promise<void> {
  * Detects OpenAPI documents in `cwd`, writes a starter `speckify.yaml` for
  * them, and writes the caller workflow that wires this repo into Speckify's
  * reusable workflow. Refuses to overwrite either file unless `force` is set.
+ * Also writes `.claude/skills/speckify/SKILL.md`, unless `noAgentSkill` is
+ * set -- that file is never overwritten, `force` included: it's meant to be
+ * a starting point a repo can go on to edit for itself.
  *
  * @throws {InitError} if no spec is found, or a target file exists without `--force`.
  */
@@ -93,5 +103,18 @@ export async function runInit(options: RunInitOptions): Promise<RunInitResult> {
   if (resolved.warning !== undefined) {
     result.warning = resolved.warning;
   }
+
+  if (!(options.noAgentSkill ?? false)) {
+    const agentSkillPath = join(options.cwd, '.claude', 'skills', 'speckify', 'SKILL.md');
+    if (await exists(agentSkillPath)) {
+      result.agentSkillKept = true;
+    } else {
+      const skillMarkdown = await readAgentSkillTemplate();
+      await mkdir(dirname(agentSkillPath), { recursive: true });
+      await writeFile(agentSkillPath, skillMarkdown, 'utf8');
+      result.agentSkillPath = agentSkillPath;
+    }
+  }
+
   return result;
 }

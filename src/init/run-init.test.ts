@@ -121,6 +121,78 @@ describe('runInit', () => {
     expect(workflow).toContain('@v1.0.0');
   });
 
+  it('writes the agent skill file by default', async () => {
+    await writeFile(join(cwd, 'openapi.yaml'), 'openapi: 3.1.0');
+    const fetchImpl = vi
+      .fn()
+      .mockResolvedValue(
+        new Response(JSON.stringify({ object: { sha: 'a'.repeat(40), type: 'commit' } })),
+      );
+
+    const result = await runInit({
+      cwd,
+      owner: 'acme',
+      speckifyVersion: '1.0.0',
+      speckifyRepo: 'branchLeft/speckify',
+      fetchImpl,
+    });
+
+    const skillPath = join(cwd, '.claude', 'skills', 'speckify', 'SKILL.md');
+    expect(result.agentSkillPath).toBe(skillPath);
+    expect(result.agentSkillKept).toBeUndefined();
+    const skill = await readFile(skillPath, 'utf8');
+    expect(skill).toContain('name: speckify');
+  });
+
+  it('skips the agent skill file when noAgentSkill is set', async () => {
+    await writeFile(join(cwd, 'openapi.yaml'), 'openapi: 3.1.0');
+    const fetchImpl = vi
+      .fn()
+      .mockResolvedValue(
+        new Response(JSON.stringify({ object: { sha: 'a'.repeat(40), type: 'commit' } })),
+      );
+
+    const result = await runInit({
+      cwd,
+      owner: 'acme',
+      speckifyVersion: '1.0.0',
+      speckifyRepo: 'branchLeft/speckify',
+      fetchImpl,
+      noAgentSkill: true,
+    });
+
+    expect(result.agentSkillPath).toBeUndefined();
+    expect(result.agentSkillKept).toBeUndefined();
+    await expect(
+      readFile(join(cwd, '.claude', 'skills', 'speckify', 'SKILL.md')),
+    ).rejects.toThrow();
+  });
+
+  it('never overwrites an existing agent skill file, even with force', async () => {
+    await writeFile(join(cwd, 'openapi.yaml'), 'openapi: 3.1.0');
+    await mkdir(join(cwd, '.claude', 'skills', 'speckify'), { recursive: true });
+    await writeFile(join(cwd, '.claude', 'skills', 'speckify', 'SKILL.md'), 'custom content');
+    const fetchImpl = vi
+      .fn()
+      .mockResolvedValue(
+        new Response(JSON.stringify({ object: { sha: 'a'.repeat(40), type: 'commit' } })),
+      );
+
+    const result = await runInit({
+      cwd,
+      owner: 'acme',
+      speckifyVersion: '1.0.0',
+      speckifyRepo: 'branchLeft/speckify',
+      fetchImpl,
+      force: true,
+    });
+
+    expect(result.agentSkillKept).toBe(true);
+    expect(result.agentSkillPath).toBeUndefined();
+    const skill = await readFile(join(cwd, '.claude', 'skills', 'speckify', 'SKILL.md'), 'utf8');
+    expect(skill).toBe('custom content');
+  });
+
   it('honours a custom configPath', async () => {
     await writeFile(join(cwd, 'openapi.yaml'), 'openapi: 3.1.0');
     const fetchImpl = vi
