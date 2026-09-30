@@ -171,14 +171,20 @@ async function spawnServer(
   };
 }
 
+/** The apps' own tsconfig, so the options the standards gate sees are the ones used here. */
+function appCompilerOptions(): ts.CompilerOptions {
+  const configPath = join(repoRoot, 'examples', 'dogfood', 'apps', 'tsconfig.json');
+  const read = ts.readConfigFile(configPath, (path) => ts.sys.readFile(path));
+  if (read.error !== undefined) {
+    throw new Error(ts.flattenDiagnosticMessageText(read.error.messageText, '\n'));
+  }
+  return ts.parseJsonConfigFileContent(read.config, ts.sys, dirname(configPath)).options;
+}
+
 function tsDiagnostics(entryFile: string, outDir: string): string[] {
   const compilerOptions: ts.CompilerOptions = {
-    target: ts.ScriptTarget.ES2022,
-    module: ts.ModuleKind.NodeNext,
-    moduleResolution: ts.ModuleResolutionKind.NodeNext,
-    strict: true,
-    skipLibCheck: false,
-    esModuleInterop: true,
+    ...appCompilerOptions(),
+    noEmit: false,
     outDir,
     rootDir: dirname(entryFile),
   };
