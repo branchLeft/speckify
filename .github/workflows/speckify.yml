@@ -1,0 +1,64 @@
+name: speckify (reusable, check only)
+
+# Callable from any producer repo via `workflow_call` for the `check` gate
+# only — see `speckify init`, which no longer uses this for `publish`.
+#
+# PyPI's trusted-publishing docs are explicit that a reusable workflow
+# cannot be the workflow a Trusted Publisher is configured against: a job
+# invoked via `workflow_call` gets an OIDC token whose `job_workflow_ref`
+# claim names *this* workflow, not the caller's own file, so PyPI's
+# trusted-publisher match (the caller repo + the caller's own workflow
+# filename) can never succeed for a job that runs here. `speckify init`
+# therefore writes a caller workflow whose `publish` job calls Speckify's
+# composite action directly instead. This reusable workflow is kept only
+# for `check` (which publishes nothing, so the constraint doesn't apply)
+# — never wire a `publish` job into it again.
+#
+# `inputs.ref` is the exact Speckify commit (or tag, if SHA resolution
+# fell back) the caller resolved when it wrote its `uses:` pin, passed
+# through explicitly rather than read back via `github.job_workflow_sha`:
+# that context value is not reliably populated inside a called reusable
+# workflow. `uses:` itself accepts no expression (Actions evaluates it
+# before any context exists), so the composite action can't be referenced
+# as `branchLeft/speckify@${{ inputs.ref }}` directly — each job instead
+# checks Speckify out at `inputs.ref` into `.speckify/` (`with.ref` *does*
+# accept an expression) and references it by that local path.
+
+on:
+  workflow_call:
+    inputs:
+      config:
+        description: 'Path to speckify.yaml, relative to the caller repository root.'
+        type: string
+        default: speckify.yaml
+      ref:
+        description: 'The Speckify commit SHA (or tag) this workflow file itself is pinned at.'
+        type: string
+        required: true
+
+jobs:
+  check:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      pull-requests: write
+    steps:
+      - name: Checkout the caller repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Checkout Speckify
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: branchLeft/speckify
+          ref: ${{ inputs.ref }}
+          path: .speckify
+
+      - name: speckify check
+        uses: ./.speckify
+        with:
+          command: check
+          config: ${{ inputs.config }}
+        env:
+          GITHUB_TOKEN: ${{ github.token }}

@@ -1,0 +1,9 @@
+dist/
+coverage/
+pnpm-lock.yaml
+src/version/fixtures/invalid.json
+.pytest_cache/
+# Vendored unchanged from their upstream sources, provenance recorded in
+# SOURCES.md alongside each — reformatting would break the "unchanged"
+# claim and diverge from the recorded commit's actual bytes.
+test/corpus/

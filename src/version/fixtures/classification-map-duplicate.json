@@ -1,0 +1,24 @@
+{
+  "oasdiffVersion": "1.32.1",
+  "perspective": "test fixture, not the real map",
+  "rules": [
+    {
+      "id": "response-required-property-removed",
+      "oasdiffLevel": "ERR",
+      "direction": "response",
+      "effect": "violation",
+      "bump": "major",
+      "reason": "first occurrence",
+      "source": "test-fixture"
+    },
+    {
+      "id": "response-required-property-removed",
+      "oasdiffLevel": "ERR",
+      "direction": "response",
+      "effect": "violation",
+      "bump": "minor",
+      "reason": "duplicate occurrence, for the duplicate-id test",
+      "source": "test-fixture"
+    }
+  ]
+}

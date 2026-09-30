@@ -1,0 +1,114 @@
+import { createRequire } from 'node:module';
+import path from 'node:path';
+import { mkdir, readdir, symlink } from 'node:fs/promises';
+import ts from 'typescript';
+import { BuildError } from './errors.js';
+
+const require = createRequire(import.meta.url);
+
+/**
+ * Resolves the on-disk directory a package installed, from Speckify's own
+ * module resolution. Resolves `<name>/package.json` to work with any
+ * installation context (development, npm install, or tool install).
+ * @throws if `name` cannot be resolved — Speckify's install is missing the
+ * declared runtime dependency, not a caller error.
+ * See build.md for installation context details.
+ */
+function resolvePackageDir(name: string): string {
+  return path.dirname(require.resolve(`${name}/package.json`));
+}
+
+/**
+ * Generated packages need zod's runtime alongside their generated
+ * `zod.gen.ts`. Symlinking it (and @types/node) into the generated
+ * package's own node_modules makes the package self-contained for
+ * compilation regardless of where its directory lives on disk.
+ */
+async function linkDependency(
+  packageDir: string,
+  moduleName: string,
+  realDir: string,
+): Promise<void> {
+  const target = path.join(packageDir, 'node_modules', moduleName);
+  await mkdir(path.dirname(target), { recursive: true });
+  await symlink(realDir, target, 'dir').catch((error: unknown) => {
+    const code = (error as NodeJS.ErrnoException).code;
+    if (code !== 'EEXIST') throw error;
+  });
+}
+
+async function listSourceFiles(dir: string): Promise<string[]> {
+  const entries = await readdir(dir, { withFileTypes: true });
+  const files = await Promise.all(
+    entries.map(async (entry) => {
+      const full = path.join(dir, entry.name);
+      if (entry.isDirectory()) return listSourceFiles(full);
+      return entry.name.endsWith('.ts') ? [full] : [];
+    }),
+  );
+  return files.flat();
+}
+
+function formatDiagnostics(diagnostics: readonly ts.Diagnostic[]): string[] {
+  const host: ts.FormatDiagnosticsHost = {
+    getCurrentDirectory: () => process.cwd(),
+    getCanonicalFileName: (fileName) => fileName,
+    getNewLine: () => ts.sys.newLine,
+  };
+  return diagnostics.map((diagnostic) => ts.formatDiagnostic(diagnostic, host).trim());
+}
+
+/**
+ * Compiles a generated package's `src/` to `dist/` (ESM + .d.ts), using the
+ * TypeScript compiler API in-process rather than shelling out to `tsc`, so
+ * the generated package needs no `typescript` devDependency of its own.
+ *
+ * The generated package's tsconfig is strict but deliberately does not set
+ * `exactOptionalPropertyTypes`: hey-api's own runtime template (client.gen.ts,
+ * core/*.gen.ts) fails that check on its own boilerplate, independent of any
+ * producer spec's shapes (confirmed in the conformance spike).
+ */
+export async function buildPackage(packageDir: string): Promise<void> {
+  await Promise.all([
+    linkDependency(packageDir, 'zod', resolvePackageDir('zod')),
+    linkDependency(packageDir, '@types/node', resolvePackageDir('@types/node')),
+  ]);
+
+  const srcDir = path.join(packageDir, 'src');
+  const fileNames = await listSourceFiles(srcDir);
+
+  const compilerOptions: ts.CompilerOptions = {
+    target: ts.ScriptTarget.ES2022,
+    module: ts.ModuleKind.NodeNext,
+    moduleResolution: ts.ModuleResolutionKind.NodeNext,
+    outDir: path.join(packageDir, 'dist'),
+    rootDir: srcDir,
+    declaration: true,
+    strict: true,
+    exactOptionalPropertyTypes: false,
+    skipLibCheck: true,
+    esModuleInterop: true,
+    forceConsistentCasingInFileNames: true,
+    resolveJsonModule: true,
+    // Without an explicit typeRoots, TypeScript's ambient @types discovery
+    // walks up from the *current working directory*, not from packageDir
+    // -- so the @types/node just symlinked into packageDir/node_modules
+    // above was only ever found by accident, when the caller's cwd
+    // happened to be a parent of packageDir (true of every existing test,
+    // all run from the repo root; false of a real `speckify build`
+    // invoked from an arbitrary working directory).
+    typeRoots: [path.join(packageDir, 'node_modules', '@types')],
+  };
+
+  const program = ts.createProgram(fileNames, compilerOptions);
+  const emitResult = program.emit();
+  const diagnostics = ts.getPreEmitDiagnostics(program).concat(emitResult.diagnostics);
+  const errors = diagnostics.filter((d) => d.category === ts.DiagnosticCategory.Error);
+
+  if (errors.length > 0) {
+    throw new BuildError(
+      `Generated package at ${packageDir} failed to compile with ${errors.length.toString()} error(s).`,
+      formatDiagnostics(errors),
+    );
+  }
+}

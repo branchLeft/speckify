@@ -1,0 +1,7 @@
+{
+  "oasdiff_1.32.1_darwin_all.tar.gz": "f80a51e54f3f651aa5fd0ed037d34439faabe50bdc68def77e05a18fba8a3228",
+  "oasdiff_1.32.1_linux_amd64.tar.gz": "7ce49adcfecb6cd746f3d8aada0b6ac32ab47d860ab24566ab481e645f1a62e4",
+  "oasdiff_1.32.1_linux_arm64.tar.gz": "b617e0500466936dd218a0f2c50d56e3c3a4ae6412926dc49ddc96b090590ab8",
+  "oasdiff_1.32.1_windows_amd64.tar.gz": "cce550834cddfa7584a5cfde8deb2a6a57effcbc445f040f4f7ac37da47e8173",
+  "oasdiff_1.32.1_windows_arm64.tar.gz": "d0b823bd93b7c6ba626c58347755829b03052a7fda50f0156b08e7049fe9c49e"
+}

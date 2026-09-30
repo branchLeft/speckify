@@ -1,0 +1,25 @@
+[project]
+name = "speckify-python-toolchain"
+version = "0.0.0"
+description = "Pinned Python generators the TypeScript driver runs as subprocesses (never installed globally)."
+requires-python = ">=3.11,<3.14"
+dependencies = [
+  "datamodel-code-generator==0.83.0",
+  "openapi-python-client==0.29.1",
+  "pydantic>=2.13,<3",
+  "jinja2>=3.1,<4",
+  "griffelib==2.3.0",
+]
+
+[dependency-groups]
+dev = [
+  "pytest>=8.3",
+  "pyright==1.1.414",
+  "mypy>=1.13",
+  "fastapi>=0.115",
+  "httpx>=0.27",
+  "uvicorn>=0.30",
+]
+
+[tool.uv]
+package = false

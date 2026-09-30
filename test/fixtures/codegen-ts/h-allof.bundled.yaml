@@ -1,0 +1,47 @@
+openapi: 3.1.0
+info:
+  title: AllOf Composition Fixture
+  version: 1.0.0
+paths:
+  /accounts/{id}:
+    get:
+      operationId: getAccount
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: An account
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Account'
+components:
+  schemas:
+    BaseEntity:
+      type: object
+      required:
+        - id
+        - createdAt
+      properties:
+        id:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+    Account:
+      allOf:
+        - $ref: '#/components/schemas/BaseEntity'
+        - type: object
+          required:
+            - owner
+            - balance
+          properties:
+            owner:
+              type: string
+            balance:
+              type: number
+              format: double

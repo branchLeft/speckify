@@ -1,0 +1,15 @@
+{
+  "oasdiffVersion": "1.32.1",
+  "perspective": "test fixture, not the real map",
+  "rules": [
+    {
+      "id": "some-rule",
+      "oasdiffLevel": "ERR",
+      "direction": "none",
+      "effect": "violation",
+      "bump": "huge",
+      "reason": "invalid bump value, for the schema-validation-failure test",
+      "source": "test-fixture"
+    }
+  ]
+}

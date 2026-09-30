@@ -1,0 +1,15 @@
+{
+  "oasdiffVersion": "1.0.0",
+  "perspective": "test fixture, not the real map",
+  "rules": [
+    {
+      "id": "some-rule",
+      "oasdiffLevel": "ERR",
+      "direction": "none",
+      "effect": "violation",
+      "bump": "major",
+      "reason": "pinned to a different oasdiff version than the one under test",
+      "source": "test-fixture"
+    }
+  ]
+}

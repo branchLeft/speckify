@@ -1,0 +1,13 @@
+{
+  "$id": "https://example.branchleft.co.uk/schemas/thing.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "properties": {
+    "id": { "type": "string" },
+    "kind": { "$ref": "#/$defs/ThingKind" }
+  },
+  "required": ["id"],
+  "$defs": {
+    "ThingKind": { "type": "string", "enum": ["a", "b"] }
+  }
+}

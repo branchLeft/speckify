@@ -1,0 +1,24 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "speckify"
+version = "0.0.0"
+description = "Launches the Speckify CLI (a Node package) via npx, so `pip install speckify` works without a separate Node install step for the package manager itself."
+readme = "README.md"
+license = "MIT"
+requires-python = ">=3.10"
+authors = [{ name = "Speckify" }]
+
+[project.urls]
+Homepage = "https://github.com/branchLeft/speckify"
+
+[project.scripts]
+speckify = "speckify_launcher.cli:main"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/speckify_launcher"]
+
+[dependency-groups]
+dev = ["pytest>=8.3", "pytest-cov>=6.0"]

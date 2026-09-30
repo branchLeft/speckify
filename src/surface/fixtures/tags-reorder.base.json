@@ -1,0 +1,64 @@
+{
+  "openapi": "3.0.3",
+  "info": {
+    "title": "Things",
+    "version": "1.0.0"
+  },
+  "paths": {
+    "/things": {
+      "post": {
+        "operationId": "createThing",
+        "responses": {
+          "200": {
+            "description": "ok",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "tags": ["alpha", "beta"]
+      },
+      "get": {
+        "operationId": "listThings",
+        "responses": {
+          "200": {
+            "description": "ok",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "Marker": {
+        "type": "object",
+        "properties": {
+          "m": {
+            "type": "string"
+          }
+        }
+      }
+    }
+  }
+}

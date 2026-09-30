@@ -1,0 +1,94 @@
+name: Speckify
+description: >
+  Bundle an OpenAPI contract, compute its next version against the registry,
+  and either report that plan on a pull request or publish it on merge.
+author: Speckify
+inputs:
+  command:
+    description: 'Which Speckify command to run: "check" (pull request mode) or "publish" (main mode).'
+    required: true
+  config:
+    description: 'Path to speckify.yaml, relative to the repository root.'
+    required: false
+    default: speckify.yaml
+
+runs:
+  using: composite
+  steps:
+    # Bare, no registry-url/scope: only used to build Speckify itself below,
+    # resolving its own public dependencies (zod, commander, ...) from the
+    # default registry. The caller's npm scope (read after the build, once
+    # Speckify's own CLI can read it) gets its own setup-node step further
+    # down, which only adds a *second* registry mapping to .npmrc -- it does
+    # not need to replace this one.
+    - name: Set up Node
+      uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+      with:
+        node-version-file: ${{ github.action_path }}/.nvmrc
+
+    - name: Set up uv
+      uses: astral-sh/setup-uv@f0ec1fc3b38f5e7cd731bb6ce540c5af426746bb # v6.1.0
+
+    - name: Enable corepack
+      shell: bash
+      run: corepack enable
+
+    # Runs from ${{ github.action_path }} — wherever this action's own repo
+    # was checked out at the pinned SHA/tag a caller resolved — so a SHA pin
+    # on this action runs exactly that commit's code, with no npm fetch of
+    # Speckify itself at run time.
+    - name: Install Speckify's own dependencies
+      shell: bash
+      working-directory: ${{ github.action_path }}
+      run: pnpm install --frozen-lockfile
+
+    - name: Build Speckify
+      shell: bash
+      working-directory: ${{ github.action_path }}
+      run: pnpm run build
+
+    # Read through Speckify's own parsed, validated config -- never a
+    # grep/sed over the YAML text, which reads an inline comment
+    # ("owner: acme  # note") straight into the value, since grep/sed know
+    # nothing about YAML comment syntax. `|| true` degrades to an empty
+    # scope (rather than failing the job) for a config `config get` cannot
+    # resolve; the `Run Speckify` step below still surfaces that as a real
+    # error once it loads the same config itself.
+    - name: Read the npm owner from the caller's config
+      id: npm-owner
+      shell: bash
+      working-directory: ${{ github.workspace }}
+      env:
+        SPECKIFY_ACTION_PATH: ${{ github.action_path }}
+        SPECKIFY_CONFIG: ${{ inputs.config }}
+      run: |
+        owner=$(node "$SPECKIFY_ACTION_PATH/dist/cli.js" config get publish.githubPackages.owner \
+          --config "$SPECKIFY_CONFIG" 2>/dev/null) || owner=""
+        echo "scope=${owner:+@$owner}" >> "$GITHUB_OUTPUT"
+
+    # `NODE_AUTH_TOKEN` being set on a later step's environment does nothing
+    # by itself: npm only uses it where an .npmrc line interpolates it for a
+    # specific registry host, which is what setup-node's `registry-url`
+    # writes here, scoped to `@<owner>:registry=...` so it does not touch
+    # the default registry the bare setup-node step above already pointed
+    # at the public registry for Speckify's own dependencies. Skipped
+    # entirely (not a second always-run variant) when the config has no npm
+    # scope to speak of: setup-node treats an empty `scope` as "none given"
+    # and would instead repoint the job's *default* registry at
+    # `registry-url`.
+    - name: Set up GitHub Packages auth, scoped to the caller's owner
+      if: steps.npm-owner.outputs.scope != ''
+      uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+      with:
+        node-version-file: ${{ github.action_path }}/.nvmrc
+        registry-url: https://npm.pkg.github.com
+        scope: ${{ steps.npm-owner.outputs.scope }}
+
+    - name: Run Speckify
+      shell: bash
+      working-directory: ${{ github.workspace }}
+      env:
+        SPECKIFY_ACTION_PATH: ${{ github.action_path }}
+        SPECKIFY_COMMAND: ${{ inputs.command }}
+        SPECKIFY_CONFIG: ${{ inputs.config }}
+      run: node "$SPECKIFY_ACTION_PATH/dist/cli.js" "$SPECKIFY_COMMAND" --config "$SPECKIFY_CONFIG"

@@ -1,0 +1,45 @@
+openapi: 3.1.0
+info:
+  title: Parameter coercion fixture
+  version: 1.0.0
+paths:
+  /things/{id}:
+    get:
+      operationId: getThing
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+        - name: tag
+          in: query
+          required: false
+          schema:
+            type: array
+            items:
+              type: string
+        - name: verbose
+          in: query
+          required: false
+          schema:
+            type: boolean
+      responses:
+        '200':
+          description: Found
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [id, tags, verbose]
+                properties:
+                  id:
+                    type: integer
+                  tags:
+                    type: array
+                    items:
+                      type: string
+                  verbose:
+                    type:
+                      - boolean
+                      - 'null'
