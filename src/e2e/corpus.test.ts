@@ -14,10 +14,11 @@ import { hasUv, TOOLCHAIN_DIR } from '../codegen/python/test-support.js';
 import { resolveUv } from '../codegen/python/uv.js';
 import { LintError } from '../lint/index.js';
 import { OASDIFF_CLASSIFICATION_MAP_FILENAME, resolveOasdiffBinary } from '../oasdiff/index.js';
-import { computeContractPlan } from '../plan.js';
-import { compareGeneratedSurfaces, type SurfaceReport } from '../surface/index.js';
+import { computeContractPlan, type SurfaceDiff } from '../plan.js';
+import { compareGeneratedSurfaces } from '../surface/index.js';
 import { unchangedSurface } from '../surface/test-support.js';
 import { loadClassificationMap } from '../version/index.js';
+import type { ClassificationMap } from '../version/types.js';
 import { spawn } from 'node:child_process';
 
 const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..', '..');
@@ -305,6 +306,40 @@ async function runPythonWithWheel(wheelPath: string, code: string): Promise<stri
   });
 }
 
+/** Applies every scripted mutation to `plan`'s spec and checks each plan's bump. */
+async function checkMutations(
+  testCase: CorpusCase,
+  plan: { version: string; bundledSpec: string },
+  inputs: { classificationMap: ClassificationMap; oasdiffPath: string },
+  surfaceDiff: SurfaceDiff,
+): Promise<void> {
+  for (const mutation of MUTATIONS) {
+    const mt0 = Date.now();
+    const base = JSON.parse(plan.bundledSpec) as Record<string, unknown>;
+    const revision = JSON.parse(JSON.stringify(base)) as Record<string, unknown>;
+    mutation.apply(revision);
+    const mutationPlan = await computeContractPlan({
+      contract: testCase.name,
+      bundledSpec: JSON.stringify(revision),
+      previous: {
+        version: plan.version,
+        bundledSpec: plan.bundledSpec,
+        speckifyVersion: '0.0.0-test',
+      },
+      classificationMap: inputs.classificationMap,
+      toolchainImpactBump: 'none',
+      surfaceDiff,
+      oasdiffPath: inputs.oasdiffPath,
+    });
+    console.log(
+      `[corpus timing] ${testCase.name} mutation "${mutation.name}": ${String(Date.now() - mt0)}ms`,
+    );
+    expect(mutationPlan.bump, `${testCase.name}: ${mutation.name}`).toBe(
+      expectedBumpFor(mutation, base),
+    );
+  }
+}
+
 describe('corpus: OAI-authored examples and one large real-world spec', () => {
   const outDirs: string[] = [];
 
@@ -383,53 +418,49 @@ describe('corpus: OAI-authored examples and one large real-world spec', () => {
         });
         expect(selfPlan.bump).toBe('none');
 
-        // The three scripted mutations, using the real oasdiff binary. The
-        // package-surface diff itself (`compareGeneratedSurfaces`, real TS
-        // + Python generation on both sides) only runs under `FULL` — see
-        // the module doc comment — everywhere else `unchangedSurface`
-        // stands in, so the oasdiff/allow-list gate is still proven for
-        // real on every run, just without the extra generation cost. A
-        // known-build-failure spec (the DigitalOcean fixture) never gets
-        // the real surface diff at all: its TS build is already known to
-        // fail, so generating it again here would only fail the same way a
-        // second time, for no new signal.
-        const useRealSurfaceDiff = FULL && testCase.outcome.kind !== 'known-build-failure';
-        for (const mutation of MUTATIONS) {
-          const mt0 = Date.now();
-          const base = JSON.parse(plan.bundledSpec) as Record<string, unknown>;
-          const revision = JSON.parse(JSON.stringify(base)) as Record<string, unknown>;
-          mutation.apply(revision);
-          const revisionJson = JSON.stringify(revision);
-          const expectedBump = expectedBumpFor(mutation, base);
-
-          const mutationPlan = await computeContractPlan({
-            contract: testCase.name,
-            bundledSpec: revisionJson,
-            previous: {
-              version: plan.version,
-              bundledSpec: plan.bundledSpec,
-              speckifyVersion: '0.0.0-test',
-            },
-            classificationMap,
-            toolchainImpactBump: 'none',
-            surfaceDiff: useRealSurfaceDiff
-              ? (previousSpec, currentSpec): Promise<SurfaceReport> =>
-                  compareGeneratedSurfaces({
-                    previousSpec,
-                    currentSpec,
-                    targets: { typescript: { client: true, server: true } },
-                  })
-              : unchangedSurface,
-            oasdiffPath,
-          });
-          console.log(
-            `[corpus timing] ${testCase.name} mutation "${mutation.name}": ${String(Date.now() - mt0)}ms`,
-          );
-          expect(mutationPlan.bump, `${testCase.name}: ${mutation.name}`).toBe(expectedBump);
-        }
+        // The allow-list and oasdiff are proven on every run; the generated-
+        // surface diff has its own full-mode test below.
+        await checkMutations(testCase, plan, { classificationMap, oasdiffPath }, unchangedSurface);
 
         console.log(`[corpus timing] ${testCase.name} (light total): ${String(Date.now() - t0)}ms`);
       }, 60_000);
+
+      // A known-build-failure spec is skipped: its generation already fails.
+      it.skipIf(!FULL || testCase.outcome.kind !== 'pass')(
+        'full: the generated-surface diff agrees on each mutation',
+        async () => {
+          const bundledSpec = await bundleSpec(specFile(testCase), {
+            repoRoot: dirname(specFile(testCase)),
+          });
+          const classificationMap = await loadClassificationMap(
+            resolve(repoRoot, 'data', OASDIFF_CLASSIFICATION_MAP_FILENAME),
+          );
+          const oasdiffPath = await resolveOasdiffBinary({
+            cacheDir: join(tmpdir(), 'speckify-corpus-oasdiff-cache'),
+          });
+          const plan = await computeContractPlan({
+            contract: testCase.name,
+            bundledSpec,
+            previous: null,
+            classificationMap,
+            toolchainImpactBump: 'none',
+            surfaceDiff: unchangedSurface,
+            oasdiffPath,
+          });
+          const realSurfaceDiff: SurfaceDiff = (previousSpec, currentSpec) =>
+            compareGeneratedSurfaces({
+              previousSpec,
+              currentSpec,
+              targets: {
+                typescript: { client: true, server: true },
+                ...(uvAvailable ? { python: { client: true, server: true } } : {}),
+              },
+              ...(uvAvailable ? { toolchainDir: TOOLCHAIN_DIR } : {}),
+            });
+          await checkMutations(testCase, plan, { classificationMap, oasdiffPath }, realSurfaceDiff);
+        },
+        300_000,
+      );
 
       it.skipIf(!FULL)(
         'full: builds both TypeScript and Python packages and they typecheck/import',
