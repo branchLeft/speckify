@@ -1,0 +1,15 @@
+contracts:
+  - name: dogfood-notes
+    spec: ./openapi.yaml
+    typescript:
+      package: '@example/dogfood-notes'
+      client: true
+      server: true
+    python:
+      package: dogfood-notes
+      client: true
+      server: true
+
+publish:
+  githubPackages:
+    owner: example
