@@ -131,17 +131,10 @@ function specFile(c: CorpusCase): string {
   return join(corpusRoot, c.specPath);
 }
 
-// ---------------------------------------------------------------------------
-// Mutation helpers: operate on an already-bundled document (internal $refs
-// still present, exactly what computeContractPlan/oasdiff see). Every
-// mutation targets an operation's `parameters` array rather than a response
-// schema: every OAI example has at least one operation, but not every one
-// declares a JSON schema anywhere (api-with-examples.yaml only shows
-// example payloads), and a shared response schema can be reachable from a
-// webhook too (tictactoe.yaml), which inverts direction and would make the
-// bump major regardless — a parameter is added fresh on one operation, so
-// it can never be shared with anything else.
-// ---------------------------------------------------------------------------
+// Mutation helpers edit a bundled document's `parameters`, never a response
+// schema: some OAI examples declare no schema at all, and a shared schema can
+// also be reached from a webhook, which inverts direction and makes any edit
+// major. A new parameter on one operation is shared with nothing.
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return value !== null && typeof value === 'object' && !Array.isArray(value);
