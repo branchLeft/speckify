@@ -41,6 +41,13 @@ jobs:
       - name: Check formatting
         run: pnpm run format
 
+      # src/e2e/corpus.test.ts's heavy steps (building real TS+Python
+      # packages, the generated-surface diff) are gated on SPECKIFY_CORPUS_FULL
+      # so a local run stays fast by default; GitHub Actions sets CI=true on
+      # every runner, and the corpus test treats that the same as
+      # SPECKIFY_CORPUS_FULL=1, so this step already runs the full corpus
+      # with no extra env needed here. uv (above) and oasdiff (self-resolving,
+      # cached) are both available to it.
       - name: Test with coverage
         run: pnpm run test:coverage
 
