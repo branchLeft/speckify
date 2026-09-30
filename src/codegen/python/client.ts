@@ -43,6 +43,24 @@ async function copyDir(source: string, destination: string): Promise<void> {
 }
 
 /**
+ * openapi-python-client's own OpenAPI model requires `paths`, rejecting the
+ * document outright ("Field required") for OAS 3.1's "webhooks only, no
+ * paths" shape (a real OAI example, webhook-example.yaml, is exactly this —
+ * valid OpenAPI 3.1, `paths` is optional there). The tool has no concept of
+ * webhooks either way, so an empty `paths: {}` here changes nothing it
+ * would otherwise generate; it only stops its own stricter-than-the-spec
+ * validation from rejecting the document before it gets that far. Every
+ * other caller in this module keeps using `bundledSpec` unmodified.
+ */
+function withPathsForOpenapiPythonClient(bundledSpec: string): string {
+  const document = JSON.parse(bundledSpec) as { paths?: unknown };
+  if (document.paths !== undefined) {
+    return bundledSpec;
+  }
+  return JSON.stringify({ ...document, paths: {} });
+}
+
+/**
  * Runs openapi-python-client against `bundledSpec` and writes the result as
  * `<targetDir>/client/`, importable as `<import_name>.client`. See
  * `client.md` for the config options that place it there with no extra
@@ -59,7 +77,7 @@ export async function generateClient(
   const scratchDir = await mkdtemp(join(tmpdir(), 'speckify-opc-'));
   try {
     const specPath = join(scratchDir, 'spec.json');
-    await writeFile(specPath, bundledSpec, 'utf8');
+    await writeFile(specPath, withPathsForOpenapiPythonClient(bundledSpec), 'utf8');
 
     const configPath = join(scratchDir, 'config.yaml');
     await writeFile(
