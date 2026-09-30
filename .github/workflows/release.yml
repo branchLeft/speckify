@@ -1,6 +1,6 @@
 name: release
 
-# Fires on a signed `vX.Y.Z` tag. Publishes Speckify itself, not a generated
+# Fires on a signed `vX.Y.Z` tag. Stages and publishes Speckify itself, not a generated
 # contract package: `speckify` to npm with provenance, and the `speckify`
 # PyPI launcher, both via OIDC trusted publishing — no stored token either
 # side.
@@ -63,8 +63,10 @@ jobs:
       - name: Build
         run: pnpm run build
 
-      - name: Publish to npm with provenance
-        run: npm publish --provenance --access public
+      # Staged, not published: the version waits on npm until a maintainer
+      # approves it with 2FA (`npm stage approve`), so CI alone never ships.
+      - name: Stage the npm release with provenance
+        run: npm stage publish --provenance --access public
 
   pypi:
     needs: assert-tag-matches-version
