@@ -80,7 +80,7 @@
       "direction": "none",
       "effect": "none",
       "bump": "major",
-      "reason": "oasdiff INFO/EffectNone (none) — \"api operation id %s was added\"; no accepted-value change. OVERRIDE: operationId drives the generated SDK method name in every mainstream generator (openapi-generator, openapi-python-client, hey-api, oazapfts). This id fires both for a bare removal and for a rename (old value present, new value absent-or-different) — either way an existing generated client's method name changes or disappears, which is a source-breaking SDK change even though the HTTP wire contract is untouched.",
+      "reason": "oasdiff INFO/EffectNone (none) — \"api operation id %s was added\"; no accepted-value change. OVERRIDE: operationId drives the generated SDK method name in both generators Speckify uses (@hey-api/openapi-ts and openapi-python-client). This id fires both for a bare removal and for a rename (old value present, new value absent-or-different) — either way an existing generated client's method name changes or disappears, which is a source-breaking SDK change even though the HTTP wire contract is untouched.",
       "source": "checker/check_api_operation_id_updated.go"
     },
     {
@@ -89,7 +89,7 @@
       "direction": "none",
       "effect": "none",
       "bump": "major",
-      "reason": "oasdiff INFO/EffectNone (none) — \"api operation id %s removed and replaced with %s\"; no accepted-value change. OVERRIDE: operationId drives the generated SDK method name in every mainstream generator (openapi-generator, openapi-python-client, hey-api, oazapfts). This id fires both for a bare removal and for a rename (old value present, new value absent-or-different) — either way an existing generated client's method name changes or disappears, which is a source-breaking SDK change even though the HTTP wire contract is untouched.",
+      "reason": "oasdiff INFO/EffectNone (none) — \"api operation id %s removed and replaced with %s\"; no accepted-value change. OVERRIDE: operationId drives the generated SDK method name in both generators Speckify uses (@hey-api/openapi-ts and openapi-python-client). This id fires both for a bare removal and for a rename (old value present, new value absent-or-different) — either way an existing generated client's method name changes or disappears, which is a source-breaking SDK change even though the HTTP wire contract is untouched.",
       "source": "checker/check_api_operation_id_updated.go"
     },
     {
