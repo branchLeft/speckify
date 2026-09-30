@@ -907,10 +907,11 @@ flowchart TD
             </tr>
             <tr>
               <td>
-                Speckify itself published to npm with provenance and to PyPI through trusted
-                publishing, from a signed <code>v*.*.*</code> tag
+                Speckify itself staged to npm with provenance, then approved by a maintainer with
+                2FA, and published to PyPI through trusted publishing, from a signed
+                <code>v*.*.*</code> tag
               </td>
-              <td>Tampered or untraceable releases.</td>
+              <td>Tampered or untraceable releases, and a release shipped by CI alone.</td>
             </tr>
             <tr>
               <td>No token needed to install or build Speckify from source</td>
