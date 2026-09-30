@@ -17,7 +17,8 @@
   "files": [
     "dist",
     "data",
-    "python"
+    "python",
+    "templates"
   ],
   "scripts": {
     "build": "tsc -p tsconfig.build.json && cp src/oasdiff/checksums.json dist/oasdiff/checksums.json && cp src/oasdiff/binary-checksums.json dist/oasdiff/binary-checksums.json && cp src/lint/reserved-python-names.json dist/lint/reserved-python-names.json && node scripts/copy-runtime-assets.mjs",
