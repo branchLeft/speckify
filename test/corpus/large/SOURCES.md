@@ -33,7 +33,7 @@ resolved into one self-contained file), not a byte-for-byte copy: produced
 with `@redocly/cli@1.34.20`'s `bundle` command run locally against the
 pinned commit above —
 
-```
+```sh
 npx @redocly/cli@1 bundle specification/DigitalOcean-public.v2.yaml -o digitalocean-v2.bundled.yaml --ext yaml
 ```
 

@@ -24,16 +24,9 @@ const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..', '..');
 const corpusRoot = join(repoRoot, 'test', 'corpus');
 
 /**
- * Runs the whole corpus's build/typecheck/import and package-surface-diff
- * steps only when explicitly asked: they build real TypeScript and Python
- * packages for every passing spec (plus three mutations each), which is
- * accurate but slow (single-digit minutes). CI sets this so the corpus is
- * exercised for real on every push; a local run stays fast by default and
- * still gets full lint/plan/oasdiff coverage plus a cheap self-diff.
- *
- * Filter locally with either:
- *   SPECKIFY_CORPUS_FULL=1 pnpm vitest run src/e2e/corpus.test.ts
- *   pnpm vitest run src/e2e/corpus.test.ts -t "light"
+ * The build, import and surface-diff steps build real packages for every
+ * spec, so they run in CI (CI=true) or with SPECKIFY_CORPUS_FULL=1; a plain
+ * local run still covers lint, plan and oasdiff. See ../../test/corpus/README.md.
  */
 const FULL = process.env.SPECKIFY_CORPUS_FULL === '1' || process.env.CI === 'true';
 
