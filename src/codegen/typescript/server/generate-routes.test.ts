@@ -61,4 +61,15 @@ describe('generateRoutesSource', () => {
     const source = generateRoutesSource([op({ operationId: 'deleteThing', method: 'delete' })]);
     expect(source).not.toContain('responseSchemas');
   });
+
+  // A spec with no `paths` at all (OAS 3.1's webhooks-only shape,
+  // webhook-example.yaml in the OAI corpus) reaches this with an empty
+  // operations array. The join-then-append-comma construction used to emit
+  // `[\n,\n]` unconditionally — a one-element array with a hole, which
+  // `tsc` sees as `undefined[]`, not `RouteDefinition[]`. Caught building
+  // the corpus (src/e2e/corpus.test.ts).
+  it('emits an empty array literal for no operations, not one with a hole', () => {
+    const source = generateRoutesSource([]);
+    expect(source).toContain('export const routes: RouteDefinition[] = [];');
+  });
 });
