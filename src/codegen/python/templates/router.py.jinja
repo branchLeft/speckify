@@ -28,9 +28,19 @@ from .handlers import BeforeHandle, Handlers
 DEFAULT_MAX_JSON_BODY_BYTES = 1024 * 1024
 
 
+def _dump(value: typing.Any) -> typing.Any:
+    """`value` as returned to the caller, or its JSON-mode dump if it's a
+    pydantic model. An array response has no top-level `$ref` for
+    `toResponseInfos` (operations.py) to bind a model name to -- the ref
+    lives one level down, inside `items` -- so its body is typed as a bare
+    `dict[str, typing.Any]`, but a handler still returns the list of real
+    model instances it already has on hand, not hand-dumped dicts."""
+    return value.model_dump(mode="json", by_alias=True) if isinstance(value, pydantic.BaseModel) else value
+
+
 def _json_response(result: typing.Any) -> fastapi.Response:
     body = result.body
-    content = body.model_dump(mode="json", by_alias=True) if isinstance(body, pydantic.BaseModel) else body
+    content = [_dump(item) for item in body] if isinstance(body, list) else _dump(body)
     return fastapi.responses.JSONResponse(status_code=result.status_code, content=content)
 
 

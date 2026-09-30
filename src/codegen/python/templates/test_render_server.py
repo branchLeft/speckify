@@ -265,6 +265,66 @@ def test_json_round_trip_through_the_generated_router(generated_package: typing.
     assert response.json() == {"petType": "cat", "meowVolume": 11}
 
 
+LIST_PETS = {
+    "operationId": "listPets",
+    "method": "GET",
+    "path": "/pets",
+    "pathParams": [],
+    "queryParams": [],
+    "headerParams": [],
+    "requestBody": {"kind": "none"},
+    # An array of `$ref Pet`: the ref lives one level down, inside `items`,
+    # so `toResponseInfos` (operations.ts) never sees it and `model` stays
+    # None here too -- the same shape a real `type: array, items: {$ref:
+    # ...}}` response produces. The handler still returns real model
+    # instances, since that's what it already has on hand.
+    "responses": [{"statusCode": "200", "model": None}],
+}
+
+
+def test_list_of_pydantic_models_serialises_with_aliases(tmp_path: Path) -> None:
+    """The bug: an array response has no top-level model name, so
+    `ListPetsResponse200.body` is typed as a bare dict -- but a handler
+    returning the list of pydantic model instances it actually has (rather
+    than manually re-dumping each one) used to 500: `_json_response` only
+    special-cased a single `BaseModel`, and starlette's default JSON encoder
+    cannot serialise one at all. This reaches every array-of-objects
+    endpoint, not an edge case."""
+    package_dir = tmp_path / "listpkg"
+    package_dir.mkdir()
+    (package_dir / "__init__.py").write_text("", encoding="utf-8")
+    (package_dir / "models.py").write_text(MODELS_PY, encoding="utf-8")
+
+    operations = parse_operations([LIST_PETS])
+    write_server_module(operations, package_dir / "server")
+
+    sys.path.insert(0, str(tmp_path))
+    try:
+        import importlib
+
+        server_module = importlib.import_module("listpkg.server")
+        from listpkg import models
+
+        class TestHandlers:
+            async def list_pets(self) -> typing.Any:
+                return server_module.handlers.ListPetsResponse200(
+                    body=[models.Pet(root=models.Cat(pet_type="cat", meow_volume=3))]
+                )
+
+        app = FastAPI()
+        app.include_router(server_module.create_router(TestHandlers()))
+        client = TestClient(app)
+
+        response = client.get("/pets")
+
+        assert response.status_code == 200
+        assert response.json() == [{"petType": "cat", "meowVolume": 3}]
+    finally:
+        sys.path.remove(str(tmp_path))
+        for name in [m for m in sys.modules if m == "listpkg" or m.startswith("listpkg.")]:
+            del sys.modules[name]
+
+
 def test_422_on_invalid_body_through_the_generated_router(generated_package: typing.Any) -> None:
     class TestHandlers:
         async def create_pet(self, *, body: typing.Any) -> typing.Any:
