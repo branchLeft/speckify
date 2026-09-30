@@ -58,11 +58,16 @@ export function generateRoutesSource(operations: readonly OperationInfo[]): stri
       ? `import { ${[...zodImports].sort().join(', ')} } from './zod.gen.js';\n`
       : '';
 
+  const routesLiteral =
+    entries.length === 0
+      ? 'export const routes: RouteDefinition[] = [];\n'
+      : `export const routes: RouteDefinition[] = [\n${entries.join(',\n')},\n];\n`;
+
   return (
     HEADER +
     "import type { RouteDefinition } from './server-adapter.js';\n" +
     zodImportLine +
     '\n' +
-    `export const routes: RouteDefinition[] = [\n${entries.join(',\n')},\n];\n`
+    routesLiteral
   );
 }

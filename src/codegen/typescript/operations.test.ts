@@ -60,7 +60,7 @@ describe('extractOperations', () => {
               { name: 'X-Trace', in: 'header' },
             ],
             responses: {
-              '200': { content: { 'application/json': {} } },
+              '200': { content: { 'application/json': { schema: { type: 'object' } } } },
               '404': {},
             },
           },
@@ -77,6 +77,88 @@ describe('extractOperations', () => {
   it('leaves successStatus undefined when the 2xx response has no content', () => {
     const [op] = extractOperations({
       paths: { '/pets': { post: { operationId: 'createPet', responses: { '204': {} } } } },
+    });
+
+    expect(op?.successStatus).toBeUndefined();
+  });
+
+  // hey-api emits no `{Pascal}Errors` type at all when every response in
+  // the operation is schema-less, even though a non-2xx status is
+  // documented — verified against the real generator's output, not
+  // guessed. Also caught by the OAI corpus.
+  it('leaves hasDocumentedErrors false when no response in the operation has a schema', () => {
+    const [op] = extractOperations({
+      paths: {
+        '/versions': {
+          get: {
+            operationId: 'listVersions',
+            responses: {
+              '200': { content: { 'application/json': { examples: { foo: { value: {} } } } } },
+              '300': { content: { 'application/json': { examples: { foo: { value: {} } } } } },
+            },
+          },
+        },
+      },
+    });
+
+    expect(op?.hasDocumentedErrors).toBe(false);
+  });
+
+  it('sets hasDocumentedErrors true when a non-2xx status exists and some response in the operation has a schema', () => {
+    const [op] = extractOperations({
+      paths: {
+        '/things': {
+          get: {
+            operationId: 'getThing',
+            responses: {
+              '200': { content: { 'application/json': { examples: { foo: { value: {} } } } } },
+              '404': { content: { 'application/json': { schema: { type: 'object' } } } },
+            },
+          },
+        },
+      },
+    });
+
+    expect(op?.hasDocumentedErrors).toBe(true);
+  });
+
+  it('sets hasDocumentedErrors true when one response has no content at all, even if the other is schema-less', () => {
+    const [op] = extractOperations({
+      paths: {
+        '/things': {
+          get: {
+            operationId: 'getThing',
+            responses: {
+              '200': {},
+              '404': { content: { 'application/json': { examples: { foo: { value: {} } } } } },
+            },
+          },
+        },
+      },
+    });
+
+    expect(op?.hasDocumentedErrors).toBe(true);
+  });
+
+  // A real OAI example (api-with-examples.yaml) documents its 200 response
+  // with `content: { 'application/json': { examples: {...} } }` only —
+  // illustrating the `examples` keyword, no `schema` at all. hey-api's zod
+  // plugin emits no validator for a schema-less response, so treating this
+  // as a successStatus (as the code used to, checking only for `content`)
+  // makes `generate-routes.ts` import a `z{Pascal}Response` that was never
+  // generated, breaking the build. Caught by the OAI corpus (src/e2e/corpus.test.ts).
+  it('leaves successStatus undefined when the 2xx response has content but no schema', () => {
+    const [op] = extractOperations({
+      paths: {
+        '/versions': {
+          get: {
+            operationId: 'listVersions',
+            responses: {
+              '200': { content: { 'application/json': { examples: { foo: { value: {} } } } } },
+            },
+          },
+        },
+      },
     });
 
     expect(op?.successStatus).toBeUndefined();

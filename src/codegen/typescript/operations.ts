@@ -31,6 +31,34 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 }
 
 /**
+ * True when at least one media type under `content` declares a `schema`.
+ * A response can carry `content` with only `examples` and no `schema` (a
+ * real OAI example, api-with-examples.yaml, does exactly this) — hey-api's
+ * zod plugin emits no validator for that, so treating the response as
+ * schema-bearing makes the generated server import a validator that was
+ * never generated.
+ */
+function hasSchemaContent(content: unknown): boolean {
+  return (
+    isRecord(content) && Object.values(content).some((v) => isRecord(v) && v.schema !== undefined)
+  );
+}
+
+/**
+ * True when a response's `content` is present but none of its media types
+ * declare a `schema` (only `examples`, say). hey-api's type plugin collapses
+ * *every* response on the operation to a bare `unknown` (no discriminated
+ * `{Pascal}Responses`/`{Pascal}Errors`) when every single response is like
+ * this — but a response with no `content` at all does not count: paired
+ * with even one bare response, or one that does have a schema, hey-api
+ * still emits the discriminated types normally. Verified against the real
+ * generator's output (see operations.test.ts), not inferred from the spec.
+ */
+function blocksDiscriminatedTyping(content: unknown): boolean {
+  return isRecord(content) && !hasSchemaContent(content);
+}
+
+/**
  * Walks every path/method in the bundled spec and returns one entry per
  * operationId. Operations without an operationId are rejected up front: the
  * rest of codegen (SDK functions, Handlers methods, route ids) is keyed on
@@ -56,19 +84,32 @@ export function extractOperations(spec: BundledSpec): OperationInfo[] {
       }
 
       const responses = isRecord(operation.responses) ? operation.responses : {};
-      let hasDocumentedErrors = false;
+      let hasNonSuccessStatus = false;
+      let everyResponseBlocksTyping = true;
       let successStatus: number | undefined;
       for (const [status, responseDef] of Object.entries(responses)) {
         const code = Number.parseInt(status, 10);
         if (Number.isNaN(code)) continue;
+        const content = isRecord(responseDef) ? responseDef.content : undefined;
+        if (!blocksDiscriminatedTyping(content)) {
+          everyResponseBlocksTyping = false;
+        }
         if (code < 200 || code >= 300) {
-          hasDocumentedErrors = true;
+          hasNonSuccessStatus = true;
           continue;
         }
-        if (successStatus === undefined && isRecord(responseDef) && isRecord(responseDef.content)) {
+        if (successStatus === undefined && hasSchemaContent(content)) {
           successStatus = code;
         }
       }
+      // hey-api collapses every response on an operation to a bare
+      // `unknown` — no discriminated `{Pascal}Responses`/`{Pascal}Errors` —
+      // when every single response's `content` lacks a `schema`
+      // (api-with-examples.yaml documents its responses with `examples`
+      // only). Importing an `Errors` type unconditionally whenever a
+      // non-2xx status exists then references a type hey-api never
+      // generated. Caught by the OAI corpus (src/e2e/corpus.test.ts).
+      const hasDocumentedErrors = hasNonSuccessStatus && !everyResponseBlocksTyping;
 
       const requestBody = operation.requestBody;
       const content =
