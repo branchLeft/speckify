@@ -1,5 +1,5 @@
 import path from 'node:path';
-import { mkdir, writeFile } from 'node:fs/promises';
+import { appendFile, mkdir, writeFile } from 'node:fs/promises';
 import { buildPackage } from './build.js';
 import { assertGenerationComplete } from './completeness.js';
 import { CodegenInputError } from './errors.js';
@@ -47,6 +47,16 @@ export async function generateTypeScriptPackage(input: GenerateInput): Promise<v
   await mkdir(srcDir, { recursive: true });
 
   await runHeyApi(input.bundledSpec, srcDir);
+  if (input.client) {
+    // hey-api's own generated `index.ts` never re-exports the configurable
+    // `client` singleton it writes to `client.gen.ts` -- only the bound SDK
+    // functions and types. The README this same generator ships (see
+    // package-files.ts) tells every consumer to `import { client } from
+    // '<package>'` and call `client.setConfig({ baseUrl })`; without this,
+    // that's the only documented way to point the SDK at a real server, and
+    // it silently doesn't exist.
+    await appendFile(path.join(srcDir, 'index.ts'), "export { client } from './client.gen.js';\n");
+  }
   if (input.server) {
     await writeServer(srcDir, operations);
   }

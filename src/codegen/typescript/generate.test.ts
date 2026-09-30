@@ -162,6 +162,35 @@ describe('generateTypeScriptPackage', () => {
     );
   }, 30_000);
 
+  // The README this same generator writes (package-files.ts) tells every
+  // consumer to `import { client } from '<package>'` and call
+  // `client.setConfig(...)` to point the SDK at a real server -- the only
+  // documented way to do that, since `./client` is not a published export
+  // subpath. hey-api's own `index.ts` output never re-exports that binding,
+  // so the documented usage silently doesn't exist: this proves it does.
+  it('exports `client` from the package root, matching the README it ships', async () => {
+    const outDir = await tempOutDir();
+    const bundledSpec = await loadFixture('combined.bundled.yaml');
+
+    await generateTypeScriptPackage({
+      bundledSpec,
+      packageName: '@speckify-fixtures/combined',
+      version: '1.0.0',
+      client: true,
+      server: false,
+      changelog: '',
+      speckifyVersion: '0.1.0',
+      outDir,
+    });
+
+    await expect(readFile(path.join(outDir, 'dist', 'index.js'), 'utf8')).resolves.toContain(
+      'export { client }',
+    );
+    await expect(readFile(path.join(outDir, 'dist', 'index.d.ts'), 'utf8')).resolves.toMatch(
+      /export \{\s*client\s*\}/,
+    );
+  }, 30_000);
+
   it('the completeness guard fires when a real generated SDK is missing an operation (sabotage)', async () => {
     const outDir = await tempOutDir();
     const bundledSpec = await loadFixture('combined.bundled.yaml');
