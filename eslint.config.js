@@ -13,6 +13,11 @@ export default [
       'python/.venv/**',
       'python/**/*.py',
       'scripts/**/*.mjs',
+      // Standalone example apps, deliberately outside tsconfig.json's
+      // `include`: src/e2e/dogfood.test.ts typechecks each one itself
+      // (strict, against its own generated package per round), the same
+      // way it would be typechecked in a real consumer's own project.
+      'examples/**/*.ts',
     ],
   },
   js.configs.recommended,
