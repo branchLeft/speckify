@@ -410,22 +410,34 @@ program
   )
   .option('-c, --config <path>', 'path to write speckify.yaml', 'speckify.yaml')
   .option('--force', 'overwrite an existing speckify.yaml or workflow file')
-  .action(async (options: { owner: string; config: string; force?: boolean }) => {
-    const speckifyVersion = await readSpeckifyVersion();
-    const result = await runInit({
-      cwd: process.cwd(),
-      owner: options.owner,
-      speckifyVersion,
-      speckifyRepo: SPECKIFY_REPO,
-      configPath: options.config,
-      force: options.force,
-    });
-    console.log(`Wrote ${result.configPath}`);
-    console.log(`Wrote ${result.workflowPath}`);
-    if (result.warning !== undefined) {
-      console.warn(result.warning);
-    }
-  });
+  .option(
+    '--no-agent-skill',
+    'skip writing .claude/skills/speckify/SKILL.md, the coding-agent skill for this contract',
+  )
+  .action(
+    async (options: { owner: string; config: string; force?: boolean; agentSkill: boolean }) => {
+      const speckifyVersion = await readSpeckifyVersion();
+      const result = await runInit({
+        cwd: process.cwd(),
+        owner: options.owner,
+        speckifyVersion,
+        speckifyRepo: SPECKIFY_REPO,
+        configPath: options.config,
+        force: options.force,
+        noAgentSkill: !options.agentSkill,
+      });
+      console.log(`Wrote ${result.configPath}`);
+      console.log(`Wrote ${result.workflowPath}`);
+      if (result.agentSkillPath !== undefined) {
+        console.log(`Wrote ${result.agentSkillPath}`);
+      } else if (result.agentSkillKept === true) {
+        console.log('Kept the existing .claude/skills/speckify/SKILL.md');
+      }
+      if (result.warning !== undefined) {
+        console.warn(result.warning);
+      }
+    },
+  );
 
 program
   .command('build')
