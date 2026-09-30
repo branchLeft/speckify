@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "speckify"
-version = "0.0.0"
+version = "0.1.0"
 description = "Launches the Speckify CLI (a Node package) via npx, so `pip install speckify` works without a separate Node install step for the package manager itself."
 readme = "README.md"
 license = "MIT"
