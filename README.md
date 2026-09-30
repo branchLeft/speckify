@@ -20,6 +20,8 @@ This detects `openapi*.yaml` / `openapi*.json`, writes a starter
 `speckify.yaml` (one contract per spec found), and writes
 `.github/workflows/speckify.yml`: a `check` job and a `publish` job, each
 calling Speckify's composite action directly, pinned to a single commit.
+It also writes `.claude/skills/speckify/SKILL.md`, a coding-agent skill
+for working with this contract — pass `--no-agent-skill` to skip it.
 Commit both, open a pull request, and Speckify comments the version it
 would publish and why. Merge, and it publishes.
 
