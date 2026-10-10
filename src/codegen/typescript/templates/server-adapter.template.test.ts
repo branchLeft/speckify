@@ -334,6 +334,82 @@ describe('createRequestListener', () => {
       expect(seen).toEqual(['getWidget']);
     });
   });
+
+  describe('hostile request paths', () => {
+    const slotRoute: RouteDefinition = {
+      id: 'resetSlot',
+      method: 'POST',
+      path: '/slots/{id}/reset',
+      bodyMode: 'none',
+      pathSchema: z.object({ id: z.string() }),
+    };
+    const listener = createRequestListener(
+      {
+        resetSlot: (request: { path: { id: string } }) =>
+          Promise.resolve<HandledResponse>({ status: 200, body: { id: request.path.id } }),
+      },
+      [slotRoute],
+    );
+
+    it.each([
+      ['an empty segment that drops the count', '/slots//reset'],
+      ['an empty segment that keeps the count', '/slots//abc/reset'],
+      ['a double slash before the last segment', '/slots/abc//reset'],
+      ['a leading double slash', '//slots/abc/reset'],
+      ['a bare double-slash target', '//'],
+      ['a triple-slash target', '///'],
+      ['a leading double slash before a bracket', '//[/'],
+      ['a leading double slash before an at-sign', '//@/'],
+      ['a leading double slash before an invalid port', '//a:99999/slots/abc/reset'],
+      ['a leading double slash before a bad escape', '//%zz/reset'],
+      ['a leading double slash naming a host', '//localhost/slots/abc/reset'],
+      ['a trailing slash', '/slots/abc/reset/'],
+      ['a bare percent sign', '/slots/%/reset'],
+      ['a non-hex escape', '/slots/%zz/reset'],
+      ['a truncated multi-byte escape', '/slots/%E0%A4%A/reset'],
+      ['an encoded slash in a parameter', '/slots/a%2Fb/reset'],
+    ])('answers 404, never 500 or a match, for %s (%s)', async (_label, path) => {
+      await withServer(listener, async (baseUrl) => {
+        const res = await fetch(`${baseUrl}${path}`, { method: 'POST' });
+        expect(res.status).toBe(404);
+        expect(res.headers.get('content-type')).toBe('application/problem+json');
+      });
+    });
+
+    // fetch normalises dot-segments before sending, so these send raw bytes.
+    it.each([
+      ['an escaped double dot as a parameter', '/slots/%2e%2e/reset'],
+      ['an escaped single dot as a parameter', '/slots/%2e/reset'],
+    ])('answers 404 for %s (%s), never a dot-segment id', async (_label, path) => {
+      await withServer(listener, async (baseUrl) => {
+        const { hostname, port } = new URL(baseUrl);
+        const res = await new Promise<http.IncomingMessage>((resolve, reject) => {
+          const req = http.request({ hostname, port, path, method: 'POST' }, resolve);
+          req.on('error', reject);
+          req.end();
+        });
+        res.resume();
+        expect(res.statusCode).toBe(404);
+        expect(res.headers['content-type']).toBe('application/problem+json');
+      });
+    });
+
+    it('still matches a clean path (control case)', async () => {
+      await withServer(listener, async (baseUrl) => {
+        const res = await fetch(`${baseUrl}/slots/abc/reset`, { method: 'POST' });
+        expect(res.status).toBe(200);
+        expect(await res.json()).toEqual({ id: 'abc' });
+      });
+    });
+
+    it('decodes an ordinary percent-escape in a parameter (control case)', async () => {
+      await withServer(listener, async (baseUrl) => {
+        const res = await fetch(`${baseUrl}/slots/a%20b/reset`, { method: 'POST' });
+        expect(res.status).toBe(200);
+        expect(await res.json()).toEqual({ id: 'a b' });
+      });
+    });
+  });
 });
 
 describe('beforeHandle refusals', () => {
