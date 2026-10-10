@@ -173,6 +173,7 @@ function decodeParam(raw: string): string | undefined {
   } catch {
     return undefined;
   }
+  if (decoded === '.' || decoded === '..') return undefined;
   return decoded.includes('/') ? undefined : decoded;
 }
 

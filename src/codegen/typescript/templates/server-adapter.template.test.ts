@@ -376,6 +376,24 @@ describe('createRequestListener', () => {
       });
     });
 
+    // fetch normalises dot-segments before sending, so these send raw bytes.
+    it.each([
+      ['an escaped double dot as a parameter', '/slots/%2e%2e/reset'],
+      ['an escaped single dot as a parameter', '/slots/%2e/reset'],
+    ])('answers 404 for %s (%s), never a dot-segment id', async (_label, path) => {
+      await withServer(listener, async (baseUrl) => {
+        const { hostname, port } = new URL(baseUrl);
+        const res = await new Promise<http.IncomingMessage>((resolve, reject) => {
+          const req = http.request({ hostname, port, path, method: 'POST' }, resolve);
+          req.on('error', reject);
+          req.end();
+        });
+        res.resume();
+        expect(res.statusCode).toBe(404);
+        expect(res.headers['content-type']).toBe('application/problem+json');
+      });
+    });
+
     it('still matches a clean path (control case)', async () => {
       await withServer(listener, async (baseUrl) => {
         const res = await fetch(`${baseUrl}/slots/abc/reset`, { method: 'POST' });
