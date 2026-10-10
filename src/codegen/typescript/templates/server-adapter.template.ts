@@ -81,24 +81,11 @@ export interface ListenerOptions {
    */
   readonly maxJsonBodyBytes?: number;
   /**
-   * Runs before any request parsing at all -- path/query/header coercion
-   * and validation, and body parsing -- so a caller verifying a request
-   * signature (or doing auth) sees the request exactly as it arrived and
-   * gets the first chance to reject it, ahead of Speckify's own
-   * validation. `rawBody` carries the exact bytes for a JSON body (signing
-   * covers the raw body, not the parsed value); it is `undefined` for an
-   * octet-stream body, which is never buffered here.
-   *
-   * The return value decides what happens next:
-   * - `undefined` (return nothing): the request continues to parsing and
-   *   the handler, as before.
-   * - a {@link HandledResponse}: a refusal. The adapter answers with its
-   *   `status`, `headers` and `body` exactly as given, and the handler is
-   *   never called. Omit `body` for an empty response (e.g. a 413). Use a
-   *   status the route declares, such as 401, 404 or 413.
-   * - a throw (or a rejected promise): an unexpected failure, answered
-   *   with a 500 problem response and reported to `onError`. It is not a
-   *   refusal; return a {@link HandledResponse} to refuse.
+   * Runs before any request parsing, so a signature or auth check sees the
+   * request as it arrived. `rawBody` is the exact JSON body bytes, or
+   * `undefined` for an octet-stream body. Return nothing to continue, or a
+   * {@link HandledResponse} to refuse: it is sent as is and the handler is
+   * not called. A throw is a 500, reported to `onError`.
    */
   readonly beforeHandle?: (
     rawRequest: IncomingMessage,
