@@ -109,7 +109,7 @@ function sendProblem(res: ServerResponse, status: number, title: string, errors?
 function matchPath(template: string, actual: string): Record<string, string> | undefined {
   const templateParts = template.split('/').filter((part) => part.length > 0);
   const actualParts = splitRequestPath(actual);
-  if (actualParts === undefined || templateParts.length !== actualParts.length) return undefined;
+  if (templateParts.length !== actualParts?.length) return undefined;
 
   const params: Record<string, string> = {};
   for (let i = 0; i < templateParts.length; i += 1) {
@@ -124,6 +124,23 @@ function matchPath(template: string, actual: string): Record<string, string> | u
     }
   }
   return params;
+}
+
+/**
+ * Splits a raw request target into its path and query, without the URL
+ * parser. `new URL` reads a leading `//` as an authority, so it can throw
+ * on the target or match a path the client never sent. The fragment is
+ * dropped, as a client never sends it.
+ */
+function splitTarget(target: string): { pathname: string; query: URLSearchParams } {
+  const hash = target.indexOf('#');
+  const beforeHash = hash === -1 ? target : target.slice(0, hash);
+  const mark = beforeHash.indexOf('?');
+  if (mark === -1) return { pathname: beforeHash, query: new URLSearchParams() };
+  return {
+    pathname: beforeHash.slice(0, mark),
+    query: new URLSearchParams(beforeHash.slice(mark + 1)),
+  };
 }
 
 /**
@@ -293,9 +310,9 @@ function coerceSingleValuedByShape(
 }
 
 /** Groups a URL's query string into `{ key: string[] }`, preserving every repeated occurrence of a key. */
-function multiValuedQuery(url: URL): Record<string, string[]> {
+function multiValuedQuery(params: URLSearchParams): Record<string, string[]> {
   const result: Record<string, string[]> = {};
-  for (const [key, value] of url.searchParams.entries()) {
+  for (const [key, value] of params.entries()) {
     (result[key] ??= []).push(value);
   }
   return result;
@@ -339,11 +356,11 @@ async function handleRequest(
   validateResponses: boolean,
   options: ListenerOptions,
 ): Promise<void> {
-  const url = new URL(req.url ?? '/', 'http://localhost');
+  const { pathname, query: rawQuery } = splitTarget(req.url ?? '/');
   const method = (req.method ?? 'GET').toUpperCase();
 
   const route = routes.find(
-    (candidate) => candidate.method === method && matchPath(candidate.path, url.pathname),
+    (candidate) => candidate.method === method && matchPath(candidate.path, pathname),
   );
   if (!route) {
     sendProblem(res, 404, 'Not Found');
@@ -369,7 +386,7 @@ async function handleRequest(
   }
   await options.beforeHandle?.(req, route, rawJsonBody);
 
-  const rawPathParams = matchPath(route.path, url.pathname) ?? {};
+  const rawPathParams = matchPath(route.path, pathname) ?? {};
   let pathParams: Record<string, unknown> = coerceSingleValuedByShape(
     route.pathSchema,
     rawPathParams,
@@ -383,7 +400,10 @@ async function handleRequest(
     pathParams = result.data as Record<string, unknown>;
   }
 
-  let query: Record<string, unknown> = coerceQueryByShape(route.querySchema, multiValuedQuery(url));
+  let query: Record<string, unknown> = coerceQueryByShape(
+    route.querySchema,
+    multiValuedQuery(rawQuery),
+  );
   if (route.querySchema) {
     const result = route.querySchema.safeParse(query);
     if (!result.success) {
