@@ -9,6 +9,9 @@ const execFileAsync = promisify(execFile);
 /** How long one `oasdiff changelog` may run before it is killed. */
 export const OASDIFF_TIMEOUT_MS = 5 * 60_000;
 
+/** Extra time, after the kill, for the child's stdio to close before the run is failed anyway. */
+const OASDIFF_KILL_GRACE_MS = 1_000;
+
 /** The subset of `execFile`'s behaviour the runner depends on, so tests can inject a fake. */
 export type ProcessRunner = (
   command: string,
@@ -31,9 +34,34 @@ async function defaultProcessRun(
   // other exit -- however it happened to fill stdout -- must abort the plan
   // rather than be read as "no changes". execFile's own error already
   // carries stderr in its message, so there is nothing to recover here.
-  return execFileAsync(command, args as string[], {
+  // SIGKILL cannot be trapped. The deadline is defence in depth: a second
+  // bound if execFile has not settled shortly after its own kill.
+  const run = execFileAsync(command, args as string[], {
     maxBuffer: 1024 * 1024 * 64,
     timeout: timeoutMs,
+    killSignal: 'SIGKILL',
+  }).catch((error: unknown) => {
+    if (error instanceof Error && 'killed' in error && error.killed === true) {
+      throw new Error(timeoutMessage(timeoutMs));
+    }
+    throw error;
+  });
+  return withDeadline(run, timeoutMs + OASDIFF_KILL_GRACE_MS, timeoutMessage(timeoutMs));
+}
+
+function timeoutMessage(timeoutMs: number): string {
+  return `timed out after ${String(timeoutMs)} ms and was killed`;
+}
+
+function withDeadline<T>(work: Promise<T>, deadlineMs: number, message: string): Promise<T> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const deadline = new Promise<never>((_resolve, reject) => {
+    timer = setTimeout(() => {
+      reject(new Error(message));
+    }, deadlineMs);
+  });
+  return Promise.race([work, deadline]).finally(() => {
+    clearTimeout(timer);
   });
 }
 

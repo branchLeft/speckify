@@ -101,6 +101,16 @@ export function createNpmRegistryRecord(options: NpmRegistryOptions): RegistryRe
     }
   }
 
+  /** Reads a response body; a stall or failure there is a RecordError naming the URL too. */
+  async function readBody<T>(url: string, read: () => Promise<T>): Promise<T> {
+    try {
+      return await read();
+    } catch (error) {
+      const reason = error instanceof Error ? error.message : String(error);
+      throw new RecordError(`npm registry response from ${url} could not be read: ${reason}`);
+    }
+  }
+
   async function latest(packageName: string): Promise<RegistryRecordEntry | null> {
     const packumentUrl = `${registryUrl}/${encodeURIComponent(packageName)}`;
     const response = await fetchWithTimeout(packumentUrl);
@@ -113,7 +123,7 @@ export function createNpmRegistryRecord(options: NpmRegistryOptions): RegistryRe
       );
     }
 
-    const packument: unknown = await response.json();
+    const packument: unknown = await readBody(packumentUrl, () => response.json());
     if (!isNpmPackument(packument)) {
       throw new RecordError(`npm registry returned a malformed packument for "${packageName}"`);
     }
@@ -138,7 +148,9 @@ export function createNpmRegistryRecord(options: NpmRegistryOptions): RegistryRe
         `could not download tarball for "${packageName}"@${version}: ${String(tarballResponse.status)}`,
       );
     }
-    const tarballBuffer = Buffer.from(await tarballResponse.arrayBuffer());
+    const tarballBuffer = Buffer.from(
+      await readBody(tarballUrl, () => tarballResponse.arrayBuffer()),
+    );
 
     const specBuffer = await extractTarGzEntry(
       tarballBuffer,
