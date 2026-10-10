@@ -83,6 +83,26 @@ describe('createNpmRegistryRecord', () => {
     expect(headers.Authorization).toBe('Bearer a-token');
   });
 
+  it('aborts a registry request that stalls past the timeout, as a RecordError', async () => {
+    const fetchImpl: FetchLike = vi.fn(
+      (_url: string, init?: RequestInit) =>
+        new Promise<Response>((_resolve, reject) => {
+          init?.signal?.addEventListener('abort', () => {
+            reject(new Error('aborted'));
+          });
+        }),
+    );
+    const record = createNpmRegistryRecord({
+      registryUrl: 'https://npm.example',
+      fetchImpl,
+      timeoutMs: 50,
+    });
+
+    await expect(record.latest('@acme/orders-api')).rejects.toThrow(RecordError);
+    const init = (fetchImpl as ReturnType<typeof vi.fn>).mock.calls[0]?.[1] as RequestInit;
+    expect(init.signal?.aborted).toBe(true);
+  });
+
   it('reads the generating speckifyVersion back from package/package.json (B3)', async () => {
     const tarball = await makeTarballWithSpec(
       { openapi: '3.0.3', info: { version: '0.0.0' } },

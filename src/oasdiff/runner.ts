@@ -6,15 +6,23 @@ import { oasdiffChangeSchema, type OasdiffChange } from './types.js';
 
 const execFileAsync = promisify(execFile);
 
+/** How long one `oasdiff changelog` may run before it is killed. */
+export const OASDIFF_TIMEOUT_MS = 5 * 60_000;
+
 /** The subset of `execFile`'s behaviour the runner depends on, so tests can inject a fake. */
 export type ProcessRunner = (
   command: string,
   args: readonly string[],
 ) => Promise<{ stdout: string; stderr: string }>;
 
-async function defaultProcessRunner(
+function createDefaultProcessRunner(timeoutMs: number): ProcessRunner {
+  return async (command, args) => defaultProcessRun(command, args, timeoutMs);
+}
+
+async function defaultProcessRun(
   command: string,
   args: readonly string[],
+  timeoutMs: number,
 ): Promise<{ stdout: string; stderr: string }> {
   // Confirmed against the real oasdiff 1.32.1 binary: `changelog` exits 0
   // whether or not it found changes, and only exits non-zero on a genuine
@@ -23,7 +31,10 @@ async function defaultProcessRunner(
   // other exit -- however it happened to fill stdout -- must abort the plan
   // rather than be read as "no changes". execFile's own error already
   // carries stderr in its message, so there is nothing to recover here.
-  return execFileAsync(command, args as string[], { maxBuffer: 1024 * 1024 * 64 });
+  return execFileAsync(command, args as string[], {
+    maxBuffer: 1024 * 1024 * 64,
+    timeout: timeoutMs,
+  });
 }
 
 export interface RunOasdiffOptions {
@@ -31,6 +42,8 @@ export interface RunOasdiffOptions {
   baseSpecPath: string;
   revisionSpecPath: string;
   runProcess?: ProcessRunner | undefined;
+  /** Kill the default process runner after this long. Defaults to {@link OASDIFF_TIMEOUT_MS}. */
+  processTimeoutMs?: number | undefined;
 }
 
 /**
@@ -41,7 +54,9 @@ export interface RunOasdiffOptions {
  * valid JSON matching oasdiff's changelog shape.
  */
 export async function runOasdiffChangelog(options: RunOasdiffOptions): Promise<OasdiffChange[]> {
-  const runProcess = options.runProcess ?? defaultProcessRunner;
+  const runProcess =
+    options.runProcess ??
+    createDefaultProcessRunner(options.processTimeoutMs ?? OASDIFF_TIMEOUT_MS);
 
   let stdout: string;
   try {

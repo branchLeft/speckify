@@ -46,6 +46,20 @@ describe('runOasdiffChangelog with the default process runner', () => {
     ).rejects.toThrow(/oasdiff failed to run/);
   });
 
+  it('kills a process that outlives the timeout and throws, never waiting on it', async () => {
+    await writeFile(scriptPath, ['#!/bin/sh', 'exec sleep 3', ''].join('\n'));
+    await chmod(scriptPath, 0o755);
+
+    await expect(
+      runOasdiffChangelog({
+        oasdiffPath: scriptPath,
+        baseSpecPath: 'base.json',
+        revisionSpecPath: 'revision.json',
+        processTimeoutMs: 200,
+      }),
+    ).rejects.toThrow(/oasdiff failed to run/);
+  });
+
   it('throws OasdiffError when the binary does not exist', async () => {
     await expect(
       runOasdiffChangelog({
