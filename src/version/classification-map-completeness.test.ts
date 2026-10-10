@@ -12,6 +12,7 @@ import {
   OASDIFF_CLASSIFICATION_MAP_FILENAME,
 } from '../oasdiff/version.js';
 import { loadClassificationMap, loadOasdiffCheckIds } from './classification-map.js';
+import { classify } from './classify.js';
 
 const execFileAsync = promisify(execFile);
 
@@ -60,5 +61,27 @@ describe('the committed classification map is complete', () => {
     const catalogueIds = await loadOasdiffCheckIds(checksPath);
 
     expect([...liveIds].sort()).toEqual([...catalogueIds].sort());
+  });
+});
+
+describe('the shipped map classifies breaking rules on its own', () => {
+  // The allow-list and the generated-surface diff can also raise a bump, so
+  // a plan-level test cannot see an under-bump in this map. Classifying the
+  // real oasdiff change through the shipped map alone can.
+  it('classifies a removed required response property as major', async () => {
+    const map = await loadClassificationMap(classificationMapPath);
+    const result = classify(
+      [
+        {
+          id: 'response-required-property-removed',
+          text: 'removed the required property `name` from the response with the `200` status',
+          level: 3,
+          operation: 'GET',
+          path: '/widgets',
+        },
+      ],
+      map,
+    );
+    expect(result.bump).toBe('major');
   });
 });
