@@ -108,20 +108,49 @@ function sendProblem(res: ServerResponse, status: number, title: string, errors?
  */
 function matchPath(template: string, actual: string): Record<string, string> | undefined {
   const templateParts = template.split('/').filter((part) => part.length > 0);
-  const actualParts = actual.split('/').filter((part) => part.length > 0);
-  if (templateParts.length !== actualParts.length) return undefined;
+  const actualParts = splitRequestPath(actual);
+  if (actualParts === undefined || templateParts.length !== actualParts.length) return undefined;
 
   const params: Record<string, string> = {};
   for (let i = 0; i < templateParts.length; i += 1) {
     const templatePart = templateParts[i] ?? '';
     const actualPart = actualParts[i] ?? '';
     if (templatePart.startsWith('{') && templatePart.endsWith('}')) {
-      params[templatePart.slice(1, -1)] = decodeURIComponent(actualPart);
+      const value = decodeParam(actualPart);
+      if (value === undefined) return undefined;
+      params[templatePart.slice(1, -1)] = value;
     } else if (templatePart !== actualPart) {
       return undefined;
     }
   }
   return params;
+}
+
+/**
+ * Splits a request path into its segments. An empty segment (a double slash,
+ * or a trailing slash) is not a segment this API defines, so the whole path
+ * is refused rather than having the empty part silently dropped.
+ */
+function splitRequestPath(actual: string): string[] | undefined {
+  if (actual === '/') return [];
+  const parts = actual.slice(1).split('/');
+  return parts.some((part) => part.length === 0) ? undefined : parts;
+}
+
+/**
+ * Decodes one path parameter. A malformed percent-escape (for example `%zz`)
+ * makes decodeURIComponent throw; that is a request that matches no route,
+ * not a server fault. An escaped slash is refused too, since a decoded `/`
+ * would smuggle a second segment into a single parameter.
+ */
+function decodeParam(raw: string): string | undefined {
+  let decoded: string;
+  try {
+    decoded = decodeURIComponent(raw);
+  } catch {
+    return undefined;
+  }
+  return decoded.includes('/') ? undefined : decoded;
 }
 
 /** Thrown by {@link readJsonBody} when the body crosses `maxBytes` before it ends. */
