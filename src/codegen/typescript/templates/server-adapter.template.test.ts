@@ -1,10 +1,11 @@
 import http from 'node:http';
 import type { AddressInfo } from 'node:net';
 import { z } from 'zod';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, expectTypeOf, it } from 'vitest';
 import {
   createRequestListener,
   type HandledResponse,
+  type ListenerOptions,
   type RouteDefinition,
 } from './server-adapter.template.js';
 
@@ -332,5 +333,137 @@ describe('createRequestListener', () => {
       expect(res.status).toBe(400);
       expect(seen).toEqual(['getWidget']);
     });
+  });
+});
+
+describe('beforeHandle refusals', () => {
+  const route: RouteDefinition = {
+    id: 'createPet',
+    method: 'POST',
+    path: '/pets',
+    bodyMode: 'json',
+    bodySchema: z.object({ name: z.string() }),
+  };
+
+  it.each([
+    { status: 401, body: { title: 'Unauthorized', status: 401 } },
+    { status: 404, body: { title: 'Not Found', status: 404 } },
+  ])(
+    'returns the refused status $status and body exactly as beforeHandle gave them',
+    async (refusal) => {
+      let handlerCalled = false;
+      const listener = createRequestListener(
+        {
+          createPet: () => {
+            handlerCalled = true;
+            return Promise.resolve<HandledResponse>({ status: 201, body: {} });
+          },
+        },
+        [route],
+        { beforeHandle: () => refusal },
+      );
+
+      await withServer(listener, async (baseUrl) => {
+        // The body is invalid on purpose: a request that got past beforeHandle
+        // would answer 400, so a 401/404 here proves the refusal ran first.
+        const res = await fetch(`${baseUrl}/pets`, {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({ name: 42 }),
+        });
+        expect(res.status).toBe(refusal.status);
+        expect(await res.json()).toEqual(refusal.body);
+      });
+      expect(handlerCalled).toBe(false);
+    },
+  );
+
+  it('returns a refused 413 with an empty body when the refusal carries none', async () => {
+    let handlerCalled = false;
+    const listener = createRequestListener(
+      {
+        createPet: () => {
+          handlerCalled = true;
+          return Promise.resolve<HandledResponse>({ status: 201, body: {} });
+        },
+      },
+      [route],
+      { beforeHandle: () => ({ status: 413 }) },
+    );
+
+    await withServer(listener, async (baseUrl) => {
+      const res = await fetch(`${baseUrl}/pets`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ name: 'Rex' }),
+      });
+      expect(res.status).toBe(413);
+      expect(await res.text()).toBe('');
+    });
+    expect(handlerCalled).toBe(false);
+  });
+
+  it('sends a refusal status and headers when beforeHandle is async', async () => {
+    const listener = createRequestListener(
+      { createPet: () => Promise.resolve<HandledResponse>({ status: 201, body: {} }) },
+      [route],
+      {
+        beforeHandle: async () => {
+          await Promise.resolve();
+          return { status: 401, headers: { 'www-authenticate': 'Speckify-Signature' } };
+        },
+      },
+    );
+
+    await withServer(listener, async (baseUrl) => {
+      const res = await fetch(`${baseUrl}/pets`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ name: 'Rex' }),
+      });
+      expect(res.status).toBe(401);
+      expect(res.headers.get('www-authenticate')).toBe('Speckify-Signature');
+    });
+  });
+
+  it('still answers 500 when beforeHandle throws (control: a throw is not a refusal)', async () => {
+    let handlerCalled = false;
+    const errors: unknown[] = [];
+    const listener = createRequestListener(
+      {
+        createPet: () => {
+          handlerCalled = true;
+          return Promise.resolve<HandledResponse>({ status: 201, body: {} });
+        },
+      },
+      [route],
+      {
+        beforeHandle: () => {
+          throw new Error('verifier crashed');
+        },
+        onError: (error) => void errors.push(error),
+      },
+    );
+
+    await withServer(listener, async (baseUrl) => {
+      const res = await fetch(`${baseUrl}/pets`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ name: 'Rex' }),
+      });
+      expect(res.status).toBe(500);
+      expect(res.headers.get('content-type')).toBe('application/problem+json');
+    });
+    expect(handlerCalled).toBe(false);
+    expect(errors).toHaveLength(1);
+  });
+
+  it('types beforeHandle as returning a refusal, or nothing to continue', () => {
+    type Hook = NonNullable<ListenerOptions['beforeHandle']>;
+    /* eslint-disable @typescript-eslint/no-invalid-void-type -- the hook may return void, which is the type under test */
+    expectTypeOf<ReturnType<Hook>>().toEqualTypeOf<
+      void | HandledResponse | Promise<void | HandledResponse>
+    >();
+    /* eslint-enable @typescript-eslint/no-invalid-void-type */
   });
 });

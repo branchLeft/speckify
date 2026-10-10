@@ -60,6 +60,14 @@ export interface RouteDefinition {
   readonly responseSchemas?: Readonly<Record<number, ZodType>>;
 }
 
+/**
+ * What a `beforeHandle` hook returns: nothing to continue, or a refusal.
+ * It is `void` rather than `undefined` so an async hook with no return
+ * statement, which only verifies, still type-checks.
+ */
+// eslint-disable-next-line @typescript-eslint/no-invalid-void-type -- a hook with nothing to refuse returns void
+type BeforeHandleResult = void | HandledResponse | Promise<void | HandledResponse>;
+
 /** The default {@link ListenerOptions.maxJsonBodyBytes}: 1 MiB. */
 export const DEFAULT_MAX_JSON_BODY_BYTES = 1024 * 1024;
 
@@ -80,12 +88,23 @@ export interface ListenerOptions {
    * validation. `rawBody` carries the exact bytes for a JSON body (signing
    * covers the raw body, not the parsed value); it is `undefined` for an
    * octet-stream body, which is never buffered here.
+   *
+   * The return value decides what happens next:
+   * - `undefined` (return nothing): the request continues to parsing and
+   *   the handler, as before.
+   * - a {@link HandledResponse}: a refusal. The adapter answers with its
+   *   `status`, `headers` and `body` exactly as given, and the handler is
+   *   never called. Omit `body` for an empty response (e.g. a 413). Use a
+   *   status the route declares, such as 401, 404 or 413.
+   * - a throw (or a rejected promise): an unexpected failure, answered
+   *   with a 500 problem response and reported to `onError`. It is not a
+   *   refusal; return a {@link HandledResponse} to refuse.
    */
   readonly beforeHandle?: (
     rawRequest: IncomingMessage,
     route: RouteDefinition,
     rawBody: Buffer | undefined,
-  ) => void | Promise<void>;
+  ) => BeforeHandleResult;
   readonly onError?: (error: unknown, rawRequest: IncomingMessage) => void;
 }
 
@@ -338,7 +357,12 @@ async function handleRequest(
       throw error;
     }
   }
-  await options.beforeHandle?.(req, route, rawJsonBody);
+  const refusal = await options.beforeHandle?.(req, route, rawJsonBody);
+  if (refusal) {
+    res.writeHead(refusal.status, { 'content-type': 'application/json', ...refusal.headers });
+    res.end(refusal.body === undefined ? undefined : JSON.stringify(refusal.body));
+    return;
+  }
 
   const rawPathParams = matchPath(route.path, url.pathname) ?? {};
   let pathParams: Record<string, unknown> = coerceSingleValuedByShape(
