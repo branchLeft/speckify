@@ -115,7 +115,19 @@ describe.skipIf(!uvAvailable)(describeTitle, () => {
 
     const { stdout, exitCode } = await run(
       uvPath,
-      ['run', '--frozen', 'pyright', '--outputjson', '--pythonpath', venvPython, consumerPath],
+      [
+        'run',
+        '--frozen',
+        'pyright',
+        '--outputjson',
+        // Pyright reads its config from the project root, which is the cwd (TOOLCHAIN_DIR),
+        // so the strict pyrightconfig.json in workDir is ignored unless passed explicitly.
+        '--project',
+        join(workDir, 'pyrightconfig.json'),
+        '--pythonpath',
+        venvPython,
+        consumerPath,
+      ],
       TOOLCHAIN_DIR,
     );
 
