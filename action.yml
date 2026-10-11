@@ -21,10 +21,16 @@ runs:
     # Speckify's own CLI can read it) gets its own setup-node step further
     # down, which only adds a *second* registry mapping to .npmrc -- it does
     # not need to replace this one.
+    #
+    # The version is written out, not read from .nvmrc: a node-version-file
+    # under ${{ github.action_path }} is an absolute path, which setup-node
+    # joins onto the caller's workspace, so the file is never found outside
+    # this repository. scripts/action-node-setup.test.ts keeps this value
+    # equal to .nvmrc.
     - name: Set up Node
       uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
       with:
-        node-version-file: ${{ github.action_path }}/.nvmrc
+        node-version: '26.5.0'
 
     - name: Set up uv
       uses: astral-sh/setup-uv@f0ec1fc3b38f5e7cd731bb6ce540c5af426746bb # v6.1.0
@@ -80,7 +86,7 @@ runs:
       if: steps.npm-owner.outputs.scope != ''
       uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
       with:
-        node-version-file: ${{ github.action_path }}/.nvmrc
+        node-version: '26.5.0'
         registry-url: https://npm.pkg.github.com
         scope: ${{ steps.npm-owner.outputs.scope }}
 
