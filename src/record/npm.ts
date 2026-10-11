@@ -11,7 +11,11 @@ export interface NpmRegistryOptions {
   /** A bearer token for a registry that requires auth, such as GitHub Packages. */
   token?: string | undefined;
   fetchImpl?: FetchLike | undefined;
+  /** Abort any single registry request that runs longer than this. */
+  timeoutMs?: number | undefined;
 }
+
+const DEFAULT_REGISTRY_TIMEOUT_MS = 30_000;
 
 interface NpmPackument {
   'dist-tags'?: { latest?: string };
@@ -74,6 +78,7 @@ function speckifyVersionFromPackageJson(raw: Buffer | null): string | null {
 export function createNpmRegistryRecord(options: NpmRegistryOptions): RegistryRecord {
   const fetchImpl = options.fetchImpl ?? fetch;
   const registryUrl = options.registryUrl.replace(/\/$/, '');
+  const timeoutMs = options.timeoutMs ?? DEFAULT_REGISTRY_TIMEOUT_MS;
 
   function authHeaders(): Record<string, string> {
     const headers: Record<string, string> = { Accept: 'application/json' };
@@ -83,9 +88,32 @@ export function createNpmRegistryRecord(options: NpmRegistryOptions): RegistryRe
     return headers;
   }
 
+  /** One registry request, aborted after the timeout so a stalled registry cannot hang the plan. */
+  async function fetchWithTimeout(url: string): Promise<Response> {
+    try {
+      return await fetchImpl(url, {
+        headers: authHeaders(),
+        signal: AbortSignal.timeout(timeoutMs),
+      });
+    } catch (error) {
+      const reason = error instanceof Error ? error.message : String(error);
+      throw new RecordError(`npm registry request to ${url} failed: ${reason}`);
+    }
+  }
+
+  /** Reads a response body; a stall or failure there is a RecordError naming the URL too. */
+  async function readBody<T>(url: string, read: () => Promise<T>): Promise<T> {
+    try {
+      return await read();
+    } catch (error) {
+      const reason = error instanceof Error ? error.message : String(error);
+      throw new RecordError(`npm registry response from ${url} could not be read: ${reason}`);
+    }
+  }
+
   async function latest(packageName: string): Promise<RegistryRecordEntry | null> {
     const packumentUrl = `${registryUrl}/${encodeURIComponent(packageName)}`;
-    const response = await fetchImpl(packumentUrl, { headers: authHeaders() });
+    const response = await fetchWithTimeout(packumentUrl);
     if (response.status === 404) {
       return null;
     }
@@ -95,7 +123,7 @@ export function createNpmRegistryRecord(options: NpmRegistryOptions): RegistryRe
       );
     }
 
-    const packument: unknown = await response.json();
+    const packument: unknown = await readBody(packumentUrl, () => response.json());
     if (!isNpmPackument(packument)) {
       throw new RecordError(`npm registry returned a malformed packument for "${packageName}"`);
     }
@@ -114,13 +142,15 @@ export function createNpmRegistryRecord(options: NpmRegistryOptions): RegistryRe
       );
     }
 
-    const tarballResponse = await fetchImpl(tarballUrl, { headers: authHeaders() });
+    const tarballResponse = await fetchWithTimeout(tarballUrl);
     if (!tarballResponse.ok) {
       throw new RecordError(
         `could not download tarball for "${packageName}"@${version}: ${String(tarballResponse.status)}`,
       );
     }
-    const tarballBuffer = Buffer.from(await tarballResponse.arrayBuffer());
+    const tarballBuffer = Buffer.from(
+      await readBody(tarballUrl, () => tarballResponse.arrayBuffer()),
+    );
 
     const specBuffer = await extractTarGzEntry(
       tarballBuffer,

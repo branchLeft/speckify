@@ -1,4 +1,4 @@
-import { mkdtemp, rm, writeFile, chmod } from 'node:fs/promises';
+import { mkdtemp, rm, writeFile, chmod, readFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
@@ -45,6 +45,44 @@ describe('runOasdiffChangelog with the default process runner', () => {
       }),
     ).rejects.toThrow(/oasdiff failed to run/);
   });
+
+  it('rejects a run that outlives the timeout', async () => {
+    await writeFile(scriptPath, ['#!/bin/sh', 'exec sleep 3', ''].join('\n'));
+    await chmod(scriptPath, 0o755);
+
+    await expect(
+      runOasdiffChangelog({
+        oasdiffPath: scriptPath,
+        baseSpecPath: 'base.json',
+        revisionSpecPath: 'revision.json',
+        processTimeoutMs: 200,
+      }),
+    ).rejects.toThrow(/oasdiff failed to run: timed out/);
+  });
+
+  it('rejects, never resolving an empty changelog, when the child ignores SIGTERM', async () => {
+    const pidFile = join(dir, 'child.pid');
+    await writeFile(
+      scriptPath,
+      ['#!/bin/sh', "trap '' TERM", `echo $$ > ${pidFile}`, 'exec sleep 6', ''].join('\n'),
+    );
+    await chmod(scriptPath, 0o755);
+
+    const started = Date.now();
+    await expect(
+      runOasdiffChangelog({
+        oasdiffPath: scriptPath,
+        baseSpecPath: 'base.json',
+        revisionSpecPath: 'revision.json',
+        processTimeoutMs: 500,
+      }),
+    ).rejects.toThrow(/oasdiff failed to run: timed out/);
+    expect(Date.now() - started).toBeLessThan(2_000);
+
+    // The child itself is gone, not left running after the run was failed.
+    const pid = Number(await readFile(pidFile, 'utf8'));
+    expect(() => process.kill(pid, 0)).toThrow();
+  }, 15_000);
 
   it('throws OasdiffError when the binary does not exist', async () => {
     await expect(
