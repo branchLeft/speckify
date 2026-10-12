@@ -177,7 +177,8 @@ describe('buildContract (end-to-end: plan through a mocked first-publish registr
     );
 
     expect(typecheckStrictConsumer(consumerFile)).toEqual([]);
-  }, 30_000);
+    // Timeout: twice the worst measured run (29,984 ms with coverage under load), about five times the median.
+  }, 60_000);
 
   it.skipIf(!uvAvailable)(
     'generates and builds the Python wheel for a first publish, and it installs and imports in a clean uv environment',
