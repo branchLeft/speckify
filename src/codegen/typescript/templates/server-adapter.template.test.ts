@@ -410,6 +410,135 @@ describe('createRequestListener', () => {
       });
     });
   });
+
+  describe('absolute-form request targets', () => {
+    const slotRoute: RouteDefinition = {
+      id: 'resetSlot',
+      method: 'POST',
+      path: '/slots/{id}/reset',
+      bodyMode: 'none',
+      pathSchema: z.object({ id: z.string() }),
+    };
+    let calls = 0;
+    const listener = createRequestListener(
+      {
+        resetSlot: (request: { path: { id: string } }) => {
+          calls += 1;
+          return Promise.resolve<HandledResponse>({ status: 200, body: { id: request.path.id } });
+        },
+      },
+      [slotRoute],
+    );
+
+    // node:http sends the target unchanged, so these reach the adapter as absolute-form.
+    function sendRawRequest(
+      baseUrl: string,
+      target: string,
+    ): Promise<{ status: number | undefined; contentType: string | undefined; text: string }> {
+      const { hostname, port } = new URL(baseUrl);
+      return new Promise((resolve, reject) => {
+        const req = http.request({ hostname, port, path: target, method: 'POST' }, (res) => {
+          let text = '';
+          res.setEncoding('utf8');
+          res.on('data', (chunk: string) => {
+            text += chunk;
+          });
+          res.on('error', reject);
+          res.on('end', () => {
+            resolve({
+              status: res.statusCode,
+              contentType: res.headers['content-type'],
+              text,
+            });
+          });
+        });
+        req.on('error', reject);
+        req.end();
+      });
+    }
+
+    it.each([
+      'http://example.test/slots/abc/reset',
+      'https://example.test/slots/abc/reset',
+      'http://example.test:8080/slots/abc/reset',
+      'HTTP://example.test/slots/abc/reset',
+      'http://user:pw@example.test/slots/abc/reset',
+      'http://example.test/slots/abc/reset#frag',
+      'http://[::1]/slots/abc/reset',
+    ])('serves %s as the origin-form path /slots/abc/reset', async (target) => {
+      calls = 0;
+      await withServer(listener, async (baseUrl) => {
+        const res = await sendRawRequest(baseUrl, target);
+        expect(res.status).toBe(200);
+        const body: unknown = JSON.parse(res.text);
+        expect(body).toEqual({ id: 'abc' });
+      });
+      expect(calls).toBe(1);
+    });
+
+    it.each([
+      'http://example.test//slots/abc/reset',
+      'ftp://example.test/slots/abc/reset',
+      'ws://example.test/slots/abc/reset',
+      'file:///slots/abc/reset',
+      'httpx://example.test/slots/abc/reset',
+      'http://example.test',
+      'https://example.test',
+      'http://example.test?x=/slots/abc/reset',
+      'http:///slots/abc/reset',
+      'http://:8080/slots/abc/reset',
+      'http://user@/slots/abc/reset',
+      'http://user:pw@/slots/abc/reset',
+      'http://user@:8080/slots/abc/reset',
+      'http://',
+    ])('refuses %s with 404 problem+json and never calls the handler', async (target) => {
+      calls = 0;
+      await withServer(listener, async (baseUrl) => {
+        const res = await sendRawRequest(baseUrl, target);
+        expect(res.status).toBe(404);
+        expect(res.contentType).toBe('application/problem+json');
+      });
+      expect(calls).toBe(0);
+    });
+
+    it('still serves the origin-form control /slots/abc/reset', async () => {
+      calls = 0;
+      await withServer(listener, async (baseUrl) => {
+        const res = await sendRawRequest(baseUrl, '/slots/abc/reset');
+        expect(res.status).toBe(200);
+        const body: unknown = JSON.parse(res.text);
+        expect(body).toEqual({ id: 'abc' });
+      });
+      expect(calls).toBe(1);
+    });
+
+    it('keeps every repeated query value on an absolute-form target, as origin-form does', async () => {
+      const echoRoute: RouteDefinition = {
+        id: 'echoQuery',
+        method: 'POST',
+        path: '/echo',
+        bodyMode: 'none',
+        querySchema: z.object({ x: z.array(z.string()) }),
+      };
+      const echoListener = createRequestListener(
+        {
+          echoQuery: (request: { query: { x: string[] } }) =>
+            Promise.resolve<HandledResponse>({ status: 200, body: request.query }),
+        },
+        [echoRoute],
+      );
+
+      await withServer(echoListener, async (baseUrl) => {
+        const absolute = await sendRawRequest(baseUrl, 'http://example.test/echo?x=1&x=2');
+        const origin = await sendRawRequest(baseUrl, '/echo?x=1&x=2');
+        expect(absolute.status).toBe(200);
+        expect(origin.status).toBe(200);
+        expect(absolute.text).toBe(origin.text);
+        const body: unknown = JSON.parse(absolute.text);
+        expect(body).toEqual({ x: ['1', '2'] });
+      });
+    });
+  });
 });
 
 describe('beforeHandle refusals', () => {
