@@ -335,6 +335,272 @@ describe('createRequestListener', () => {
     });
   });
 
+  it('answers 400 problem+json for a malformed JSON body, without calling the handler or reporting an error', async () => {
+    const route: RouteDefinition = {
+      id: 'createPet',
+      method: 'POST',
+      path: '/pets',
+      bodyMode: 'json',
+      bodySchema: z.object({ name: z.string() }),
+    };
+    let handlerCalled = false;
+    const errors: unknown[] = [];
+    const listener = createRequestListener(
+      {
+        createPet: () => {
+          handlerCalled = true;
+          return Promise.resolve<HandledResponse>({ status: 201, body: {} });
+        },
+      },
+      [route],
+      { onError: (error) => void errors.push(error) },
+    );
+
+    await withServer(listener, async (baseUrl) => {
+      const res = await fetch(`${baseUrl}/pets`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: '{"name":',
+      });
+      expect(res.status).toBe(400);
+      expect(res.headers.get('content-type')).toBe('application/problem+json');
+      expect(await res.json()).toEqual({ title: 'Malformed JSON body', status: 400 });
+    });
+    expect(handlerCalled).toBe(false);
+    expect(errors).toHaveLength(0);
+  });
+
+  it('answers 500 and reports the error when a matched route has no registered handler', async () => {
+    const errors: unknown[] = [];
+    const listener = createRequestListener({}, [getThingRoute], {
+      onError: (error) => void errors.push(error),
+    });
+
+    await withServer(listener, async (baseUrl) => {
+      const res = await fetch(`${baseUrl}/things/abc`);
+      expect(res.status).toBe(500);
+      expect(res.headers.get('content-type')).toBe('application/problem+json');
+      expect(await res.json()).toEqual({ title: 'Internal Server Error', status: 500 });
+    });
+    expect(errors).toHaveLength(1);
+    expect(errors[0]).toBeInstanceOf(Error);
+    expect((errors[0] as Error).message).toBe('No handler registered for operation "getThing"');
+  });
+
+  describe('request coercion and rejection', () => {
+    const headerRoute: RouteDefinition = {
+      id: 'readHeaders',
+      method: 'GET',
+      path: '/headers',
+      bodyMode: 'none',
+      headersSchema: z.object({
+        'X-Count': z.number().optional(),
+        'X-Flag': z.boolean(),
+        'X-Tags': z.array(z.number()),
+      }),
+    };
+    const validHeaders = { 'x-count': '1', 'x-flag': 'true', 'x-tags': '3' };
+    let handlerCalls = 0;
+    const headerListener = createRequestListener(
+      {
+        readHeaders: (request: { headers: unknown }) => {
+          handlerCalls += 1;
+          return Promise.resolve<HandledResponse>({ status: 200, body: request.headers });
+        },
+      },
+      [headerRoute],
+    );
+
+    it('coerces optional, boolean and array header fields by their declared types', async () => {
+      handlerCalls = 0;
+      await withServer(headerListener, async (baseUrl) => {
+        const res = await fetch(`${baseUrl}/headers`, {
+          headers: { 'x-count': '7', 'x-flag': 'False', 'x-tags': '3' },
+        });
+        expect(res.status).toBe(200);
+        expect(await res.json()).toEqual({ 'x-count': 7, 'x-flag': false, 'x-tags': [3] });
+      });
+      expect(handlerCalls).toBe(1);
+    });
+
+    it.each([
+      ['an empty number header', { 'x-count': '' }],
+      ['a number header that is not numeric', { 'x-count': 'abc' }],
+      ['a boolean header that is neither true nor false', { 'x-flag': 'maybe' }],
+    ])(
+      'answers 400 Invalid headers for %s, without calling the handler',
+      async (_label, override) => {
+        handlerCalls = 0;
+        await withServer(headerListener, async (baseUrl) => {
+          const res = await fetch(`${baseUrl}/headers`, {
+            headers: { ...validHeaders, ...override },
+          });
+          expect(res.status).toBe(400);
+          expect(res.headers.get('content-type')).toBe('application/problem+json');
+          const problem = (await res.json()) as { title: string };
+          expect(problem.title).toBe('Invalid headers');
+        });
+        expect(handlerCalls).toBe(0);
+      },
+    );
+
+    it('joins a repeated multi-valued request header into one value for the handler', async () => {
+      const echoRoute: RouteDefinition = {
+        id: 'echoHeaders',
+        method: 'GET',
+        path: '/echo-headers',
+        bodyMode: 'none',
+      };
+      const listener = createRequestListener(
+        {
+          echoHeaders: (request: { headers: unknown }) =>
+            Promise.resolve<HandledResponse>({ status: 200, body: request.headers }),
+        },
+        [echoRoute],
+      );
+
+      await withServer(listener, async (baseUrl) => {
+        const { hostname, port } = new URL(baseUrl);
+        const text = await new Promise<string>((resolve, reject) => {
+          const req = http.request(
+            {
+              hostname,
+              port,
+              path: '/echo-headers',
+              method: 'GET',
+              headers: { 'set-cookie': ['a=1', 'b=2'] },
+            },
+            (res) => {
+              let body = '';
+              res.setEncoding('utf8');
+              res.on('data', (chunk: string) => {
+                body += chunk;
+              });
+              res.on('error', reject);
+              res.on('end', () => {
+                resolve(body);
+              });
+            },
+          );
+          req.on('error', reject);
+          req.end();
+        });
+        expect(JSON.parse(text)).toMatchObject({ 'set-cookie': 'a=1, b=2' });
+      });
+    });
+
+    it('coerces a scalar number query field from the URL', async () => {
+      const route: RouteDefinition = {
+        id: 'listItems',
+        method: 'GET',
+        path: '/items',
+        bodyMode: 'none',
+        querySchema: z.object({ limit: z.number() }),
+      };
+      const listener = createRequestListener(
+        {
+          listItems: (request: { query: unknown }) =>
+            Promise.resolve<HandledResponse>({ status: 200, body: request.query }),
+        },
+        [route],
+      );
+
+      await withServer(listener, async (baseUrl) => {
+        const res = await fetch(`${baseUrl}/items?limit=5`);
+        expect(res.status).toBe(200);
+        expect(await res.json()).toEqual({ limit: 5 });
+      });
+    });
+
+    it('answers 400 Invalid query parameters when a typed query field does not coerce', async () => {
+      const route: RouteDefinition = {
+        id: 'listItems',
+        method: 'GET',
+        path: '/items',
+        bodyMode: 'none',
+        querySchema: z.object({ limit: z.number() }),
+      };
+      let handlerCalled = false;
+      const listener = createRequestListener(
+        {
+          listItems: () => {
+            handlerCalled = true;
+            return Promise.resolve<HandledResponse>({ status: 200, body: {} });
+          },
+        },
+        [route],
+      );
+
+      await withServer(listener, async (baseUrl) => {
+        const res = await fetch(`${baseUrl}/items?limit=abc`);
+        expect(res.status).toBe(400);
+        const problem = (await res.json()) as { title: string };
+        expect(problem.title).toBe('Invalid query parameters');
+      });
+      expect(handlerCalled).toBe(false);
+    });
+
+    it('keeps every repeated query value for an unschemaed key, and a single value otherwise', async () => {
+      const route: RouteDefinition = {
+        id: 'search',
+        method: 'GET',
+        path: '/search',
+        bodyMode: 'none',
+      };
+      const listener = createRequestListener(
+        {
+          search: (request: { query: unknown }) =>
+            Promise.resolve<HandledResponse>({ status: 200, body: request.query }),
+        },
+        [route],
+      );
+
+      await withServer(listener, async (baseUrl) => {
+        const res = await fetch(`${baseUrl}/search?tag=a&tag=b&single=c`);
+        expect(res.status).toBe(200);
+        expect(await res.json()).toEqual({ tag: ['a', 'b'], single: 'c' });
+      });
+    });
+
+    it('answers 404 when a literal path segment differs, even at the same segment count', async () => {
+      const listener = createRequestListener({}, [getThingRoute]);
+      await withServer(listener, async (baseUrl) => {
+        const res = await fetch(`${baseUrl}/stuff/abc`);
+        expect(res.status).toBe(404);
+        expect(res.headers.get('content-type')).toBe('application/problem+json');
+      });
+    });
+
+    it('passes an empty JSON body to the handler as undefined, not as a parse error', async () => {
+      const route: RouteDefinition = {
+        id: 'createPet',
+        method: 'POST',
+        path: '/pets',
+        bodyMode: 'json',
+      };
+      const bodies: unknown[] = [];
+      const listener = createRequestListener(
+        {
+          createPet: (request: { body: unknown }) => {
+            bodies.push(request.body);
+            return Promise.resolve<HandledResponse>({ status: 201, body: {} });
+          },
+        },
+        [route],
+      );
+
+      await withServer(listener, async (baseUrl) => {
+        const res = await fetch(`${baseUrl}/pets`, {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+        });
+        expect(res.status).toBe(201);
+      });
+      expect(bodies).toHaveLength(1);
+      expect(bodies[0]).toBeUndefined();
+    });
+  });
+
   describe('hostile request paths', () => {
     const slotRoute: RouteDefinition = {
       id: 'resetSlot',
@@ -407,6 +673,135 @@ describe('createRequestListener', () => {
         const res = await fetch(`${baseUrl}/slots/a%20b/reset`, { method: 'POST' });
         expect(res.status).toBe(200);
         expect(await res.json()).toEqual({ id: 'a b' });
+      });
+    });
+  });
+
+  describe('absolute-form request targets', () => {
+    const slotRoute: RouteDefinition = {
+      id: 'resetSlot',
+      method: 'POST',
+      path: '/slots/{id}/reset',
+      bodyMode: 'none',
+      pathSchema: z.object({ id: z.string() }),
+    };
+    let calls = 0;
+    const listener = createRequestListener(
+      {
+        resetSlot: (request: { path: { id: string } }) => {
+          calls += 1;
+          return Promise.resolve<HandledResponse>({ status: 200, body: { id: request.path.id } });
+        },
+      },
+      [slotRoute],
+    );
+
+    // node:http sends the target unchanged, so these reach the adapter as absolute-form.
+    function sendRawRequest(
+      baseUrl: string,
+      target: string,
+    ): Promise<{ status: number | undefined; contentType: string | undefined; text: string }> {
+      const { hostname, port } = new URL(baseUrl);
+      return new Promise((resolve, reject) => {
+        const req = http.request({ hostname, port, path: target, method: 'POST' }, (res) => {
+          let text = '';
+          res.setEncoding('utf8');
+          res.on('data', (chunk: string) => {
+            text += chunk;
+          });
+          res.on('error', reject);
+          res.on('end', () => {
+            resolve({
+              status: res.statusCode,
+              contentType: res.headers['content-type'],
+              text,
+            });
+          });
+        });
+        req.on('error', reject);
+        req.end();
+      });
+    }
+
+    it.each([
+      'http://example.test/slots/abc/reset',
+      'https://example.test/slots/abc/reset',
+      'http://example.test:8080/slots/abc/reset',
+      'HTTP://example.test/slots/abc/reset',
+      'http://user:pw@example.test/slots/abc/reset',
+      'http://example.test/slots/abc/reset#frag',
+      'http://[::1]/slots/abc/reset',
+    ])('serves %s as the origin-form path /slots/abc/reset', async (target) => {
+      calls = 0;
+      await withServer(listener, async (baseUrl) => {
+        const res = await sendRawRequest(baseUrl, target);
+        expect(res.status).toBe(200);
+        const body: unknown = JSON.parse(res.text);
+        expect(body).toEqual({ id: 'abc' });
+      });
+      expect(calls).toBe(1);
+    });
+
+    it.each([
+      'http://example.test//slots/abc/reset',
+      'ftp://example.test/slots/abc/reset',
+      'ws://example.test/slots/abc/reset',
+      'file:///slots/abc/reset',
+      'httpx://example.test/slots/abc/reset',
+      'http://example.test',
+      'https://example.test',
+      'http://example.test?x=/slots/abc/reset',
+      'http:///slots/abc/reset',
+      'http://:8080/slots/abc/reset',
+      'http://user@/slots/abc/reset',
+      'http://user:pw@/slots/abc/reset',
+      'http://user@:8080/slots/abc/reset',
+      'http://',
+    ])('refuses %s with 404 problem+json and never calls the handler', async (target) => {
+      calls = 0;
+      await withServer(listener, async (baseUrl) => {
+        const res = await sendRawRequest(baseUrl, target);
+        expect(res.status).toBe(404);
+        expect(res.contentType).toBe('application/problem+json');
+      });
+      expect(calls).toBe(0);
+    });
+
+    it('still serves the origin-form control /slots/abc/reset', async () => {
+      calls = 0;
+      await withServer(listener, async (baseUrl) => {
+        const res = await sendRawRequest(baseUrl, '/slots/abc/reset');
+        expect(res.status).toBe(200);
+        const body: unknown = JSON.parse(res.text);
+        expect(body).toEqual({ id: 'abc' });
+      });
+      expect(calls).toBe(1);
+    });
+
+    it('keeps every repeated query value on an absolute-form target, as origin-form does', async () => {
+      const echoRoute: RouteDefinition = {
+        id: 'echoQuery',
+        method: 'POST',
+        path: '/echo',
+        bodyMode: 'none',
+        querySchema: z.object({ x: z.array(z.string()) }),
+      };
+      const echoListener = createRequestListener(
+        {
+          echoQuery: (request: { query: { x: string[] } }) =>
+            Promise.resolve<HandledResponse>({ status: 200, body: request.query }),
+        },
+        [echoRoute],
+      );
+
+      await withServer(echoListener, async (baseUrl) => {
+        const absolute = await sendRawRequest(baseUrl, 'http://example.test/echo?x=1&x=2');
+        const origin = await sendRawRequest(baseUrl, '/echo?x=1&x=2');
+        expect(absolute.status).toBe(200);
+        expect(origin.status).toBe(200);
+        expect(absolute.text).toBe(origin.text);
+        const body: unknown = JSON.parse(absolute.text);
+        expect(body).toEqual({ x: ['1', '2'] });
       });
     });
   });

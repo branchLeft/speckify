@@ -133,12 +133,29 @@ function matchPath(template: string, actual: string): Record<string, string> | u
 }
 
 /**
+ * Reduces an absolute-form target to its origin-form part. The scheme and
+ * authority are discarded. A missing host, or a remainder that does not start
+ * with `/`, becomes `''`, which matches no route.
+ */
+function stripAbsoluteForm(target: string): string {
+  const prefix = /^https?:\/\/([^/?#]*)/i.exec(target);
+  if (prefix === null) return target;
+  const authority = prefix[1] ?? '';
+  const host = authority.slice(authority.lastIndexOf('@') + 1);
+  const remainder = target.slice(prefix[0].length);
+  if (host.length === 0 || host.startsWith(':') || !remainder.startsWith('/')) return '';
+  return remainder;
+}
+
+/**
  * Splits a raw request target into its path and query, without the URL
  * parser. `new URL` reads a leading `//` as an authority, so it can throw
  * on the target or match a path the client never sent. The fragment is
  * dropped, as a client never sends it.
+ * Accepts http and https absolute-form; anything else is refused.
  */
-function splitTarget(target: string): { pathname: string; query: URLSearchParams } {
+function splitTarget(rawTarget: string): { pathname: string; query: URLSearchParams } {
+  const target = stripAbsoluteForm(rawTarget);
   const hash = target.indexOf('#');
   const beforeHash = hash === -1 ? target : target.slice(0, hash);
   const mark = beforeHash.indexOf('?');
