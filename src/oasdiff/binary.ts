@@ -4,12 +4,16 @@ import { arch as hostArch, platform as hostPlatform } from 'node:os';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
+import { deadlineFetch } from '../record/deadline-fetch.js';
 import { extractTarGzEntry } from '../record/extract-tar-entry.js';
 import { OasdiffError } from './errors.js';
 import { OASDIFF_VERSION } from './version.js';
 import type { FetchLike } from '../record/types.js';
 
 export { OASDIFF_VERSION } from './version.js';
+
+/** Abort the oasdiff archive download past this, so a stalled release host cannot hang the run. */
+const DOWNLOAD_TIMEOUT_MS = 120_000;
 
 const moduleDir = dirname(fileURLToPath(import.meta.url));
 const defaultChecksumsPath = join(moduleDir, 'checksums.json');
@@ -79,6 +83,8 @@ export interface ResolveOasdiffOptions {
   binaryChecksumsPath?: string;
   /** Where warnings (e.g. an unverified override) are printed; defaults to `console.error`. */
   warn?: (message: string) => void;
+  /** Overrides the archive download's abort budget for tests. */
+  timeoutMs?: number;
 }
 
 /**
@@ -147,12 +153,18 @@ export async function resolveOasdiffBinary(options: ResolveOasdiffOptions): Prom
   }
 
   const downloadUrl = `https://github.com/oasdiff/oasdiff/releases/download/v${OASDIFF_VERSION}/${asset}`;
-  const fetchImpl = options.fetchImpl ?? fetch;
-  const response = await fetchImpl(downloadUrl);
+  const http = deadlineFetch(
+    options.fetchImpl ?? fetch,
+    options.timeoutMs ?? DOWNLOAD_TIMEOUT_MS,
+    (message) => new OasdiffError(message),
+  );
+  const response = await http.fetch('oasdiff download', downloadUrl);
   if (!response.ok) {
     throw new OasdiffError(`could not download ${downloadUrl}: ${String(response.status)}`);
   }
-  const archiveBuffer = Buffer.from(await response.arrayBuffer());
+  const archiveBuffer = Buffer.from(
+    await http.body('oasdiff download', downloadUrl, () => response.arrayBuffer()),
+  );
 
   const actualArchiveChecksum = createHash('sha256').update(archiveBuffer).digest('hex');
   if (actualArchiveChecksum !== expectedArchiveChecksum) {

@@ -1,12 +1,18 @@
 import { toCanonicalJson } from '../bundle/canonical-json.js';
+import { deadlineFetch } from './deadline-fetch.js';
 import { RecordError } from './errors.js';
 import { extractZipEntry } from './extract-zip-entry.js';
 import type { FetchLike, RegistryRecord, RegistryRecordEntry } from './types.js';
+
+/** Abort any single PyPI request, or read of its response, that runs longer than this. */
+const PYPI_TIMEOUT_MS = 60_000;
 
 export interface PyPiRegistryOptions {
   /** The PyPI-compatible index base URL. Defaults to `https://pypi.org`. */
   indexUrl?: string | undefined;
   fetchImpl?: FetchLike | undefined;
+  /** Overrides the per-request abort budget for tests. */
+  timeoutMs?: number | undefined;
 }
 
 interface PyPiRelease {
@@ -50,12 +56,16 @@ function speckifyVersionFromSpeckifyJson(raw: Buffer | null): string | null {
  * `openapi.json` it published alongside it.
  */
 export function createPyPiRegistryRecord(options: PyPiRegistryOptions = {}): RegistryRecord {
-  const fetchImpl = options.fetchImpl ?? fetch;
+  const http = deadlineFetch(
+    options.fetchImpl ?? fetch,
+    options.timeoutMs ?? PYPI_TIMEOUT_MS,
+    (message) => new RecordError(message),
+  );
   const indexUrl = (options.indexUrl ?? 'https://pypi.org').replace(/\/$/, '');
 
   async function latest(packageName: string): Promise<RegistryRecordEntry | null> {
     const projectUrl = `${indexUrl}/pypi/${encodeURIComponent(packageName)}/json`;
-    const response = await fetchImpl(projectUrl);
+    const response = await http.fetch('PyPI project lookup', projectUrl);
     if (response.status === 404) {
       return null;
     }
@@ -63,7 +73,9 @@ export function createPyPiRegistryRecord(options: PyPiRegistryOptions = {}): Reg
       throw new RecordError(`PyPI returned ${String(response.status)} for "${packageName}"`);
     }
 
-    const project: unknown = await response.json();
+    const project: unknown = await http.body('PyPI project lookup', projectUrl, () =>
+      response.json(),
+    );
     if (!isPyPiProjectResponse(project)) {
       throw new RecordError(`PyPI returned a malformed project response for "${packageName}"`);
     }
@@ -80,13 +92,15 @@ export function createPyPiRegistryRecord(options: PyPiRegistryOptions = {}): Reg
       );
     }
 
-    const wheelResponse = await fetchImpl(wheel.url);
+    const wheelResponse = await http.fetch('PyPI wheel download', wheel.url);
     if (!wheelResponse.ok) {
       throw new RecordError(
         `could not download wheel for "${packageName}"@${version}: ${String(wheelResponse.status)}`,
       );
     }
-    const wheelBuffer = Buffer.from(await wheelResponse.arrayBuffer());
+    const wheelBuffer = Buffer.from(
+      await http.body('PyPI wheel download', wheel.url, () => wheelResponse.arrayBuffer()),
+    );
 
     const specBuffer = await extractZipEntry(
       wheelBuffer,

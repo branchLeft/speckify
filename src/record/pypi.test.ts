@@ -195,7 +195,10 @@ describe('createPyPiRegistryRecord', () => {
     try {
       const record = createPyPiRegistryRecord();
       await expect(record.latest('orders-api')).resolves.toBeNull();
-      expect(fetchSpy).toHaveBeenCalledWith('https://pypi.org/pypi/orders-api/json');
+      expect(fetchSpy).toHaveBeenCalledWith(
+        'https://pypi.org/pypi/orders-api/json',
+        expect.objectContaining({ signal: expect.any(AbortSignal) }),
+      );
     } finally {
       fetchSpy.mockRestore();
     }
