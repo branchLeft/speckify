@@ -9,6 +9,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { FetchLike } from '../record/types.js';
 import { OasdiffError } from './errors.js';
+import { OASDIFF_VERSION } from './version.js';
 import {
   OASDIFF_OVERRIDE_ENV,
   OASDIFF_OVERRIDE_UNVERIFIED_ENV,
@@ -35,6 +36,7 @@ function sha256(content: string): string {
 const ASSET = 'oasdiff_1.32.1_linux_amd64.tar.gz';
 const BINARY_CONTENT = 'fake-binary-content';
 const BINARY_CHECKSUM = sha256(BINARY_CONTENT);
+const DOWNLOAD_URL = `https://github.com/oasdiff/oasdiff/releases/download/v${OASDIFF_VERSION}/${ASSET}`;
 
 describe('resolveOasdiffBinary', () => {
   let dir: string;
@@ -345,6 +347,56 @@ describe('resolveOasdiffBinary', () => {
         fetchImpl,
       }),
     ).rejects.toThrow(/could not download/);
+  });
+
+  it('aborts a download that stalls past the timeout, as an OasdiffError naming the URL', async () => {
+    const fetchImpl: FetchLike = vi.fn(
+      (_url: string, init?: RequestInit) =>
+        new Promise<Response>((_resolve, reject) => {
+          init?.signal?.addEventListener('abort', () => {
+            reject(new Error('aborted'));
+          });
+        }),
+    );
+
+    const error = await resolveOasdiffBinary({
+      cacheDir: dir,
+      platform: 'linux',
+      arch: 'x64',
+      checksumsPath,
+      binaryChecksumsPath,
+      fetchImpl,
+      timeoutMs: 50,
+    }).catch((caught: unknown) => caught);
+
+    expect(error).toBeInstanceOf(OasdiffError);
+    expect((error as Error).message).toContain(DOWNLOAD_URL);
+  });
+
+  it('wraps an archive body that stalls past the timeout as an OasdiffError naming the URL', async () => {
+    const fetchImpl: FetchLike = vi.fn((_url: string, init?: RequestInit): Promise<Response> => {
+      const body = new ReadableStream<Uint8Array>({
+        start(controller): void {
+          init?.signal?.addEventListener('abort', () => {
+            controller.error(new Error('body aborted'));
+          });
+        },
+      });
+      return Promise.resolve(new Response(body, { status: 200 }));
+    });
+
+    const error = await resolveOasdiffBinary({
+      cacheDir: dir,
+      platform: 'linux',
+      arch: 'x64',
+      checksumsPath,
+      binaryChecksumsPath,
+      fetchImpl,
+      timeoutMs: 50,
+    }).catch((caught: unknown) => caught);
+
+    expect(error).toBeInstanceOf(OasdiffError);
+    expect((error as Error).message).toContain(DOWNLOAD_URL);
   });
 
   it('throws OasdiffError when the archive has no matching binary entry', async () => {

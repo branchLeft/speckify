@@ -250,4 +250,98 @@ describe('createPyPiRegistryRecord', () => {
 
     await expect(record.latest('orders-api')).rejects.toThrow(/has no openapi\.json/);
   });
+
+  describe('deadlines', () => {
+    const PROJECT_URL = 'https://pypi.example/pypi/orders-api/json';
+    const WHEEL_URL = 'https://pypi.example/x.whl';
+    const projectWithWheel = {
+      info: { version: '2.0.0' },
+      urls: [{ packagetype: 'bdist_wheel', url: WHEEL_URL }],
+    };
+
+    function stallUntilAborted(init: RequestInit | undefined): Promise<Response> {
+      return new Promise<Response>((_resolve, reject) => {
+        init?.signal?.addEventListener('abort', () => {
+          reject(new Error('aborted'));
+        });
+      });
+    }
+
+    function bodyStallingResponse(init: RequestInit | undefined): Response {
+      const body = new ReadableStream<Uint8Array>({
+        start(controller): void {
+          init?.signal?.addEventListener('abort', () => {
+            controller.error(new Error('body aborted'));
+          });
+        },
+      });
+      return new Response(body, { status: 200, headers: { 'content-type': 'application/json' } });
+    }
+
+    it('aborts a PyPI project lookup that stalls past the timeout, as a RecordError naming the URL', async () => {
+      const fetchImpl: FetchLike = vi.fn((_url: string, init?: RequestInit) =>
+        stallUntilAborted(init),
+      );
+      const record = createPyPiRegistryRecord({
+        indexUrl: 'https://pypi.example',
+        fetchImpl,
+        timeoutMs: 50,
+      });
+
+      const error = await record.latest('orders-api').catch((caught: unknown) => caught);
+
+      expect(error).toBeInstanceOf(RecordError);
+      expect((error as Error).message).toContain(PROJECT_URL);
+    });
+
+    it('wraps a PyPI project body that stalls past the timeout as a RecordError naming the URL', async () => {
+      const fetchImpl: FetchLike = vi.fn((url: string, init?: RequestInit) =>
+        Promise.resolve(url === PROJECT_URL ? bodyStallingResponse(init) : jsonResponse({})),
+      );
+      const record = createPyPiRegistryRecord({
+        indexUrl: 'https://pypi.example',
+        fetchImpl,
+        timeoutMs: 50,
+      });
+
+      const error = await record.latest('orders-api').catch((caught: unknown) => caught);
+
+      expect(error).toBeInstanceOf(RecordError);
+      expect((error as Error).message).toContain(PROJECT_URL);
+    });
+
+    it('aborts a wheel download that stalls past the timeout, as a RecordError naming the URL', async () => {
+      const fetchImpl: FetchLike = vi.fn((url: string, init?: RequestInit) =>
+        url === WHEEL_URL ? stallUntilAborted(init) : Promise.resolve(jsonResponse(projectWithWheel)),
+      );
+      const record = createPyPiRegistryRecord({
+        indexUrl: 'https://pypi.example',
+        fetchImpl,
+        timeoutMs: 50,
+      });
+
+      const error = await record.latest('orders-api').catch((caught: unknown) => caught);
+
+      expect(error).toBeInstanceOf(RecordError);
+      expect((error as Error).message).toContain(WHEEL_URL);
+    });
+
+    it('wraps a wheel body that stalls past the timeout as a RecordError naming the URL', async () => {
+      const fetchImpl: FetchLike = vi.fn((url: string, init?: RequestInit) =>
+        Promise.resolve(
+          url === WHEEL_URL ? bodyStallingResponse(init) : jsonResponse(projectWithWheel),
+        ),
+      );
+      const record = createPyPiRegistryRecord({
+        indexUrl: 'https://pypi.example',
+        fetchImpl,
+        timeoutMs: 50,
+      });
+
+      const error = await record.latest('orders-api').catch((caught: unknown) => caught);
+
+      expect(error).toBeInstanceOf(RecordError);
+      expect((error as Error).message).toContain(WHEEL_URL);
+    });
+  });
 });
