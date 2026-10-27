@@ -1,3 +1,5 @@
+import { createHash } from 'node:crypto';
+
 import { compare, valid } from 'semver';
 
 import { toCanonicalJson } from '../bundle/canonical-json.js';
@@ -19,11 +21,48 @@ const DEFAULT_REGISTRY_TIMEOUT_MS = 30_000;
 
 interface NpmPackument {
   'dist-tags'?: { latest?: string };
-  versions?: Record<string, { dist?: { tarball?: string } }>;
+  versions?: Record<string, { dist?: { tarball?: string; integrity?: string } }>;
 }
 
 function isNpmPackument(value: unknown): value is NpmPackument {
   return typeof value === 'object' && value !== null;
+}
+
+/** Subresource Integrity algorithms accepted for `dist.integrity`, weakest first. */
+const SRI_ALGORITHMS = ['sha256', 'sha384', 'sha512'] as const;
+
+/**
+ * Whether `data` matches an SRI string (`sha512-<base64>`, possibly several
+ * space-separated). Only the strongest supported algorithm present is
+ * consulted, so a weak digest alongside a strong one cannot satisfy it.
+ * A string naming no supported algorithm never matches.
+ */
+function matchesIntegrity(data: Buffer, integrity: string): boolean {
+  const tokens = integrity
+    .split(/\s+/)
+    .filter((token) => token !== '')
+    .map((token) => {
+      const dash = token.indexOf('-');
+      return { algorithm: token.slice(0, dash), digest: token.slice(dash + 1) };
+    });
+  for (const algorithm of [...SRI_ALGORITHMS].reverse()) {
+    const candidates = tokens.filter((token) => token.algorithm === algorithm);
+    if (candidates.length > 0) {
+      const actual = createHash(algorithm).update(data).digest('base64');
+      return candidates.some((token) => token.digest === actual);
+    }
+  }
+  return false;
+}
+
+/** The origin of an http(s) URL, or `null` for anything else (an opaque origin must never compare equal). */
+function httpOrigin(url: string): string | null {
+  try {
+    const parsed = new URL(url);
+    return parsed.protocol === 'https:' || parsed.protocol === 'http:' ? parsed.origin : null;
+  } catch {
+    return null;
+  }
 }
 
 /**
@@ -79,6 +118,8 @@ export function createNpmRegistryRecord(options: NpmRegistryOptions): RegistryRe
   const fetchImpl = options.fetchImpl ?? fetch;
   const registryUrl = options.registryUrl.replace(/\/$/, '');
   const timeoutMs = options.timeoutMs ?? DEFAULT_REGISTRY_TIMEOUT_MS;
+
+  const registryOrigin = httpOrigin(registryUrl);
 
   function authHeaders(): Record<string, string> {
     const headers: Record<string, string> = { Accept: 'application/json' };
@@ -142,6 +183,14 @@ export function createNpmRegistryRecord(options: NpmRegistryOptions): RegistryRe
       );
     }
 
+    // The packument names the tarball URL, so it is untrusted input: the
+    // bearer token must never leave the registry's own origin.
+    if (registryOrigin === null || httpOrigin(tarballUrl) !== registryOrigin) {
+      throw new RecordError(
+        `npm registry packument for "${packageName}"@${version} points its tarball at ${tarballUrl}, which is not on the registry origin; refusing to send the token there`,
+      );
+    }
+
     const tarballResponse = await fetchWithTimeout(tarballUrl);
     if (!tarballResponse.ok) {
       throw new RecordError(
@@ -151,6 +200,13 @@ export function createNpmRegistryRecord(options: NpmRegistryOptions): RegistryRe
     const tarballBuffer = Buffer.from(
       await readBody(tarballUrl, () => tarballResponse.arrayBuffer()),
     );
+
+    const integrity = packument.versions?.[version]?.dist?.integrity;
+    if (integrity !== undefined && !matchesIntegrity(tarballBuffer, integrity)) {
+      throw new RecordError(
+        `tarball for "${packageName}"@${version} from ${tarballUrl} does not match its packument integrity`,
+      );
+    }
 
     const specBuffer = await extractTarGzEntry(
       tarballBuffer,

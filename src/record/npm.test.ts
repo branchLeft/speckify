@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import { gzipSync } from 'node:zlib';
 
 import { pack } from 'tar-stream';
@@ -295,5 +296,122 @@ describe('createNpmRegistryRecord', () => {
     await expect(record.latest('@acme/orders-api')).rejects.toThrow(
       /has no package\/openapi\.json/,
     );
+  });
+
+  describe('registry token scope and tarball integrity', () => {
+    function registryFetch(
+      tarballUrl: string,
+      tarball: Buffer,
+      integrity?: string,
+    ): ReturnType<typeof vi.fn> {
+      return vi.fn(async (url: string) => {
+        if (url === tarballUrl) {
+          return Promise.resolve(new Response(new Uint8Array(tarball), { status: 200 }));
+        }
+        return Promise.resolve(
+          jsonResponse({
+            'dist-tags': { latest: '1.0.0' },
+            versions: {
+              '1.0.0': {
+                dist: { tarball: tarballUrl, ...(integrity === undefined ? {} : { integrity }) },
+              },
+            },
+          }),
+        );
+      });
+    }
+
+    function sri(data: Buffer): string {
+      return `sha512-${createHash('sha512').update(data).digest('base64')}`;
+    }
+
+    it('refuses a tarball URL on another host and sends it no Authorization header', async () => {
+      const tarball = await makeTarballWithSpec({ openapi: '3.0.3', info: { version: '0.0.0' } });
+      const fetchImpl = registryFetch('https://evil.example/x.tgz', tarball);
+      const record = createNpmRegistryRecord({
+        registryUrl: 'https://npm.example',
+        token: 'a-token',
+        fetchImpl,
+      });
+
+      await expect(record.latest('@acme/orders-api')).rejects.toThrow(
+        /https:\/\/evil\.example\/x\.tgz/,
+      );
+      for (const call of fetchImpl.mock.calls as [string, RequestInit | undefined][]) {
+        expect(call[0]).not.toContain('evil.example');
+      }
+    });
+
+    it.each([
+      ['another scheme', 'http://npm.example/x.tgz'],
+      ['another port', 'https://npm.example:8443/x.tgz'],
+      ['a lookalike host', 'https://npm.example.evil.example/x.tgz'],
+      ['userinfo smuggling', 'https://npm.example@evil.example/x.tgz'],
+      ['a non-http scheme', 'file:///x.tgz'],
+    ])('refuses a tarball URL with %s', async (_label, tarballUrl) => {
+      const tarball = await makeTarballWithSpec({ openapi: '3.0.3', info: { version: '0.0.0' } });
+      const fetchImpl = registryFetch(tarballUrl, tarball);
+      const record = createNpmRegistryRecord({
+        registryUrl: 'https://npm.example',
+        token: 'a-token',
+        fetchImpl,
+      });
+
+      await expect(record.latest('@acme/orders-api')).rejects.toThrow(RecordError);
+      expect(fetchImpl).toHaveBeenCalledTimes(1);
+    });
+
+    it('sends the token to a tarball on the registry origin, default port included', async () => {
+      const tarball = await makeTarballWithSpec({ openapi: '3.0.3', info: { version: '0.0.0' } });
+      const tarballUrl = 'https://npm.example:443/orders-api/-/x.tgz';
+      const fetchImpl = registryFetch(tarballUrl, tarball);
+      const record = createNpmRegistryRecord({
+        registryUrl: 'https://npm.example',
+        token: 'a-token',
+        fetchImpl,
+      });
+
+      await record.latest('@acme/orders-api');
+      const tarballCall = fetchImpl.mock.calls[1] as [string, RequestInit];
+      expect((tarballCall[1].headers as Record<string, string>).Authorization).toBe(
+        'Bearer a-token',
+      );
+    });
+
+    it('rejects a tarball whose digest does not match the packument integrity', async () => {
+      const tarball = await makeTarballWithSpec({ openapi: '3.0.3', info: { version: '0.0.0' } });
+      const other = Buffer.from('some other bytes');
+      const tarballUrl = 'https://npm.example/x.tgz';
+      const record = createNpmRegistryRecord({
+        registryUrl: 'https://npm.example',
+        fetchImpl: registryFetch(tarballUrl, tarball, sri(other)),
+      });
+
+      await expect(record.latest('@acme/orders-api')).rejects.toThrow(RecordError);
+      await expect(record.latest('@acme/orders-api')).rejects.toThrow(/integrity/);
+    });
+
+    it('accepts a tarball whose digest matches the packument integrity', async () => {
+      const tarball = await makeTarballWithSpec({ openapi: '3.0.3', info: { version: '0.0.0' } });
+      const tarballUrl = 'https://npm.example/x.tgz';
+      const record = createNpmRegistryRecord({
+        registryUrl: 'https://npm.example',
+        fetchImpl: registryFetch(tarballUrl, tarball, sri(tarball)),
+      });
+
+      const result = await record.latest('@acme/orders-api');
+      expect(result?.version).toBe('1.0.0');
+    });
+
+    it('rejects an integrity string naming no supported algorithm', async () => {
+      const tarball = await makeTarballWithSpec({ openapi: '3.0.3', info: { version: '0.0.0' } });
+      const tarballUrl = 'https://npm.example/x.tgz';
+      const record = createNpmRegistryRecord({
+        registryUrl: 'https://npm.example',
+        fetchImpl: registryFetch(tarballUrl, tarball, 'md5-AAAA'),
+      });
+
+      await expect(record.latest('@acme/orders-api')).rejects.toThrow(/integrity/);
+    });
   });
 });
