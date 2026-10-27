@@ -250,4 +250,60 @@ describe('createPyPiRegistryRecord', () => {
 
     await expect(record.latest('orders-api')).rejects.toThrow(/has no openapi\.json/);
   });
+
+  describe('which openapi.json a wheel is read from', () => {
+    function wheelFetch(wheel: Buffer): FetchLike {
+      return vi.fn(async (url: string) => {
+        if (url.endsWith('.whl')) {
+          return Promise.resolve(new Response(new Uint8Array(wheel), { status: 200 }));
+        }
+        return Promise.resolve(
+          jsonResponse({
+            info: { version: '2.0.0' },
+            urls: [{ packagetype: 'bdist_wheel', url: 'https://pypi.example/x.whl' }],
+          }),
+        );
+      });
+    }
+
+    it('prefers the package spec over a vendored nested one, whatever the archive order', async () => {
+      const nested = '{"openapi":"3.1.0","info":{"title":"VENDORED","version":"0.0.0"}}';
+      const own = '{"openapi":"3.1.0","info":{"title":"OWN","version":"0.0.0"}}';
+      for (const files of [
+        [
+          ['orders_api/_vendor/other/openapi.json', nested],
+          ['orders_api/openapi.json', own],
+        ],
+        [
+          ['orders_api/openapi.json', own],
+          ['orders_api/_vendor/other/openapi.json', nested],
+        ],
+      ] as [string, string][][]) {
+        const record = createPyPiRegistryRecord({
+          indexUrl: 'https://pypi.example',
+          fetchImpl: wheelFetch(makeWheelWithFiles(files)),
+        });
+
+        const result = await record.latest('orders-api');
+        expect(result?.bundledSpec).toContain('OWN');
+        expect(result?.bundledSpec).not.toContain('VENDORED');
+      }
+    });
+
+    it('refuses a wheel with two candidate specs at the same depth, naming both', async () => {
+      const wheel = makeWheelWithFiles([
+        ['orders_api/openapi.json', '{"openapi":"3.1.0"}'],
+        ['other_pkg/openapi.json', '{"openapi":"3.1.0"}'],
+      ]);
+      const record = createPyPiRegistryRecord({
+        indexUrl: 'https://pypi.example',
+        fetchImpl: wheelFetch(wheel),
+      });
+
+      const failure = record.latest('orders-api');
+      await expect(failure).rejects.toThrow(RecordError);
+      await expect(failure).rejects.toThrow(/orders_api\/openapi\.json/);
+      await expect(failure).rejects.toThrow(/other_pkg\/openapi\.json/);
+    });
+  });
 });

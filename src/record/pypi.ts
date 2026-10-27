@@ -44,6 +44,40 @@ function speckifyVersionFromSpeckifyJson(raw: Buffer | null): string | null {
   }
 }
 
+function isSpecEntry(entryName: string): boolean {
+  return entryName === 'openapi.json' || entryName.endsWith('/openapi.json');
+}
+
+function depth(entryName: string): number {
+  return entryName.split('/').length;
+}
+
+/**
+ * The wheel's own `openapi.json`: the shallowest candidate, so a vendored
+ * spec nested deeper cannot stand in for the package's. Two candidates at the
+ * shallowest depth are ambiguous and refused.
+ */
+async function ownSpecEntryName(wheel: Buffer, label: string): Promise<string | null> {
+  const names: string[] = [];
+  await extractZipEntry(wheel, (entryName) => {
+    if (isSpecEntry(entryName)) {
+      names.push(entryName);
+    }
+    return false;
+  });
+  if (names.length === 0) {
+    return null;
+  }
+  const shallowest = Math.min(...names.map(depth));
+  const own = names.filter((name) => depth(name) === shallowest);
+  if (own.length > 1) {
+    throw new RecordError(
+      `published wheel for ${label} has more than one openapi.json at the same depth: ${own.join(', ')}`,
+    );
+  }
+  return own[0] ?? null;
+}
+
 /**
  * A {@link RegistryRecord} backed by PyPI's JSON API: reads the project's
  * current version, then downloads that version's wheel and extracts the
@@ -88,10 +122,11 @@ export function createPyPiRegistryRecord(options: PyPiRegistryOptions = {}): Reg
     }
     const wheelBuffer = Buffer.from(await wheelResponse.arrayBuffer());
 
-    const specBuffer = await extractZipEntry(
-      wheelBuffer,
-      (entryName) => entryName === 'openapi.json' || entryName.endsWith('/openapi.json'),
-    );
+    const specEntryName = await ownSpecEntryName(wheelBuffer, `"${packageName}"@${version}`);
+    const specBuffer =
+      specEntryName === null
+        ? null
+        : await extractZipEntry(wheelBuffer, (entryName) => entryName === specEntryName);
     if (specBuffer === null) {
       throw new RecordError(`published wheel for "${packageName}"@${version} has no openapi.json`);
     }
