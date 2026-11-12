@@ -61,10 +61,38 @@ async function sha256OfFile(path: string): Promise<string> {
   return createHash('sha256').update(buffer).digest('hex');
 }
 
+const DEFAULT_DOWNLOAD_TIMEOUT_MS = 120_000;
+
+/** One archive request, aborted after the timeout so a stalled server cannot hang the resolution. */
+async function fetchArchive(
+  url: string,
+  fetchImpl: FetchLike,
+  timeoutMs: number,
+): Promise<Response> {
+  try {
+    return await fetchImpl(url, { signal: AbortSignal.timeout(timeoutMs) });
+  } catch (error) {
+    const reason = error instanceof Error ? error.message : String(error);
+    throw new OasdiffError(`could not download ${url}: ${reason}`);
+  }
+}
+
+/** Reads the archive body; a stall or failure there is an OasdiffError naming the URL too. */
+async function readArchive(url: string, response: Response): Promise<Buffer> {
+  try {
+    return Buffer.from(await response.arrayBuffer());
+  } catch (error) {
+    const reason = error instanceof Error ? error.message : String(error);
+    throw new OasdiffError(`could not read ${url}: ${reason}`);
+  }
+}
+
 export interface ResolveOasdiffOptions {
   /** Where a downloaded binary is cached, keyed by version. */
   cacheDir: string;
   fetchImpl?: FetchLike;
+  /** Abort the archive download, including reading its body, after this many milliseconds. */
+  timeoutMs?: number;
   /** Overrides `process.platform` for tests; defaults to the host platform. */
   platform?: string;
   /** Overrides `process.arch` for tests; defaults to the host architecture. */
@@ -148,11 +176,12 @@ export async function resolveOasdiffBinary(options: ResolveOasdiffOptions): Prom
 
   const downloadUrl = `https://github.com/oasdiff/oasdiff/releases/download/v${OASDIFF_VERSION}/${asset}`;
   const fetchImpl = options.fetchImpl ?? fetch;
-  const response = await fetchImpl(downloadUrl);
+  const timeoutMs = options.timeoutMs ?? DEFAULT_DOWNLOAD_TIMEOUT_MS;
+  const response = await fetchArchive(downloadUrl, fetchImpl, timeoutMs);
   if (!response.ok) {
     throw new OasdiffError(`could not download ${downloadUrl}: ${String(response.status)}`);
   }
-  const archiveBuffer = Buffer.from(await response.arrayBuffer());
+  const archiveBuffer = await readArchive(downloadUrl, response);
 
   const actualArchiveChecksum = createHash('sha256').update(archiveBuffer).digest('hex');
   if (actualArchiveChecksum !== expectedArchiveChecksum) {

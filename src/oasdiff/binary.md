@@ -22,7 +22,9 @@ override can never run silently.
    to the cache or ever executed. Either mismatch throws `OasdiffError`
    rather than running an unverified binary. The download is written to a
    temp file in the cache's version directory and atomically renamed into
-   place, so a reader can never observe a partially written binary.
+   place, so a reader can never observe a partially written binary. The
+   request and body read are bounded by a timeout (120 seconds by default);
+   a stall throws `OasdiffError` naming the URL.
 
 ## Two checksum tables
 
