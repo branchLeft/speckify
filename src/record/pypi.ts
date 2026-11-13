@@ -7,7 +7,11 @@ export interface PyPiRegistryOptions {
   /** The PyPI-compatible index base URL. Defaults to `https://pypi.org`. */
   indexUrl?: string | undefined;
   fetchImpl?: FetchLike | undefined;
+  /** Abort any single PyPI request that runs longer than this. */
+  timeoutMs?: number | undefined;
 }
+
+const DEFAULT_PYPI_TIMEOUT_MS = 30_000;
 
 interface PyPiRelease {
   packagetype?: string;
@@ -52,10 +56,31 @@ function speckifyVersionFromSpeckifyJson(raw: Buffer | null): string | null {
 export function createPyPiRegistryRecord(options: PyPiRegistryOptions = {}): RegistryRecord {
   const fetchImpl = options.fetchImpl ?? fetch;
   const indexUrl = (options.indexUrl ?? 'https://pypi.org').replace(/\/$/, '');
+  const timeoutMs = options.timeoutMs ?? DEFAULT_PYPI_TIMEOUT_MS;
+
+  /** One PyPI request, aborted after the timeout so a stalled index cannot hang the plan. */
+  async function fetchWithTimeout(url: string): Promise<Response> {
+    try {
+      return await fetchImpl(url, { signal: AbortSignal.timeout(timeoutMs) });
+    } catch (error) {
+      const reason = error instanceof Error ? error.message : String(error);
+      throw new RecordError(`PyPI request to ${url} failed: ${reason}`);
+    }
+  }
+
+  /** Reads a response body; a stall or failure there is a RecordError naming the URL too. */
+  async function readBody<T>(url: string, read: () => Promise<T>): Promise<T> {
+    try {
+      return await read();
+    } catch (error) {
+      const reason = error instanceof Error ? error.message : String(error);
+      throw new RecordError(`PyPI response from ${url} could not be read: ${reason}`);
+    }
+  }
 
   async function latest(packageName: string): Promise<RegistryRecordEntry | null> {
     const projectUrl = `${indexUrl}/pypi/${encodeURIComponent(packageName)}/json`;
-    const response = await fetchImpl(projectUrl);
+    const response = await fetchWithTimeout(projectUrl);
     if (response.status === 404) {
       return null;
     }
@@ -63,7 +88,7 @@ export function createPyPiRegistryRecord(options: PyPiRegistryOptions = {}): Reg
       throw new RecordError(`PyPI returned ${String(response.status)} for "${packageName}"`);
     }
 
-    const project: unknown = await response.json();
+    const project: unknown = await readBody(projectUrl, () => response.json());
     if (!isPyPiProjectResponse(project)) {
       throw new RecordError(`PyPI returned a malformed project response for "${packageName}"`);
     }
@@ -80,13 +105,13 @@ export function createPyPiRegistryRecord(options: PyPiRegistryOptions = {}): Reg
       );
     }
 
-    const wheelResponse = await fetchImpl(wheel.url);
+    const wheelResponse = await fetchWithTimeout(wheel.url);
     if (!wheelResponse.ok) {
       throw new RecordError(
         `could not download wheel for "${packageName}"@${version}: ${String(wheelResponse.status)}`,
       );
     }
-    const wheelBuffer = Buffer.from(await wheelResponse.arrayBuffer());
+    const wheelBuffer = Buffer.from(await readBody(wheel.url, () => wheelResponse.arrayBuffer()));
 
     const specBuffer = await extractZipEntry(
       wheelBuffer,
