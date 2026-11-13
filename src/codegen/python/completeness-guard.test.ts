@@ -62,6 +62,16 @@ describe('assertClientCompleteness', () => {
     ).resolves.toBeUndefined();
   });
 
+  it('passes for an operationId openapi-python-client renames (reserved word, leading underscore)', async () => {
+    clientDir = await makeClientDir(['list_', 'format_', 'import_', 'field_private']);
+    await expect(
+      assertClientCompleteness(
+        [operation('list'), operation('format'), operation('import'), operation('_private')],
+        clientDir,
+      ),
+    ).resolves.toBeUndefined();
+  });
+
   it('fails, naming the missing operationId, when a module is absent', async () => {
     // Sabotage: openapi-python-client silently dropped uploadBlob (the
     // known date-time-header limitation) — the guard must catch exactly this.
