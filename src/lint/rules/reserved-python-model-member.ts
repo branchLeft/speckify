@@ -31,7 +31,12 @@ export function checkReservedPythonModelMembers(doc: unknown): LintFinding[] {
     if (!isRecord(value) || !isRecord(value.properties)) return;
 
     for (const name of Object.keys(value.properties)) {
-      const pythonName = pythonIdentifier(name, FIELD_PREFIX, OPENAPI_PYTHON_CLIENT_RESERVED_WORDS);
+      // CPython NFKC-normalises identifiers, so a fullwidth or long-s lookalike shadows the member too.
+      const pythonName = pythonIdentifier(
+        name.normalize('NFKC'),
+        FIELD_PREFIX,
+        OPENAPI_PYTHON_CLIENT_RESERVED_WORDS,
+      );
       if (!OPENAPI_PYTHON_CLIENT_MODEL_MEMBERS.has(pythonName)) continue;
       findings.push({
         ruleId: RULE_ID,

@@ -47,8 +47,25 @@ describe('checkReservedPythonModelMembers', () => {
     expect(findings[0]?.ruleId).toBe(RULE_ID);
   });
 
+  it.each([
+    ['\uFF54\uFF4F\u005F\uFF44\uFF49\uFF43\uFF54', 'to_dict'],
+    ['additional_propertie\u017F', 'additional_properties'],
+  ])('refuses "%s", which python NFKC-normalises to the reserved "%s"', (name) => {
+    const findings = checkReservedPythonModelMembers(specWithSchemaProperty(name));
+    expect(findings).toHaveLength(1);
+    expect(findings[0]).toMatchObject({
+      ruleId: RULE_ID,
+      pointer: `/components/schemas/Thing/properties/${name}`,
+    });
+    expect(findings[0]?.message).toContain(name);
+  });
+
   it('is fine with an ordinary property', () => {
     expect(checkReservedPythonModelMembers(specWithSchemaProperty('nickname'))).toEqual([]);
+  });
+
+  it('is fine with a non-ASCII property that does not normalise to a reserved member', () => {
+    expect(checkReservedPythonModelMembers(specWithSchemaProperty('caf\u00E9'))).toEqual([]);
   });
 
   it('is fine with a document that has no schemas at all', () => {
