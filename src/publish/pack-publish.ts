@@ -117,6 +117,20 @@ export interface PublishFromPackOptions {
    * is published.
    */
   attestationBundles?: readonly string[] | undefined;
+  /**
+   * Refuse to publish any npm tarball unless attestation files were given
+   * (and so checked). Without it, publishing with no attestation files is
+   * allowed, for a caller that has chosen not to attest.
+   */
+  requireAttestation?: boolean | undefined;
+  /**
+   * Called for each npm tarball, after its digest is checked and before
+   * anything is published, to prove who signed its attestation (see
+   * `verifyTarballAttestation`). It rejects to stop the whole publish.
+   */
+  verifyTarball?:
+    | ((tarball: { label: string; tarballPath: string; sha256: string }) => Promise<void>)
+    | undefined;
   publishNpmFn?: ((options: PublishNpmOptions) => Promise<void>) | undefined;
   publishPypiFn?: ((options: PublishPypiOptions) => Promise<void>) | undefined;
 }
@@ -177,11 +191,22 @@ export async function publishFromPack(
 
   await assertTarballsUnchanged(options.packDir, tarballs);
 
-  if (options.attestationBundles !== undefined && options.attestationBundles.length > 0) {
-    const attested = new Set(
-      options.attestationBundles.flatMap((text) => [...attestedSha256s(text)]),
-    );
+  const bundles = options.attestationBundles ?? [];
+  if (bundles.length > 0) {
+    const attested = new Set(bundles.flatMap((text) => [...attestedSha256s(text)]));
     assertDigestsAttested(tarballs, attested);
+  } else if (options.requireAttestation === true && tarballs.length > 0) {
+    throw new PublishError(
+      `refusing to publish ${tarballs.map((tarball) => tarball.label).join(', ')}: an attestation is required and no attestation was given`,
+    );
+  }
+
+  for (const entry of tarballs) {
+    await options.verifyTarball?.({
+      label: entry.label,
+      tarballPath: path.join(options.packDir, entry.tarball),
+      sha256: entry.sha256,
+    });
   }
 
   const results: PublishFromPackResult[] = [];

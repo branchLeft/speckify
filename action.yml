@@ -25,6 +25,34 @@ inputs:
       Off, the packages are published as before, with no attestation.
     required: false
     default: 'true'
+  attestation-repo:
+    description: >
+      With attest "true": the repository (owner/repo) whose workflow must have
+      signed each tarball's attestation. Empty means this run's repository. A
+      caller that wants no trust in the run's own context writes the literal.
+    required: false
+    default: ''
+  attestation-signer-workflow:
+    description: >
+      With attest "true": the workflow that must have signed, as
+      owner/repo/.github/workflows/<file>.yml, without a ref. Empty means the
+      workflow running now (for a reusable workflow, write the literal of the
+      one that calls the attest step).
+    required: false
+    default: ''
+  attestation-source-ref:
+    description: >
+      With attest "true": the exact ref the signing run must have been on, such
+      as refs/heads/main. Empty means this run's ref. Writing refs/heads/main
+      makes a publish from any other ref fail.
+    required: false
+    default: ''
+  github-token:
+    description: >
+      With attest "true": the token `gh attestation verify` reads the
+      attestation with. The default needs no permission beyond the job's own.
+    required: false
+    default: ${{ github.token }}
 
 runs:
   using: composite
@@ -48,6 +76,12 @@ runs:
           true|false) ;;
           *) echo "::error::attest must be true or false: '$SPECKIFY_ATTEST'" >&2; exit 1 ;;
         esac
+        # Set by the runner only when the job grants `id-token: write`, which
+        # attesting needs. Said now, not after the install and the build.
+        if [ "$SPECKIFY_COMMAND" = publish ] && [ "$SPECKIFY_ATTEST" = true ] && [ -z "${ACTIONS_ID_TOKEN_REQUEST_URL:-}" ]; then
+          echo "::error::attest is true, so the calling job needs 'id-token: write' and 'attestations: write' (as well as 'packages: write'); the job has no id-token. Grant them, or set attest: false to publish without an attestation." >&2
+          exit 1
+        fi
 
     # Bare, no registry-url/scope: only used to build Speckify itself below,
     # resolving its own public dependencies (zod, commander, ...) from the
@@ -182,11 +216,15 @@ runs:
         subject-path: ${{ steps.pack.outputs.pack-dir }}/*.tgz
         create-storage-record: false
 
-    # `--attestation` makes the publish refuse unless every tarball's digest
-    # is a subject of the attestation just made, and the publish itself
-    # re-hashes each tarball against the digest recorded when it was packed;
-    # a mismatch publishes nothing. Tarballs with no attestation are refused
-    # here, before the CLI runs, rather than published unsigned.
+    # The publish is the CLI's own refusal, not a shell test: `--require-attestation`
+    # makes it refuse any npm tarball when no attestation was given, and
+    # `--attestation` makes it refuse unless every tarball's digest is a subject
+    # of the attestation just made. The three `--attestation-*` flags then make
+    # it run `gh attestation verify` on each tarball -- the Sigstore signature,
+    # bound to this repository, this signer workflow and this ref -- and refuse
+    # on anything else, before the first publish. The publish itself re-hashes
+    # each tarball against the digest recorded when it was packed. There is no
+    # path that publishes a tarball unattested or unverified.
     - name: Publish the packed packages
       id: publish-packed
       if: inputs.command == 'publish' && inputs.attest == 'true'
@@ -196,15 +234,24 @@ runs:
         SPECKIFY_ACTION_PATH: ${{ github.action_path }}
         SPECKIFY_CONFIG: ${{ inputs.config }}
         SPECKIFY_PACK_DIR: ${{ steps.pack.outputs.pack-dir }}
-        SPECKIFY_HAS_TARBALLS: ${{ steps.pack.outputs.has-tarballs }}
         SPECKIFY_ATTESTATION: ${{ steps.attest.outputs.bundle-path }}
+        SPECKIFY_INPUT_REPO: ${{ inputs.attestation-repo }}
+        SPECKIFY_INPUT_SIGNER: ${{ inputs.attestation-signer-workflow }}
+        SPECKIFY_INPUT_REF: ${{ inputs.attestation-source-ref }}
+        SPECKIFY_RUN_REPO: ${{ github.repository }}
+        SPECKIFY_RUN_WORKFLOW_REF: ${{ github.workflow_ref }}
+        SPECKIFY_RUN_REF: ${{ github.ref }}
+        GH_TOKEN: ${{ inputs.github-token }}
       run: |
         set -eu
-        if [ "$SPECKIFY_HAS_TARBALLS" = true ] && [ -z "$SPECKIFY_ATTESTATION" ]; then
-          echo "::error::the tarballs were packed but the attest step left no attestation; nothing was published" >&2
-          exit 1
-        fi
-        args=(publish --config "$SPECKIFY_CONFIG" --from-pack --pack-dir "$SPECKIFY_PACK_DIR")
+        repo="${SPECKIFY_INPUT_REPO:-$SPECKIFY_RUN_REPO}"
+        signer="${SPECKIFY_INPUT_SIGNER:-${SPECKIFY_RUN_WORKFLOW_REF%@*}}"
+        source_ref="${SPECKIFY_INPUT_REF:-$SPECKIFY_RUN_REF}"
+        args=(publish --config "$SPECKIFY_CONFIG" --from-pack --pack-dir "$SPECKIFY_PACK_DIR"
+          --require-attestation
+          --attestation-repo "$repo"
+          --attestation-signer-workflow "$signer"
+          --attestation-source-ref "$source_ref")
         if [ -n "$SPECKIFY_ATTESTATION" ]; then
           args+=(--attestation "$SPECKIFY_ATTESTATION")
         fi

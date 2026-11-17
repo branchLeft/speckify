@@ -23,6 +23,7 @@ import {
   type PackManifestContract,
   type PublishTarget,
   type TargetOutcome,
+  verifyTarballAttestation,
 } from './publish/index.js';
 import {
   createNpmRegistryRecord,
@@ -375,6 +376,43 @@ interface PublishOptions {
   fromPack?: boolean;
   packDir: string;
   attestation: string[];
+  requireAttestation?: boolean;
+  attestationRepo?: string;
+  attestationSignerWorkflow?: string;
+  attestationSourceRef?: string;
+}
+
+/**
+ * The flags that only mean something with `--from-pack`, and the identity
+ * flags that only mean something together.
+ *
+ * @throws {Error} naming the flag at fault.
+ */
+function assertPublishFlags(options: PublishOptions): void {
+  if (options.packOnly === true && options.fromPack === true) {
+    throw new Error('--pack-only and --from-pack cannot be used together');
+  }
+  const identityFlags = [
+    ['--attestation-repo', options.attestationRepo],
+    ['--attestation-signer-workflow', options.attestationSignerWorkflow],
+    ['--attestation-source-ref', options.attestationSourceRef],
+  ] as const;
+  const fromPackOnly = [
+    ['--attestation', options.attestation.length > 0],
+    ['--require-attestation', options.requireAttestation === true],
+    ...identityFlags.map(([flag, value]) => [flag, value !== undefined] as const),
+  ] as const;
+  for (const [flag, given] of fromPackOnly) {
+    if (given && options.fromPack !== true) {
+      throw new Error(`${flag} only applies with --from-pack`);
+    }
+  }
+  const named = identityFlags.filter(([, value]) => value !== undefined);
+  if (named.length > 0 && named.length < identityFlags.length) {
+    throw new Error(
+      '--attestation-repo, --attestation-signer-workflow and --attestation-source-ref must all be given together',
+    );
+  }
 }
 
 /** What every `build` and `publish` run hands `buildContract`, beyond the contract itself. */
@@ -430,6 +468,18 @@ async function publishPacked(options: PublishOptions): Promise<void> {
   );
   const npmToken = process.env.NODE_AUTH_TOKEN ?? process.env.GITHUB_TOKEN ?? '';
 
+  // All three are given or none (assertPublishFlags), so one check covers them.
+  const identity =
+    options.attestationRepo === undefined ||
+    options.attestationSignerWorkflow === undefined ||
+    options.attestationSourceRef === undefined
+      ? undefined
+      : {
+          repo: options.attestationRepo,
+          signerWorkflow: options.attestationSignerWorkflow,
+          sourceRef: options.attestationSourceRef,
+        };
+
   const results = await publishFromPack({
     packDir,
     manifest,
@@ -438,6 +488,16 @@ async function publishPacked(options: PublishOptions): Promise<void> {
     npmToken,
     npmOwner: config.publish.githubPackages.owner,
     attestationBundles,
+    requireAttestation: options.requireAttestation === true,
+    verifyTarball:
+      identity === undefined
+        ? undefined
+        : (tarball): Promise<void> =>
+            verifyTarballAttestation({
+              tarballPath: tarball.tarballPath,
+              sha256: tarball.sha256,
+              identity,
+            }),
   });
 
   let anyFailed = false;
@@ -480,13 +540,24 @@ program
     collectOption,
     [] as string[],
   )
+  .option(
+    '--require-attestation',
+    'with --from-pack: refuse to publish any npm tarball unless an --attestation was given',
+  )
+  .option(
+    '--attestation-repo <owner/repo>',
+    'with --from-pack: verify each tarball`s attestation signature (gh attestation verify) as made in this repository',
+  )
+  .option(
+    '--attestation-signer-workflow <path>',
+    'with --from-pack: the workflow that must have signed, owner/repo/.github/workflows/<file>.yml',
+  )
+  .option(
+    '--attestation-source-ref <ref>',
+    'with --from-pack: the exact ref the signing run must have been on, e.g. refs/heads/main',
+  )
   .action(async (options: PublishOptions) => {
-    if (options.packOnly === true && options.fromPack === true) {
-      throw new Error('--pack-only and --from-pack cannot be used together');
-    }
-    if (options.attestation.length > 0 && options.fromPack !== true) {
-      throw new Error('--attestation only applies with --from-pack');
-    }
+    assertPublishFlags(options);
     if (options.fromPack === true) {
       await publishPacked(options);
       return;

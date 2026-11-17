@@ -130,6 +130,7 @@ describe('the command and attest inputs', () => {
       const result = await runScript(step('inputs').run ?? '', {
         SPECKIFY_COMMAND: command,
         SPECKIFY_ATTEST: attest,
+        ACTIONS_ID_TOKEN_REQUEST_URL: 'https://example.invalid/token',
       });
       expect(result.code, `${command} attest=${attest}: ${result.stderr}`).toBe(0);
     }
@@ -164,6 +165,53 @@ describe('the command and attest inputs', () => {
       SPECKIFY_COMMAND: '${{ inputs.command }}',
       SPECKIFY_ATTEST: '${{ inputs.attest }}',
     });
+  });
+
+  it('fails early, naming both permissions, when a publish that attests has no id-token', async () => {
+    const result = await runScript(step('inputs').run ?? '', {
+      SPECKIFY_COMMAND: 'publish',
+      SPECKIFY_ATTEST: 'true',
+    });
+    expect(result.code).not.toBe(0);
+    expect(result.stderr).toContain("'id-token: write'");
+    expect(result.stderr).toContain("'attestations: write'");
+    expect(result.stderr).toContain('attest: false');
+  });
+
+  it('accepts a publish that attests once the job has an id-token', async () => {
+    const result = await runScript(step('inputs').run ?? '', {
+      SPECKIFY_COMMAND: 'publish',
+      SPECKIFY_ATTEST: 'true',
+      ACTIONS_ID_TOKEN_REQUEST_URL: 'https://example.invalid/token',
+    });
+    expect(result.code, result.stderr).toBe(0);
+  });
+
+  it.each([
+    ['publish', 'false'],
+    ['check', 'true'],
+    ['plan', 'true'],
+    ['build', 'true'],
+  ])('asks for no id-token for %s with attest %s', async (command, attest) => {
+    const result = await runScript(step('inputs').run ?? '', {
+      SPECKIFY_COMMAND: command,
+      SPECKIFY_ATTEST: attest,
+    });
+    expect(result.code, result.stderr).toBe(0);
+  });
+});
+
+describe('the identity inputs', () => {
+  it.each(['attestation-repo', 'attestation-signer-workflow', 'attestation-source-ref'])(
+    'has an optional %s that defaults to empty, meaning this run',
+    (name) => {
+      expect(action.inputs[name]?.required).toBe(false);
+      expect(action.inputs[name]?.default).toBe('');
+    },
+  );
+
+  it('reads the token gh verifies with from the run, by default', () => {
+    expect(action.inputs['github-token']?.default).toBe('${{ github.token }}');
   });
 });
 
@@ -268,19 +316,41 @@ describe('the attest step', () => {
 describe('the publish-packed step', () => {
   const publishStep = step('publish-packed');
 
-  function inputsOf(attestation: string, hasTarballs: string): Record<string, string> {
+  const runContext = {
+    SPECKIFY_RUN_REPO: 'acme/widgets',
+    SPECKIFY_RUN_WORKFLOW_REF: 'acme/widgets/.github/workflows/release.yml@refs/heads/main',
+    SPECKIFY_RUN_REF: 'refs/heads/main',
+  };
+
+  function inputsOf(
+    attestation: string,
+    overrides: Record<string, string> = {},
+  ): Record<string, string> {
     return {
       SPECKIFY_CONFIG: 'speckify.yaml',
       SPECKIFY_PACK_DIR: '/packs',
       SPECKIFY_ATTESTATION: attestation,
-      SPECKIFY_HAS_TARBALLS: hasTarballs,
+      SPECKIFY_INPUT_REPO: '',
+      SPECKIFY_INPUT_SIGNER: '',
+      SPECKIFY_INPUT_REF: '',
+      ...runContext,
+      ...overrides,
     };
   }
 
-  it('hands the attestation bundle to the publish, so the digests are checked against it', async () => {
+  const derivedIdentity = [
+    '--attestation-repo',
+    'acme/widgets',
+    '--attestation-signer-workflow',
+    'acme/widgets/.github/workflows/release.yml',
+    '--attestation-source-ref',
+    'refs/heads/main',
+  ];
+
+  it('hands the CLI the attestation, makes it required, and gives it the identity to verify against', async () => {
     const stub = await stubAction({ packs: false });
     const result = await runScript(publishStep.run ?? '', {
-      ...inputsOf('/tmp/attestation.jsonl', 'true'),
+      ...inputsOf('/tmp/attestation.jsonl'),
       SPECKIFY_ACTION_PATH: stub.dir,
     });
     expect(result.code, result.stderr).toBe(0);
@@ -292,40 +362,62 @@ describe('the publish-packed step', () => {
         '--from-pack',
         '--pack-dir',
         '/packs',
+        '--require-attestation',
+        ...derivedIdentity,
         '--attestation',
         '/tmp/attestation.jsonl',
       ],
     ]);
   });
 
-  it('publishes without an attestation only when no tarball was packed', async () => {
+  it('prefers a literal identity the caller wrote over the run context', async () => {
     const stub = await stubAction({ packs: false });
     const result = await runScript(publishStep.run ?? '', {
-      ...inputsOf('', 'false'),
+      ...inputsOf('/tmp/attestation.jsonl', {
+        SPECKIFY_INPUT_REPO: 'acme/other',
+        SPECKIFY_INPUT_SIGNER: 'acme/other/.github/workflows/ship.yml',
+        SPECKIFY_INPUT_REF: 'refs/tags/v1.0.0',
+      }),
       SPECKIFY_ACTION_PATH: stub.dir,
     });
     expect(result.code, result.stderr).toBe(0);
-    expect(await stub.calls()).toEqual([
-      ['publish', '--config', 'speckify.yaml', '--from-pack', '--pack-dir', '/packs'],
-    ]);
+    const [call] = await stub.calls();
+    expect(call).toEqual(
+      expect.arrayContaining([
+        '--attestation-repo',
+        'acme/other',
+        '--attestation-signer-workflow',
+        'acme/other/.github/workflows/ship.yml',
+        '--attestation-source-ref',
+        'refs/tags/v1.0.0',
+      ]),
+    );
   });
 
-  it('refuses to publish tarballs the attest step left no attestation for', async () => {
+  it('leaves the decision to refuse an unattested tarball to the CLI: no bundle still runs it, required', async () => {
     const stub = await stubAction({ packs: false });
     const result = await runScript(publishStep.run ?? '', {
-      ...inputsOf('', 'true'),
+      ...inputsOf(''),
       SPECKIFY_ACTION_PATH: stub.dir,
     });
-    expect(result.code).not.toBe(0);
-    expect(result.stderr).toContain('no attestation');
-    expect(await stub.calls()).toEqual([]);
+    expect(result.code, result.stderr).toBe(0);
+    const [call] = await stub.calls();
+    expect(call).toContain('--require-attestation');
+    expect(call).not.toContain('--attestation');
   });
 
-  it('reads the pack directory, tarball flag and bundle path from the earlier steps', () => {
+  it('has no shell test of its own for whether a tarball was attested', () => {
+    expect(publishStep.run ?? '').not.toMatch(/tgz|has-tarballs|HAS_TARBALLS|compgen/);
+  });
+
+  it('reads the pack directory and bundle path from the earlier steps, and the token from the input', () => {
     expect(publishStep.env).toMatchObject({
       SPECKIFY_PACK_DIR: '${{ steps.pack.outputs.pack-dir }}',
-      SPECKIFY_HAS_TARBALLS: '${{ steps.pack.outputs.has-tarballs }}',
       SPECKIFY_ATTESTATION: '${{ steps.attest.outputs.bundle-path }}',
+      SPECKIFY_RUN_REPO: '${{ github.repository }}',
+      SPECKIFY_RUN_WORKFLOW_REF: '${{ github.workflow_ref }}',
+      SPECKIFY_RUN_REF: '${{ github.ref }}',
+      GH_TOKEN: '${{ inputs.github-token }}',
     });
   });
 });

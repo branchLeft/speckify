@@ -32,6 +32,17 @@ export const githubRepositorySchema = z
     message: 'must not contain "." or ".." as a name',
   });
 
+/** True for a backslash or any C0 control character or DEL, by code point. */
+function hasBackslashOrControlCharacter(text: string): boolean {
+  for (const character of text) {
+    const code = character.codePointAt(0) ?? 0;
+    if (character === '\\' || code <= 0x1f || code === 0x7f) {
+      return true;
+    }
+  }
+  return false;
+}
+
 /**
  * A package's directory within its repository, as `package.json`'s
  * `repository.directory` records it: a relative, forward-slash path whose
@@ -41,8 +52,7 @@ export const githubRepositorySchema = z
 export const repositoryDirectorySchema = z
   .string()
   .min(1, 'must not be empty')
-  // eslint-disable-next-line no-control-regex -- rejecting control characters is the point
-  .refine((directory) => !/[\\\u0000-\u001f\u007f]/.test(directory), {
+  .refine((directory) => !hasBackslashOrControlCharacter(directory), {
     message: 'must not contain a backslash or a control character',
   })
   .refine(

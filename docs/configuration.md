@@ -101,10 +101,32 @@ attestation (the composite action does exactly this, by default):
 | `--pack-dir <dir>`     | Where `--pack-only` writes and `--from-pack` reads, relative to the config directory. Default `.speckify/pack`.                                                                                                                     |
 | `--attestation <file>` | With `--from-pack`, repeatable: an attestation bundle file (the `bundle-path` of `actions/attest-build-provenance`). Publishes only if every tarball's digest is a subject of one of them.                                          |
 
+Three more flags make the publish enforce the attestation, so the check is
+the CLI's, not a caller's shell test:
+
+| Flag                                   | What it does                                                                                                                                                                   |
+| -------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `--require-attestation`                | With `--from-pack`: refuse to publish any npm tarball unless an `--attestation` was given. Without it, no attestation file means no check (for a caller that does not attest). |
+| `--attestation-repo <owner/repo>`      | With `--from-pack`: the repository whose workflow must have signed.                                                                                                            |
+| `--attestation-signer-workflow <path>` | The workflow that must have signed, `owner/repo/.github/workflows/<file>.yml`, with no ref.                                                                                    |
+| `--attestation-source-ref <ref>`       | The exact ref the signing run must have been on, such as `refs/heads/main`.                                                                                                    |
+
+The three identity flags are all given or none, and only with `--from-pack`.
+When given, each npm tarball is checked with `gh attestation verify` (the
+`gh` CLI on the runner, reading with `GH_TOKEN`) before the first publish:
+the Sigstore signature, the GitHub Actions OIDC issuer, the SLSA provenance
+predicate, this repository, signer workflow and ref, and a GitHub-hosted
+runner. Speckify then reads the same facts from the certificate `gh`
+returned and requires the tarball's own digest among the subjects, so a
+`gh` that skipped a flag cannot pass a wrong identity. A lookup that fails
+is retried for about two minutes, since an attestation can take a moment to
+reach the API; a result naming the wrong identity is not. Nothing is
+skipped: any other outcome refuses the publish.
+
 `--from-pack` re-hashes every tarball against the digest `--pack-only`
 recorded, and (with `--attestation`) against the attestation's subjects,
-before it publishes anything. A tarball that is missing, changed or not
-attested stops the run with nothing published.
+before it publishes anything. A tarball that is missing, changed, not
+attested or not verified stops the run with nothing published.
 
 ## Environment variables the CLI reads
 

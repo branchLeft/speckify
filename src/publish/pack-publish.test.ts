@@ -318,6 +318,92 @@ describe('publishFromPack', () => {
     expect(publishNpmFn).not.toHaveBeenCalled();
   });
 
+  it('publishes nothing when an attestation is required and none was given', async () => {
+    const { packDir, manifest } = await packedManifest();
+    const publishNpmFn = vi.fn();
+    const publishPypiFn = vi.fn();
+
+    for (const attestationBundles of [undefined, []]) {
+      await expect(
+        publishFromPack({
+          ...common,
+          packDir,
+          manifest,
+          requireAttestation: true,
+          attestationBundles,
+          publishNpmFn,
+          publishPypiFn,
+        }),
+      ).rejects.toThrow(/no attestation was given/);
+    }
+    expect(publishNpmFn).not.toHaveBeenCalled();
+    expect(publishPypiFn).not.toHaveBeenCalled();
+  });
+
+  it('does not require an attestation when there is no tarball to publish', async () => {
+    const { packDir, manifest } = await packedManifest();
+    const contract = manifest.contracts[0];
+    if (contract) contract.targets = contract.targets.filter((target) => target.kind === 'pypi');
+    const publishPypiFn = vi.fn().mockResolvedValue(undefined);
+
+    await publishFromPack({
+      ...common,
+      packDir,
+      manifest,
+      requireAttestation: true,
+      publishPypiFn,
+    });
+
+    expect(publishPypiFn).toHaveBeenCalledTimes(1);
+  });
+
+  it('verifies every tarball with the given verifier before it publishes anything', async () => {
+    const { packDir, manifest, digest } = await packedManifest();
+    const verifyTarball = vi.fn().mockResolvedValue(undefined);
+    const publishNpmFn = vi.fn().mockResolvedValue(undefined);
+    const publishPypiFn = vi.fn().mockResolvedValue(undefined);
+
+    await publishFromPack({
+      ...common,
+      packDir,
+      manifest,
+      attestationBundles: [bundleFor(digest)],
+      verifyTarball,
+      publishNpmFn,
+      publishPypiFn,
+    });
+
+    expect(verifyTarball).toHaveBeenCalledWith({
+      label: 'orders-api-typescript',
+      tarballPath: path.join(packDir, 'acme-orders-api-1.1.0.tgz'),
+      sha256: digest,
+    });
+    expect(verifyTarball.mock.invocationCallOrder[0]).toBeLessThan(
+      publishNpmFn.mock.invocationCallOrder[0] ?? Infinity,
+    );
+  });
+
+  it('publishes nothing when the verifier refuses a tarball', async () => {
+    const { packDir, manifest, digest } = await packedManifest();
+    const verifyTarball = vi.fn().mockRejectedValue(new PublishError('wrong signer'));
+    const publishNpmFn = vi.fn();
+    const publishPypiFn = vi.fn();
+
+    await expect(
+      publishFromPack({
+        ...common,
+        packDir,
+        manifest,
+        attestationBundles: [bundleFor(digest)],
+        verifyTarball,
+        publishNpmFn,
+        publishPypiFn,
+      }),
+    ).rejects.toThrow(/wrong signer/);
+    expect(publishNpmFn).not.toHaveBeenCalled();
+    expect(publishPypiFn).not.toHaveBeenCalled();
+  });
+
   it('publishes without an attestation check when none was asked for', async () => {
     const { packDir, manifest } = await packedManifest();
     const publishNpmFn = vi.fn().mockResolvedValue(undefined);

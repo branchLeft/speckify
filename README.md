@@ -132,15 +132,35 @@ package into a tarball (`speckify publish --pack-only`), attests those
 tarballs with
 [`actions/attest-build-provenance`](https://github.com/actions/attest-build-provenance)
 (pinned by commit), then publishes the same files
-(`speckify publish --from-pack --attestation <bundle>`). Before it
-publishes anything it re-hashes every tarball against the digest recorded
-when it was packed and checks that digest is one of the attestation's
-subjects; one that is not stops the run with nothing published. The
-workflow's `publish` job needs, besides `contents: write` (for the
-release), `packages: write` and `id-token: write`, **`attestations:
-write`** — the workflow `speckify init` writes already has all four. Set
-`attest: 'false'` to publish without attesting, in which case
-`attestations: write` is not needed.
+(`speckify publish --from-pack --require-attestation --attestation <bundle>`).
+Before it publishes anything it re-hashes every tarball against the digest
+recorded when it was packed, checks that digest is one of the
+attestation's subjects, and then runs `gh attestation verify` on each
+tarball. That check verifies the Sigstore signature and that the
+attestation was made by **this repository's workflow, on this ref** (see
+below). The CLI itself refuses any tarball with no attestation, and any
+digest, signature or identity that does not match: with nothing published.
+There is no path through the action that publishes a tarball unattested or
+unverified. The workflow's `publish` job needs, besides `contents: write`
+(for the release), `packages: write` and `id-token: write`,
+**`attestations: write`**: the workflow `speckify init` writes already has
+all four. A job with no `id-token` fails in the first step with a message
+naming both permissions (`attestations: write` cannot be seen from inside
+the job, so it is named, not tested). Set `attest: 'false'` to publish
+without attesting, in which case neither permission is needed.
+
+The identity the signature is verified against comes from three optional
+inputs: `attestation-repo` (default: this run's repository),
+`attestation-signer-workflow` (default: the workflow now running,
+`owner/repo/.github/workflows/<file>.yml`, without its ref) and
+`attestation-source-ref` (default: this run's ref). A caller who wants
+publishes from one place only writes literals, for example
+`attestation-source-ref: refs/heads/main`, so a publish from any other ref
+fails; the defaults are taken from the run itself and so only bind the
+attestation to the run that publishes. In a reusable workflow, set
+`attestation-signer-workflow` to the workflow that contains the attest
+step. `github-token` (default `${{ github.token }}`) is what `gh` reads the
+attestation with.
 
 The same two modes are there for a workflow that wants its own steps
 between them: `--pack-only` builds, packs into `--pack-dir` (default

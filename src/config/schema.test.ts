@@ -52,12 +52,24 @@ describe('repositoryDirectorySchema', () => {
     expect(repositoryDirectorySchema.safeParse(value).success).toBe(true);
   });
 
-  it.each(['', '/abs', 'a//b', 'a/', './a', 'a/./b', '../a', 'a/../b', 'a\\b', 'a\nb', 'a\u0000b'])(
-    'rejects %j',
-    (value) => {
-      expect(repositoryDirectorySchema.safeParse(value).success).toBe(false);
-    },
-  );
+  it.each([
+    '',
+    '/abs',
+    'a//b',
+    'a/',
+    './a',
+    'a/./b',
+    '../a',
+    'a/../b',
+    'a\\b',
+    'a\nb',
+    'a\u0000b',
+    'a\u001fb',
+    'a\u007fb',
+    'a\tb',
+  ])('rejects %j', (value) => {
+    expect(repositoryDirectorySchema.safeParse(value).success).toBe(false);
+  });
 });
 
 describe('speckifyConfigSchema', () => {

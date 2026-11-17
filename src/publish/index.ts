@@ -17,6 +17,12 @@ export {
   type PublishFromPackResult,
 } from './pack-publish.js';
 export { packNpm, sha256OfFile, type PackedTarball } from './pack.js';
+export {
+  ATTESTATION_OIDC_ISSUER,
+  SLSA_PROVENANCE_PREDICATE,
+  verifyTarballAttestation,
+  type AttestationIdentity,
+} from './verify-attestation.js';
 export { publishNpm, type PublishNpmOptions } from './npm.js';
 export { publishPypi, type PublishPypiOptions } from './pypi.js';
 export type {
