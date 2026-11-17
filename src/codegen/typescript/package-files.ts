@@ -1,3 +1,5 @@
+import { GITHUB_PACKAGES_REGISTRY } from '../../constants.js';
+
 export interface PackageFilesInput {
   readonly packageName: string;
   readonly version: string;
@@ -5,6 +7,11 @@ export interface PackageFilesInput {
   readonly server: boolean;
   readonly speckifyVersion: string;
   readonly license?: string;
+  /**
+   * The GitHub `owner/repo` the package is published from, already validated.
+   * Absent on a local run, where there is no repository to name.
+   */
+  readonly repository?: string;
 }
 
 function licenseFromInfo(info: unknown): string | undefined {
@@ -53,10 +60,20 @@ export function buildPackageJson(input: PackageFilesInput): Record<string, unkno
     // record/npm.ts depends on package/openapi.json actually being there.
     files: ['dist', 'openapi.json', 'CHANGELOG.md', 'README.md'],
     dependencies: { zod: '^4.6.5' },
+    // `npm publish` takes the registry from here, so the package publishes to
+    // GitHub Packages with no `--registry` flag and no hand-edited manifest.
+    publishConfig: { registry: GITHUB_PACKAGES_REGISTRY },
     speckify: { speckifyVersion: input.speckifyVersion },
   };
   if (input.license !== undefined) {
     packageJson.license = input.license;
+  }
+  if (input.repository !== undefined) {
+    // GitHub Packages links a package to its repository through this field.
+    packageJson.repository = {
+      type: 'git',
+      url: `git+https://github.com/${input.repository}.git`,
+    };
   }
   return packageJson;
 }

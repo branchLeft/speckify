@@ -15,6 +15,23 @@ export function pep503Normalise(name: string): string {
   return name.toLowerCase().replace(/[-_.]+/g, '-');
 }
 
+// A GitHub `owner/repo` slug, as Actions' `GITHUB_REPOSITORY` carries it.
+// Each half uses GitHub's own name alphabet; `.` and `..` are path segments,
+// not names. `$` is not used because it also matches before a trailing newline.
+const GITHUB_REPOSITORY = /^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+(?![\s\S])/;
+
+/**
+ * The repository a generated package names as its source. It ends up inside
+ * a URL in the package's `package.json`, so nothing but a plain `owner/repo`
+ * is accepted.
+ */
+export const githubRepositorySchema = z
+  .string()
+  .regex(GITHUB_REPOSITORY, 'must be "owner/repo"')
+  .refine((slug) => slug.split('/').every((part) => !/^\.+$/.test(part)), {
+    message: 'must not contain "." or ".." as a name',
+  });
+
 const typescriptTargetSchema = z.object({
   package: z.string().regex(NPM_PACKAGE_NAME, 'must be a valid npm package name'),
   client: z.boolean().default(false),

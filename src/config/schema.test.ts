@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { pep503Normalise, speckifyConfigSchema } from './schema.js';
+import { githubRepositorySchema, pep503Normalise, speckifyConfigSchema } from './schema.js';
 
 const validConfig = {
   contracts: [
@@ -19,6 +19,26 @@ describe('pep503Normalise', () => {
     expect(pep503Normalise('Orders_API.Client')).toBe('orders-api-client');
     expect(pep503Normalise('already-normal')).toBe('already-normal');
     expect(pep503Normalise('a---b')).toBe('a-b');
+  });
+});
+
+describe('githubRepositorySchema', () => {
+  it.each(['acme/orders', 'Acme/Orders.v2', 'a_b/c-d', 'acme/.github'])('accepts %j', (value) => {
+    expect(githubRepositorySchema.safeParse(value).success).toBe(true);
+  });
+
+  it.each([
+    '',
+    'acme',
+    'acme/',
+    '/orders',
+    'a/b/c',
+    'acme/..',
+    '../orders',
+    'ac me/orders',
+    'a/b\n',
+  ])('rejects %j', (value) => {
+    expect(githubRepositorySchema.safeParse(value).success).toBe(false);
   });
 });
 

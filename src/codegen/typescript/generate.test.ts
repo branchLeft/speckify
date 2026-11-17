@@ -138,6 +138,55 @@ describe('generateTypeScriptPackage', () => {
     ).rejects.toBeInstanceOf(CodegenInputError);
   });
 
+  it('writes repository and publishConfig so the package publishes with no hand edits', async () => {
+    const outDir = await tempOutDir();
+    const bundledSpec = await loadFixture('f-binary-upload.bundled.yaml');
+
+    await generateTypeScriptPackage({
+      bundledSpec,
+      packageName: '@speckify-fixtures/f-binary-upload',
+      version: '1.0.0',
+      client: true,
+      server: false,
+      changelog: '',
+      speckifyVersion: '0.1.0',
+      repository: 'speckify-fixtures/contracts',
+      outDir,
+    });
+
+    const packageJson = JSON.parse(await readFile(path.join(outDir, 'package.json'), 'utf8')) as {
+      repository: unknown;
+      publishConfig: unknown;
+    };
+    expect(packageJson.repository).toEqual({
+      type: 'git',
+      url: 'git+https://github.com/speckify-fixtures/contracts.git',
+    });
+    expect(packageJson.publishConfig).toEqual({ registry: 'https://npm.pkg.github.com' });
+  }, 30_000);
+
+  it.each(['', 'no-slash', 'a/b/c', '../etc', 'owner/..', 'own er/repo', 'owner/repo\n'])(
+    'rejects the malformed repository %j before generating anything',
+    async (repository) => {
+      const outDir = await tempOutDir();
+      const bundledSpec = await loadFixture('e-const.bundled.yaml');
+
+      await expect(
+        generateTypeScriptPackage({
+          bundledSpec,
+          packageName: '@speckify-fixtures/e-const',
+          version: '1.0.0',
+          client: true,
+          server: false,
+          changelog: '',
+          speckifyVersion: '0.1.0',
+          repository,
+          outDir,
+        }),
+      ).rejects.toBeInstanceOf(CodegenInputError);
+    },
+  );
+
   it('generates a client-only package for the octet-stream fixture and typechecks the server as unused when server is false', async () => {
     const outDir = await tempOutDir();
     const bundledSpec = await loadFixture('f-binary-upload.bundled.yaml');

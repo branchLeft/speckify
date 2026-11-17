@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { GITHUB_PACKAGES_REGISTRY } from '../../constants.js';
 import { buildPackageJson, buildReadme, licenseFromBundledSpec } from './package-files.js';
 
 const base = { packageName: '@acme/widgets', version: '1.2.3', speckifyVersion: '0.1.0' };
@@ -47,6 +48,34 @@ describe('buildPackageJson', () => {
     expect(noLicense).not.toHaveProperty('license');
     const licensed = buildPackageJson({ ...base, client: true, server: false, license: 'MIT' });
     expect(licensed.license).toBe('MIT');
+  });
+
+  // GitHub Packages links a package to its source repository through
+  // `repository`, and `npm publish` takes its target registry from
+  // `publishConfig` -- a generated package without either needs hand edits
+  // before it publishes.
+  it('points repository at the given owner/repo', () => {
+    const pkg = buildPackageJson({
+      ...base,
+      client: true,
+      server: false,
+      repository: 'acme/orders',
+    });
+    expect(pkg.repository).toEqual({
+      type: 'git',
+      url: 'git+https://github.com/acme/orders.git',
+    });
+  });
+
+  it('omits repository when none is given', () => {
+    const pkg = buildPackageJson({ ...base, client: true, server: false });
+    expect(pkg).not.toHaveProperty('repository');
+  });
+
+  it('always publishes to the GitHub Packages registry', () => {
+    const pkg = buildPackageJson({ ...base, client: true, server: false });
+    expect(pkg.publishConfig).toEqual({ registry: GITHUB_PACKAGES_REGISTRY });
+    expect(GITHUB_PACKAGES_REGISTRY).toBe('https://npm.pkg.github.com');
   });
 });
 

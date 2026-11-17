@@ -1,5 +1,6 @@
 import path from 'node:path';
 import { appendFile, mkdir, writeFile } from 'node:fs/promises';
+import { githubRepositorySchema } from '../../config/index.js';
 import { buildPackage } from './build.js';
 import { assertGenerationComplete } from './completeness.js';
 import { CodegenInputError } from './errors.js';
@@ -23,6 +24,11 @@ export interface GenerateInput {
   readonly server: boolean;
   readonly changelog: string;
   readonly speckifyVersion: string;
+  /**
+   * The GitHub `owner/repo` the package is published from; written into its
+   * `package.json` `repository`. Omit it for a local build with no repository.
+   */
+  readonly repository?: string;
   /** Where to write the package; the directory is created if it doesn't exist. */
   readonly outDir: string;
 }
@@ -40,6 +46,15 @@ function withVersion(spec: BundledSpec, version: string): Record<string, unknown
 export async function generateTypeScriptPackage(input: GenerateInput): Promise<void> {
   if (!input.client && !input.server) {
     throw new CodegenInputError('At least one of client or server must be requested.');
+  }
+
+  if (input.repository !== undefined) {
+    const repository = githubRepositorySchema.safeParse(input.repository);
+    if (!repository.success) {
+      throw new CodegenInputError(
+        `Invalid repository ${JSON.stringify(input.repository)}: ${repository.error.issues.map((issue) => issue.message).join('; ')}.`,
+      );
+    }
   }
 
   const operations = extractOperations(input.bundledSpec);
@@ -76,6 +91,7 @@ export async function generateTypeScriptPackage(input: GenerateInput): Promise<v
     server: input.server,
     speckifyVersion: input.speckifyVersion,
     ...(license === undefined ? {} : { license }),
+    ...(input.repository === undefined ? {} : { repository: input.repository }),
   };
 
   await Promise.all([

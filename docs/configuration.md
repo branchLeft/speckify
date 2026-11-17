@@ -51,6 +51,16 @@ that would publish it, since the generated `package.json` is produced by
 a separate step and could in principle disagree with `speckify.yaml` by
 the time it's published.
 
+The generated `package.json` also carries the two fields GitHub Packages
+needs, so nobody edits it before publishing:
+
+- `repository` — `git+https://github.com/<owner>/<repo>.git`, taken from
+  `GITHUB_REPOSITORY` (the repo the run is in). A run with no
+  `GITHUB_REPOSITORY`, such as a local `speckify build`, leaves it out; a
+  value that is not a plain `owner/repo` fails the build.
+- `publishConfig.registry` — `https://npm.pkg.github.com`, the same
+  registry `speckify publish` passes to `npm publish`.
+
 ## Where generated packages are expected to live
 
 `speckify publish` builds each contract itself before publishing it — it
@@ -73,7 +83,7 @@ layout.
 | ---------------------------------------- | ------------------ | ------------------------------------------------------------------------------------------------------------------------------------- |
 | `GITHUB_TOKEN`                           | `check`, `publish` | Reads the last-published state from GitHub Packages; posts/updates the PR comment; creates the release.                               |
 | `NODE_AUTH_TOKEN`                        | `publish`          | The token `npm publish` itself uses. Falls back to `GITHUB_TOKEN` when unset, since the composite action sets both to the same value. |
-| `GITHUB_REPOSITORY`                      | `check`, `publish` | `owner/repo`, for the PR comment target and the release target. Set automatically by GitHub Actions.                                  |
+| `GITHUB_REPOSITORY`                      | `check`, `publish` | `owner/repo`, for the PR comment target, the release target and the generated package's `repository`. Set automatically by Actions.   |
 | `GITHUB_EVENT_NAME`, `GITHUB_EVENT_PATH` | `check`            | Used to detect a `pull_request` run and read the PR number. Set automatically by GitHub Actions.                                      |
 
 Outside of GitHub Actions (a local run), none of these need to be set:
