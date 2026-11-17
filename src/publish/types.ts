@@ -11,6 +11,8 @@ export interface NpmPublishTarget {
   /** A label for this target in reports, e.g. the contract name. */
   label: string;
   packageDir: string;
+  /** Set when the package was packed beforehand: the tarball to publish as it is. */
+  tarball?: string;
   packageName: string;
   version: string;
 }

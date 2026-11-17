@@ -1,6 +1,11 @@
 import { describe, expect, it } from 'vitest';
 
-import { githubRepositorySchema, pep503Normalise, speckifyConfigSchema } from './schema.js';
+import {
+  githubRepositorySchema,
+  pep503Normalise,
+  repositoryDirectorySchema,
+  speckifyConfigSchema,
+} from './schema.js';
 
 const validConfig = {
   contracts: [
@@ -42,7 +47,44 @@ describe('githubRepositorySchema', () => {
   });
 });
 
+describe('repositoryDirectorySchema', () => {
+  it.each(['services/broker', 'api', 'packages/a.b/c_d', 'my dir/x'])('accepts %j', (value) => {
+    expect(repositoryDirectorySchema.safeParse(value).success).toBe(true);
+  });
+
+  it.each(['', '/abs', 'a//b', 'a/', './a', 'a/./b', '../a', 'a/../b', 'a\\b', 'a\nb', 'a\u0000b'])(
+    'rejects %j',
+    (value) => {
+      expect(repositoryDirectorySchema.safeParse(value).success).toBe(false);
+    },
+  );
+});
+
 describe('speckifyConfigSchema', () => {
+  it("defaults publish.githubPackages.access to restricted, npm's own default for a scoped package", () => {
+    const result = speckifyConfigSchema.parse(validConfig);
+    expect(result.publish.githubPackages.access).toBe('restricted');
+  });
+
+  it.each(['public', 'restricted'])('accepts publish.githubPackages.access %j', (access) => {
+    const result = speckifyConfigSchema.safeParse({
+      ...validConfig,
+      publish: { githubPackages: { owner: 'acme', access } },
+    });
+    expect(result.success).toBe(true);
+  });
+
+  it.each(['private', 'PUBLIC', '', 1, null])(
+    'rejects publish.githubPackages.access %j',
+    (access) => {
+      const result = speckifyConfigSchema.safeParse({
+        ...validConfig,
+        publish: { githubPackages: { owner: 'acme', access } },
+      });
+      expect(result.success).toBe(false);
+    },
+  );
+
   it('accepts a well-formed config', () => {
     const result = speckifyConfigSchema.safeParse(validConfig);
     expect(result.success).toBe(true);

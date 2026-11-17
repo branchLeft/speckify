@@ -56,9 +56,10 @@ reference.
   owner (`@your-github-org/…`); Speckify checks this at config load time
   and again immediately before publishing. The generated `package.json`
   already names its `repository` (the repo the run is in, from
-  `GITHUB_REPOSITORY`) and a `publishConfig.registry` of
-  `https://npm.pkg.github.com`, so `speckify publish` needs no hand edits
-  to the package.
+  `GITHUB_REPOSITORY`, with `directory` set to where the contract's spec
+  lives in it) and a `publishConfig` of `https://npm.pkg.github.com` with
+  the `access` from `publish.githubPackages.access`, so `speckify publish`
+  needs no hand edits to the package.
 - A Python wheel and sdist (client, server, or both), published to
   **PyPI** via [trusted publishing](https://docs.pypi.org/trusted-publishers/)
   — Speckify never holds or stores a PyPI token; the workflow's own OIDC
@@ -123,6 +124,30 @@ Scoping it to `@<owner>` rather than setting it as the job's default
 registry keeps a plain `npm install`/`pnpm install` of a public package
 (Speckify's own dependencies, at build time) resolving from the public
 registry as normal.
+
+**Attesting what is published** (TypeScript): the action's `publish`
+command, with `attest` left at its default of `true`, runs in three steps
+so the bytes signed are the bytes published. It packs each unpublished npm
+package into a tarball (`speckify publish --pack-only`), attests those
+tarballs with
+[`actions/attest-build-provenance`](https://github.com/actions/attest-build-provenance)
+(pinned by commit), then publishes the same files
+(`speckify publish --from-pack --attestation <bundle>`). Before it
+publishes anything it re-hashes every tarball against the digest recorded
+when it was packed and checks that digest is one of the attestation's
+subjects; one that is not stops the run with nothing published. The
+workflow's `publish` job needs, besides `contents: write` (for the
+release), `packages: write` and `id-token: write`, **`attestations:
+write`** — the workflow `speckify init` writes already has all four. Set
+`attest: 'false'` to publish without attesting, in which case
+`attestations: write` is not needed.
+
+The same two modes are there for a workflow that wants its own steps
+between them: `--pack-only` builds, packs into `--pack-dir` (default
+`.speckify/pack`), writes `speckify-pack.json` there and prints each
+tarball's path and `sha256`; `--from-pack` publishes from that directory
+without rebuilding or re-planning. The action's `command` takes `check`,
+`plan` (printed as JSON), `build` and `publish`, and nothing else.
 
 **PyPI** (Python): add this repository as a trusted publisher on the PyPI
 project (Settings → Publishing → GitHub), naming **this repo**, its own

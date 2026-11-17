@@ -1,5 +1,6 @@
 import { execFile } from 'node:child_process';
-import { cp, mkdtemp, readdir, readFile, rm, symlink, writeFile } from 'node:fs/promises';
+import { createHash } from 'node:crypto';
+import { cp, mkdtemp, readdir, readFile, realpath, rm, symlink, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -110,6 +111,117 @@ describe.skipIf(!networkAvailable)('the built CLI (node dist/cli.js build)', () 
       await rm(workDir, { recursive: true, force: true });
     }
   }, 180_000);
+
+  // The tarball is what gets attested and then published, so it has to be the
+  // real thing: the bytes `npm pack` wrote, carrying the manifest fields that
+  // let it publish with no hand edits, with a digest the manifest records.
+  // Only the packing half runs for real here; publishing would reach a
+  // registry. The publishing half's refusal to publish a tarball that is not
+  // the packed one is checked against the same real tarball, and runs before
+  // anything could be sent.
+  it('packs a real tarball with --pack-only, and --from-pack refuses it once its bytes change', async () => {
+    await execFileAsync('npm', ['run', 'build'], { cwd: repoRoot });
+
+    // Through realpath, because the CLI prints the paths its own cwd resolves
+    // to, and the temp directory is a symlink on macOS.
+    const workDir = await realpath(await mkdtemp(join(tmpdir(), 'speckify-built-cli-pack-')));
+    try {
+      await cp(join(exampleDir, 'openapi.yaml'), join(workDir, 'openapi.yaml'));
+      await writeFile(
+        join(workDir, 'speckify.yaml'),
+        [
+          'contracts:',
+          '  - name: pet-shelter-pack-e2e',
+          '    spec: ./openapi.yaml',
+          '    typescript:',
+          '      package: "@speckify-pack-e2e/pet-shelter"',
+          '      client: true',
+          '',
+          'publish:',
+          '  githubPackages:',
+          '    owner: speckify-pack-e2e',
+          '    access: public',
+          '',
+        ].join('\n'),
+        'utf8',
+      );
+      const env = {
+        ...process.env,
+        GITHUB_TOKEN: '',
+        NODE_AUTH_TOKEN: '',
+        GITHUB_REPOSITORY: 'speckify-pack-e2e/pet-shelter',
+      };
+
+      const { stdout } = await execFileAsync(
+        process.execPath,
+        [cliPath, 'publish', '--pack-only', '-c', 'speckify.yaml'],
+        { cwd: workDir, env },
+      );
+
+      const packDir = join(workDir, '.speckify', 'pack');
+      const manifest = JSON.parse(await readFile(join(packDir, 'speckify-pack.json'), 'utf8')) as {
+        contracts: { targets: { kind: string; tarball: string; sha256: string }[] }[];
+      };
+      const target = manifest.contracts[0]?.targets[0];
+      if (target?.kind !== 'npm') {
+        throw new Error(`expected one npm target in the manifest, got ${JSON.stringify(manifest)}`);
+      }
+      const tarball = join(packDir, target.tarball);
+      const bytes = await readFile(tarball);
+      expect(createHash('sha256').update(bytes).digest('hex')).toBe(target.sha256);
+      expect(stdout).toContain(`tarball: ${tarball} sha256:${target.sha256}`);
+      expect(stdout).toContain('pet-shelter-pack-e2e-typescript: packed');
+
+      const { stdout: packageJsonText } = await execFileAsync('tar', [
+        '-xzOf',
+        tarball,
+        'package/package.json',
+      ]);
+      const packageJson = JSON.parse(packageJsonText) as {
+        repository: unknown;
+        publishConfig: unknown;
+      };
+      expect(packageJson.repository).toEqual({
+        type: 'git',
+        url: 'git+https://github.com/speckify-pack-e2e/pet-shelter.git',
+      });
+      expect(packageJson.publishConfig).toEqual({
+        registry: 'https://npm.pkg.github.com',
+        access: 'public',
+      });
+
+      await writeFile(tarball, Buffer.concat([bytes, Buffer.from('tampered')]));
+      await expect(
+        execFileAsync(
+          process.execPath,
+          [cliPath, 'publish', '--from-pack', '-c', 'speckify.yaml'],
+          {
+            cwd: workDir,
+            env,
+          },
+        ),
+      ).rejects.toMatchObject({
+        stderr: expect.stringContaining('changed since it was packed') as unknown,
+      });
+    } finally {
+      await rm(workDir, { recursive: true, force: true });
+    }
+  }, 180_000);
+
+  it('refuses --pack-only together with --from-pack, and --attestation without --from-pack', async () => {
+    await execFileAsync('npm', ['run', 'build'], { cwd: repoRoot });
+
+    await expect(
+      execFileAsync(process.execPath, [cliPath, 'publish', '--pack-only', '--from-pack']),
+    ).rejects.toMatchObject({
+      stderr: expect.stringContaining('cannot be used together') as unknown,
+    });
+    await expect(
+      execFileAsync(process.execPath, [cliPath, 'publish', '--attestation', 'bundle.jsonl']),
+    ).rejects.toMatchObject({
+      stderr: expect.stringContaining('only applies with --from-pack') as unknown,
+    });
+  }, 60_000);
 
   it.skipIf(!uvAvailable)(
     'builds both languages with the default --out, invoked from the config dir, with no nested-path failure',

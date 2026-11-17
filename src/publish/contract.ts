@@ -35,7 +35,7 @@ function normalizedJson(json: string): string {
   return toCanonicalJson(JSON.parse(json));
 }
 
-type PublishedCheck = 'not-published' | 'already-published';
+export type PublishedCheck = 'not-published' | 'already-published';
 
 /**
  * Tells a target that genuinely needs publishing apart from one the
@@ -47,7 +47,7 @@ type PublishedCheck = 'not-published' | 'already-published';
  * @throws {Error} when the registry has this version already, published
  * with a different spec.
  */
-async function checkAlreadyPublished(
+export async function checkAlreadyPublished(
   registry: RegistryRecord | undefined,
   packageName: string,
   version: string,
@@ -97,6 +97,7 @@ export async function publishContract(options: PublishContractOptions): Promise<
       if (target.kind === 'npm') {
         await publishNpmFn({
           packageDir: target.packageDir,
+          tarball: target.tarball,
           packageName: target.packageName,
           registryUrl: options.npmRegistryUrl,
           token: options.npmToken,

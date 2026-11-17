@@ -74,6 +74,7 @@ jobs:
       contents: write
       packages: write
       id-token: write
+      attestations: write
     steps:
       - name: Checkout
         uses: ${CHECKOUT_PIN}

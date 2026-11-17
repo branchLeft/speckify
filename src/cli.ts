@@ -13,7 +13,17 @@ import { loadConfig, type Contract, type SpeckifyConfig } from './config/index.j
 import { createGithubClient, createGithubRelease, createOrUpdateComment } from './github/index.js';
 import { runInit } from './init/index.js';
 import { OASDIFF_CLASSIFICATION_MAP_FILENAME, resolveOasdiffBinary } from './oasdiff/index.js';
-import { hasFailures, publishContract, type PublishTarget } from './publish/index.js';
+import {
+  hasFailures,
+  packContract,
+  publishContract,
+  publishFromPack,
+  readPackManifest,
+  writePackManifest,
+  type PackManifestContract,
+  type PublishTarget,
+  type TargetOutcome,
+} from './publish/index.js';
 import {
   createNpmRegistryRecord,
   createPyPiRegistryRecord,
@@ -22,7 +32,12 @@ import {
   type TargetRecord,
 } from './record/index.js';
 import { computeContractPlan, renderChangelogMarkdown, type ContractPlan } from './plan.js';
-import { buildContract, DEFAULT_BUILD_OUT_DIR, type BuildContractResult } from './build.js';
+import {
+  buildContract,
+  DEFAULT_BUILD_OUT_DIR,
+  type BuildContractOptions,
+  type BuildContractResult,
+} from './build.js';
 import { GITHUB_PACKAGES_REGISTRY, SPECKIFY_REPO } from './constants.js';
 import { compareGeneratedSurfaces } from './surface/index.js';
 import {
@@ -310,7 +325,10 @@ function targetsForContract(
  * record of what got published, so a failure here is a printed warning,
  * never a non-zero exit.
  */
-async function createReleaseIfConfigured(contract: string, plan: ContractPlan): Promise<void> {
+async function createReleaseIfConfigured(
+  contract: string,
+  published: { version: string; changelog: string; bundledSpec: string },
+): Promise<void> {
   const token = process.env.GITHUB_TOKEN;
   const repository = process.env.GITHUB_REPOSITORY;
   if (token === undefined || repository === undefined) {
@@ -322,23 +340,117 @@ async function createReleaseIfConfigured(contract: string, plan: ContractPlan): 
   }
 
   const client = createGithubClient({ token });
-  const tagName = `${contract}@v${plan.version}`;
+  const tagName = `${contract}@v${published.version}`;
   const result = await createGithubRelease(client, {
     owner,
     repo,
     tagName,
     name: tagName,
-    body: renderChangelogMarkdown(plan.changes),
+    body: published.changelog,
     assets: [
       {
         name: 'openapi.json',
         contentType: 'application/json',
-        data: Buffer.from(plan.bundledSpec),
+        data: Buffer.from(published.bundledSpec),
       },
     ],
   });
   if (!result.ok) {
     console.warn(result.warning);
+  }
+}
+
+/** Where `publish --pack-only` writes tarballs and its manifest, relative to the config directory. */
+const DEFAULT_PACK_DIR = '.speckify/pack';
+
+/** commander accumulator: each use of a repeatable option adds one value. */
+function collectOption(value: string, previous: string[]): string[] {
+  return [...previous, value];
+}
+
+interface PublishOptions {
+  config: string;
+  out: string;
+  packOnly?: boolean;
+  fromPack?: boolean;
+  packDir: string;
+  attestation: string[];
+}
+
+/** What every `build` and `publish` run hands `buildContract`, beyond the contract itself. */
+function buildOptionsFor(
+  context: PlanContext,
+  contract: Contract,
+  outDir: string,
+): BuildContractOptions {
+  return {
+    contract,
+    speckifyVersion: context.currentSpeckifyVersion,
+    toolchainDir: join(packageRoot, 'python'),
+    outDir,
+    repoRoot: context.repoRoot,
+    configDir: context.configDir,
+    access: context.config.publish.githubPackages.access,
+    ...repositoryFromEnv(),
+  };
+}
+
+function registriesFor(npmToken: string): {
+  npm: ReturnType<typeof createNpmRegistryRecord>;
+  pypi: ReturnType<typeof createPyPiRegistryRecord>;
+} {
+  return {
+    npm: createNpmRegistryRecord({ registryUrl: GITHUB_PACKAGES_REGISTRY, token: npmToken }),
+    pypi: createPyPiRegistryRecord(),
+  };
+}
+
+/** Prints one line per target, naming `published` as `publishedWord`; true if any failed. */
+function printOutcomes(outcomes: readonly TargetOutcome[], publishedWord: string): boolean {
+  for (const outcome of outcomes) {
+    const status = outcome.status === 'published' ? publishedWord : outcome.status;
+    console.log(`${outcome.target.label}: ${status}${outcome.error ? ` (${outcome.error})` : ''}`);
+  }
+  return hasFailures(outcomes);
+}
+
+/**
+ * `publish --from-pack`: publishes what `publish --pack-only` packed, each npm
+ * package from its tarball exactly as packed. Nothing is rebuilt or re-planned,
+ * so the bytes published are the bytes that were packed and, through
+ * `--attestation`, the bytes that were attested.
+ */
+async function publishPacked(options: PublishOptions): Promise<void> {
+  const configPath = resolve(options.config);
+  const config = await loadConfig(configPath);
+  const packDir = resolve(dirname(configPath), options.packDir);
+  const manifest = await readPackManifest(packDir);
+  const attestationBundles = await Promise.all(
+    options.attestation.map((file) => readFile(resolve(file), 'utf8')),
+  );
+  const npmToken = process.env.NODE_AUTH_TOKEN ?? process.env.GITHUB_TOKEN ?? '';
+
+  const results = await publishFromPack({
+    packDir,
+    manifest,
+    registries: registriesFor(npmToken),
+    npmRegistryUrl: GITHUB_PACKAGES_REGISTRY,
+    npmToken,
+    npmOwner: config.publish.githubPackages.owner,
+    attestationBundles,
+  });
+
+  let anyFailed = false;
+  for (const result of results) {
+    if (printOutcomes(result.outcomes, 'published')) {
+      anyFailed = true;
+    }
+    if (result.outcomes.some((outcome) => outcome.status === 'published')) {
+      await createReleaseIfConfigured(result.name, result);
+    }
+  }
+  if (anyFailed) {
+    process.exitCode = 1;
   }
 }
 
@@ -349,9 +461,41 @@ program
   )
   .option('-c, --config <path>', 'path to speckify.yaml', 'speckify.yaml')
   .option('-o, --out <dir>', 'build output directory', DEFAULT_BUILD_OUT_DIR)
-  .action(async (options: { config: string; out: string }) => {
+  .option(
+    '--pack-only',
+    'build and pack every unpublished npm package into --pack-dir, writing a manifest and printing each tarball; publish nothing',
+  )
+  .option(
+    '--from-pack',
+    'publish what --pack-only packed in --pack-dir: each tarball exactly as packed, after checking its digest',
+  )
+  .option(
+    '--pack-dir <dir>',
+    'where --pack-only writes and --from-pack reads, relative to the config directory',
+    DEFAULT_PACK_DIR,
+  )
+  .option(
+    '--attestation <file>',
+    'with --from-pack: an attestation bundle file; publish only if every tarball digest is one of its subjects (repeatable)',
+    collectOption,
+    [] as string[],
+  )
+  .action(async (options: PublishOptions) => {
+    if (options.packOnly === true && options.fromPack === true) {
+      throw new Error('--pack-only and --from-pack cannot be used together');
+    }
+    if (options.attestation.length > 0 && options.fromPack !== true) {
+      throw new Error('--attestation only applies with --from-pack');
+    }
+    if (options.fromPack === true) {
+      await publishPacked(options);
+      return;
+    }
+
     const context = await buildPlanContext(options.config);
     const npmToken = process.env.NODE_AUTH_TOKEN ?? process.env.GITHUB_TOKEN ?? '';
+    const packDir = resolve(context.configDir, options.packDir);
+    const packed: PackManifestContract[] = [];
     // Resolved once, against the config dir, rather than left relative:
     // `uv build` runs with its cwd set to the generated project dir (itself
     // nested under this directory), so a relative --out-dir get resolved a
@@ -362,47 +506,64 @@ program
 
     for (const contract of context.config.contracts) {
       const plan = await planContract(context, contract);
-      const built = await buildContract(plan, {
-        contract,
-        speckifyVersion: context.currentSpeckifyVersion,
-        toolchainDir: join(packageRoot, 'python'),
-        outDir,
-        ...repositoryFromEnv(),
-      });
+      const built = await buildContract(plan, buildOptionsFor(context, contract, outDir));
       const targets = targetsForContract(contract, plan.version, built);
       if (targets.length === 0) {
+        continue;
+      }
+      const registries = registriesFor(npmToken);
+      const npmOwner = context.config.publish.githubPackages.owner;
+
+      if (options.packOnly === true) {
+        const result = await packContract({
+          contract: contract.name,
+          version: plan.version,
+          changelog: renderChangelogMarkdown(plan.changes),
+          bundledSpec: plan.bundledSpec,
+          targets,
+          packDir,
+          registries,
+          npmOwner,
+        });
+        packed.push(result.contract);
+        if (printOutcomes(result.outcomes, 'packed')) {
+          anyFailed = true;
+        }
         continue;
       }
 
       const outcomes = await publishContract({
         targets,
         builtBundledSpec: plan.bundledSpec,
-        registries: {
-          npm:
-            contract.typescript !== undefined
-              ? createNpmRegistryRecord({ registryUrl: GITHUB_PACKAGES_REGISTRY, token: npmToken })
-              : undefined,
-          pypi: contract.python !== undefined ? createPyPiRegistryRecord() : undefined,
-        },
+        registries,
         npmRegistryUrl: GITHUB_PACKAGES_REGISTRY,
         npmToken,
-        npmOwner: context.config.publish.githubPackages.owner,
+        npmOwner,
       });
-
-      let contractPublished = false;
-      for (const outcome of outcomes) {
-        console.log(
-          `${outcome.target.label}: ${outcome.status}${outcome.error ? ` (${outcome.error})` : ''}`,
-        );
-        if (outcome.status === 'published') {
-          contractPublished = true;
-        }
-      }
-      if (hasFailures(outcomes)) {
+      if (printOutcomes(outcomes, 'published')) {
         anyFailed = true;
       }
-      if (contractPublished) {
-        await createReleaseIfConfigured(contract.name, plan);
+      if (outcomes.some((outcome) => outcome.status === 'published')) {
+        await createReleaseIfConfigured(contract.name, {
+          version: plan.version,
+          changelog: renderChangelogMarkdown(plan.changes),
+          bundledSpec: plan.bundledSpec,
+        });
+      }
+    }
+
+    if (options.packOnly === true) {
+      const manifestPath = await writePackManifest(packDir, {
+        schemaVersion: 1,
+        contracts: packed,
+      });
+      console.log(`manifest: ${manifestPath}`);
+      for (const contract of packed) {
+        for (const target of contract.targets) {
+          if (target.kind === 'npm') {
+            console.log(`tarball: ${join(packDir, target.tarball)} sha256:${target.sha256}`);
+          }
+        }
       }
     }
 
@@ -464,13 +625,7 @@ program
     const outDir = resolve(context.configDir, options.out);
     for (const contract of context.config.contracts) {
       const plan = await planContract(context, contract);
-      const result = await buildContract(plan, {
-        contract,
-        speckifyVersion: context.currentSpeckifyVersion,
-        toolchainDir: join(packageRoot, 'python'),
-        outDir,
-        ...repositoryFromEnv(),
-      });
+      const result = await buildContract(plan, buildOptionsFor(context, contract, outDir));
       const from = plan.previousVersion ?? '(unpublished)';
       console.log(`## ${plan.contract}: ${from} -> ${plan.version} (${plan.bump})`);
       if (result.typescript) console.log(`  typescript: ${result.typescript.dir}`);

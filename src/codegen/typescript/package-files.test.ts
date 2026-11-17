@@ -72,10 +72,50 @@ describe('buildPackageJson', () => {
     expect(pkg).not.toHaveProperty('repository');
   });
 
-  it('always publishes to the GitHub Packages registry', () => {
+  it('always publishes to the GitHub Packages registry, restricted unless told otherwise', () => {
     const pkg = buildPackageJson({ ...base, client: true, server: false });
-    expect(pkg.publishConfig).toEqual({ registry: GITHUB_PACKAGES_REGISTRY });
+    expect(pkg.publishConfig).toEqual({ registry: GITHUB_PACKAGES_REGISTRY, access: 'restricted' });
     expect(GITHUB_PACKAGES_REGISTRY).toBe('https://npm.pkg.github.com');
+  });
+
+  it('carries the configured access in publishConfig', () => {
+    const pkg = buildPackageJson({ ...base, client: true, server: false, access: 'public' });
+    expect(pkg.publishConfig).toEqual({ registry: GITHUB_PACKAGES_REGISTRY, access: 'public' });
+  });
+
+  it('records the package directory inside the repository when one is given', () => {
+    const pkg = buildPackageJson({
+      ...base,
+      client: true,
+      server: false,
+      repository: 'acme/orders',
+      repositoryDirectory: 'services/broker',
+    });
+    expect(pkg.repository).toEqual({
+      type: 'git',
+      url: 'git+https://github.com/acme/orders.git',
+      directory: 'services/broker',
+    });
+  });
+
+  it('leaves the directory out of repository when none is given', () => {
+    const pkg = buildPackageJson({
+      ...base,
+      client: true,
+      server: false,
+      repository: 'acme/orders',
+    });
+    expect(pkg.repository).not.toHaveProperty('directory');
+  });
+
+  it('writes no repository at all for a directory with no repository', () => {
+    const pkg = buildPackageJson({
+      ...base,
+      client: true,
+      server: false,
+      repositoryDirectory: 'services/broker',
+    });
+    expect(pkg).not.toHaveProperty('repository');
   });
 });
 

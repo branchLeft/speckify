@@ -1,6 +1,12 @@
 import path from 'node:path';
 import { appendFile, mkdir, writeFile } from 'node:fs/promises';
-import { githubRepositorySchema } from '../../config/index.js';
+import type { z } from 'zod';
+import {
+  githubRepositorySchema,
+  npmAccessSchema,
+  repositoryDirectorySchema,
+  type NpmAccess,
+} from '../../config/index.js';
 import { buildPackage } from './build.js';
 import { assertGenerationComplete } from './completeness.js';
 import { CodegenInputError } from './errors.js';
@@ -29,8 +35,26 @@ export interface GenerateInput {
    * `package.json` `repository`. Omit it for a local build with no repository.
    */
   readonly repository?: string;
+  /**
+   * Where the package lives inside `repository`, relative to the repository
+   * root; written into `repository.directory`. Ignored without `repository`.
+   */
+  readonly repositoryDirectory?: string;
+  /** `publishConfig.access`; `restricted` when omitted. */
+  readonly access?: NpmAccess;
   /** Where to write the package; the directory is created if it doesn't exist. */
   readonly outDir: string;
+}
+
+/** Rejects a value that is present but does not satisfy `schema`, naming the input it came from. */
+function assertValid(name: string, schema: z.ZodType, value: unknown): void {
+  if (value === undefined) return;
+  const result = schema.safeParse(value);
+  if (!result.success) {
+    throw new CodegenInputError(
+      `Invalid ${name} ${JSON.stringify(value)}: ${result.error.issues.map((issue) => issue.message).join('; ')}.`,
+    );
+  }
 }
 
 function withVersion(spec: BundledSpec, version: string): Record<string, unknown> {
@@ -48,14 +72,9 @@ export async function generateTypeScriptPackage(input: GenerateInput): Promise<v
     throw new CodegenInputError('At least one of client or server must be requested.');
   }
 
-  if (input.repository !== undefined) {
-    const repository = githubRepositorySchema.safeParse(input.repository);
-    if (!repository.success) {
-      throw new CodegenInputError(
-        `Invalid repository ${JSON.stringify(input.repository)}: ${repository.error.issues.map((issue) => issue.message).join('; ')}.`,
-      );
-    }
-  }
+  assertValid('repository', githubRepositorySchema, input.repository);
+  assertValid('repositoryDirectory', repositoryDirectorySchema, input.repositoryDirectory);
+  assertValid('access', npmAccessSchema, input.access);
 
   const operations = extractOperations(input.bundledSpec);
   const srcDir = path.join(input.outDir, 'src');
@@ -92,6 +111,10 @@ export async function generateTypeScriptPackage(input: GenerateInput): Promise<v
     speckifyVersion: input.speckifyVersion,
     ...(license === undefined ? {} : { license }),
     ...(input.repository === undefined ? {} : { repository: input.repository }),
+    ...(input.repositoryDirectory === undefined
+      ? {}
+      : { repositoryDirectory: input.repositoryDirectory }),
+    ...(input.access === undefined ? {} : { access: input.access }),
   };
 
   await Promise.all([
