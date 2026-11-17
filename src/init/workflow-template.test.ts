@@ -36,6 +36,17 @@ describe('renderCallerWorkflow', () => {
     );
   });
 
+  it('writes the ref the attestation must come from as a literal, never as an expression of the run', () => {
+    const publishJob = yamlText.slice(yamlText.indexOf('publish:'));
+    expect(publishJob).toMatch(/^ {10}attestation-source-ref: refs\/heads\/main$/m);
+    expect(publishJob).not.toMatch(/^ {10}attestation-[a-z-]+: .*\$\{\{/m);
+  });
+
+  it('tells the consumer to write the repository and signer workflow as literals too', () => {
+    expect(yamlText).toContain('# attestation-repo: OWNER/REPO');
+    expect(yamlText).toContain('# attestation-signer-workflow: OWNER/REPO/.github/workflows/');
+  });
+
   it('runs the publish job under the release environment with a non-cancelling concurrency group', () => {
     const publishJob = yamlText.slice(yamlText.indexOf('publish:'));
     expect(publishJob).toContain('environment: release');

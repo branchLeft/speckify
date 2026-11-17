@@ -244,6 +244,16 @@ runs:
         GH_TOKEN: ${{ inputs.github-token }}
       run: |
         set -eu
+        # An identity read from the run itself only proves the attestation came
+        # from the run that is publishing. A literal the caller wrote proves it
+        # came from where the caller says it must.
+        for pair in "attestation-repo:$SPECKIFY_INPUT_REPO" \
+          "attestation-signer-workflow:$SPECKIFY_INPUT_SIGNER" \
+          "attestation-source-ref:$SPECKIFY_INPUT_REF"; do
+          if [ -z "${pair#*:}" ]; then
+            echo "::warning::${pair%%:*} is not set, so it is taken from this run; write the literal value in the workflow to bind the attestation to it"
+          fi
+        done
         repo="${SPECKIFY_INPUT_REPO:-$SPECKIFY_RUN_REPO}"
         signer="${SPECKIFY_INPUT_SIGNER:-${SPECKIFY_RUN_WORKFLOW_REF%@*}}"
         source_ref="${SPECKIFY_INPUT_REF:-$SPECKIFY_RUN_REF}"

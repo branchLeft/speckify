@@ -149,17 +149,30 @@ naming both permissions (`attestations: write` cannot be seen from inside
 the job, so it is named, not tested). Set `attest: 'false'` to publish
 without attesting, in which case neither permission is needed.
 
-The identity the signature is verified against comes from three optional
-inputs: `attestation-repo` (default: this run's repository),
-`attestation-signer-workflow` (default: the workflow now running,
-`owner/repo/.github/workflows/<file>.yml`, without its ref) and
-`attestation-source-ref` (default: this run's ref). A caller who wants
-publishes from one place only writes literals, for example
-`attestation-source-ref: refs/heads/main`, so a publish from any other ref
-fails; the defaults are taken from the run itself and so only bind the
-attestation to the run that publishes. In a reusable workflow, set
-`attestation-signer-workflow` to the workflow that contains the attest
-step. `github-token` (default `${{ github.token }}`) is what `gh` reads the
+**Write the identity as literals.** The identity the signature is verified
+against comes from three inputs: `attestation-repo`,
+`attestation-signer-workflow` (`owner/repo/.github/workflows/<file>.yml`,
+without a ref) and `attestation-source-ref`. Left empty, each is read from
+the run that is publishing (its repository, its workflow, its ref), which
+only proves the attestation came from that same run; the action warns for
+each one left empty. A consumer that wants the attestation tied to a fixed
+place, as a hand-rolled attest-and-verify step would be, must write all
+three literals, so a publish from any other workflow or ref fails:
+
+```yaml
+- uses: branchLeft/speckify@<sha>
+  with:
+    command: publish
+    attestation-repo: acme/widgets
+    attestation-signer-workflow: acme/widgets/.github/workflows/speckify.yml
+    attestation-source-ref: refs/heads/main
+```
+
+`speckify init` writes `attestation-source-ref: refs/heads/main` into the
+publish job and leaves the other two as commented placeholders, because it
+does not know the repository's name. In a reusable workflow, set
+`attestation-signer-workflow` to the workflow that contains the attest step.
+`github-token` (default `${{ github.token }}`) is what `gh` reads the
 attestation with.
 
 The same two modes are there for a workflow that wants its own steps

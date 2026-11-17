@@ -394,6 +394,55 @@ describe('the publish-packed step', () => {
     );
   });
 
+  it('binds to a literal even when the run is on a different ref than the literal says', async () => {
+    const stub = await stubAction({ packs: false });
+    const result = await runScript(publishStep.run ?? '', {
+      ...inputsOf('/tmp/attestation.jsonl', {
+        SPECKIFY_INPUT_REF: 'refs/heads/main',
+        SPECKIFY_RUN_REF: 'refs/heads/some-branch',
+      }),
+      SPECKIFY_ACTION_PATH: stub.dir,
+    });
+    expect(result.code, result.stderr).toBe(0);
+    const [call] = await stub.calls();
+    expect(call).toEqual(expect.arrayContaining(['--attestation-source-ref', 'refs/heads/main']));
+    expect(call).not.toContain('refs/heads/some-branch');
+  });
+
+  it('warns, naming the input, for each identity input left to the run, and for none when all are literal', async () => {
+    const stub = await stubAction({ packs: false });
+    const defaulted = await runScript(publishStep.run ?? '', {
+      ...inputsOf('/tmp/attestation.jsonl'),
+      SPECKIFY_ACTION_PATH: stub.dir,
+    });
+    for (const name of [
+      'attestation-repo',
+      'attestation-signer-workflow',
+      'attestation-source-ref',
+    ]) {
+      expect(defaulted.stdout, name).toContain(`::warning::${name} is not set`);
+    }
+
+    const literal = await runScript(publishStep.run ?? '', {
+      ...inputsOf('/tmp/attestation.jsonl', {
+        SPECKIFY_INPUT_REPO: 'acme/widgets',
+        SPECKIFY_INPUT_SIGNER: 'acme/widgets/.github/workflows/release.yml',
+        SPECKIFY_INPUT_REF: 'refs/heads/main',
+      }),
+      SPECKIFY_ACTION_PATH: stub.dir,
+    });
+    expect(literal.code, literal.stderr).toBe(0);
+    expect(literal.stdout).not.toContain('::warning::');
+  });
+
+  it('is documented: the README tells a consumer to write all three as literals, with an example', async () => {
+    const readme = await readFile(new URL('../README.md', import.meta.url), 'utf8');
+    expect(readme).toMatch(/attestation-repo: \S+\/\S+/);
+    expect(readme).toMatch(/attestation-signer-workflow: \S+\/\S+\/\.github\/workflows\/\S+\.yml/);
+    expect(readme).toContain('attestation-source-ref: refs/heads/main');
+    expect(readme).toContain('Write the identity as literals');
+  });
+
   it('leaves the decision to refuse an unattested tarball to the CLI: no bundle still runs it, required', async () => {
     const stub = await stubAction({ packs: false });
     const result = await runScript(publishStep.run ?? '', {
