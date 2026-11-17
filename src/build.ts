@@ -18,6 +18,8 @@ export interface BuildContractOptions {
   toolchainDir?: string;
   /** Base output directory each contract's `<lang>` subdirectory is written under. @default DEFAULT_BUILD_OUT_DIR */
   outDir?: string;
+  /** The GitHub `owner/repo` the packages are published from; written into the TypeScript package's `repository`. Omit it on a local run. */
+  repository?: string;
 }
 
 export interface BuildContractResult {
@@ -56,6 +58,7 @@ export async function buildContract(
       server: contract.typescript.server,
       changelog,
       speckifyVersion: options.speckifyVersion,
+      ...(options.repository === undefined ? {} : { repository: options.repository }),
       outDir: dir,
     });
     result.typescript = { dir };

@@ -54,7 +54,11 @@ reference.
   per contract), published to **GitHub Packages** under the configured
   owner. GitHub Packages requires a scoped package name matching that
   owner (`@your-github-org/…`); Speckify checks this at config load time
-  and again immediately before publishing.
+  and again immediately before publishing. The generated `package.json`
+  already names its `repository` (the repo the run is in, from
+  `GITHUB_REPOSITORY`) and a `publishConfig.registry` of
+  `https://npm.pkg.github.com`, so `speckify publish` needs no hand edits
+  to the package.
 - A Python wheel and sdist (client, server, or both), published to
   **PyPI** via [trusted publishing](https://docs.pypi.org/trusted-publishers/)
   — Speckify never holds or stores a PyPI token; the workflow's own OIDC

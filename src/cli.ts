@@ -23,7 +23,7 @@ import {
 } from './record/index.js';
 import { computeContractPlan, renderChangelogMarkdown, type ContractPlan } from './plan.js';
 import { buildContract, DEFAULT_BUILD_OUT_DIR, type BuildContractResult } from './build.js';
-import { SPECKIFY_REPO } from './constants.js';
+import { GITHUB_PACKAGES_REGISTRY, SPECKIFY_REPO } from './constants.js';
 import { compareGeneratedSurfaces } from './surface/index.js';
 import {
   loadClassificationMap,
@@ -34,14 +34,23 @@ import {
   type ToolchainImpactEntry,
 } from './version/index.js';
 
-const GITHUB_PACKAGES_REGISTRY = 'https://npm.pkg.github.com';
-
 const packageRoot = join(dirname(fileURLToPath(import.meta.url)), '..');
 
 async function readSpeckifyVersion(): Promise<string> {
   const raw = await readFile(join(packageRoot, 'package.json'), 'utf8');
   const pkg = JSON.parse(raw) as { version: string };
   return pkg.version;
+}
+
+/**
+ * The repository the generated packages name as their source: the
+ * `GITHUB_REPOSITORY` (`owner/repo`) Actions sets on every job. A local run
+ * has none, so the packages it builds carry no `repository`; a malformed
+ * value is rejected when the package is generated, not guessed at here.
+ */
+function repositoryFromEnv(): { repository?: string } {
+  const repository = process.env.GITHUB_REPOSITORY;
+  return repository === undefined || repository === '' ? {} : { repository };
 }
 
 async function resolvePreviousState(contract: Contract): Promise<RegistryRecordEntry | null> {
@@ -358,6 +367,7 @@ program
         speckifyVersion: context.currentSpeckifyVersion,
         toolchainDir: join(packageRoot, 'python'),
         outDir,
+        ...repositoryFromEnv(),
       });
       const targets = targetsForContract(contract, plan.version, built);
       if (targets.length === 0) {
@@ -459,6 +469,7 @@ program
         speckifyVersion: context.currentSpeckifyVersion,
         toolchainDir: join(packageRoot, 'python'),
         outDir,
+        ...repositoryFromEnv(),
       });
       const from = plan.previousVersion ?? '(unpublished)';
       console.log(`## ${plan.contract}: ${from} -> ${plan.version} (${plan.bump})`);

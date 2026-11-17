@@ -1,5 +1,5 @@
 import { readFileSync } from 'node:fs';
-import { mkdir, mkdtemp, readdir, rm, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, readFile, readdir, rm, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { spawn } from 'node:child_process';
@@ -138,6 +138,7 @@ describe('buildContract (end-to-end: plan through a mocked first-publish registr
     const result = await buildContract(plan, {
       contract,
       speckifyVersion: '0.0.0-test',
+      repository: 'speckify-fixtures/e2e',
       outDir,
     });
 
@@ -145,6 +146,17 @@ describe('buildContract (end-to-end: plan through a mocked first-publish registr
       throw new Error('expected a typescript build result');
     }
     expect(result.typescript.dir).toBe(path.join(outDir, 'e2e-fixture', 'typescript'));
+
+    // The built package publishes with no hand edits: it names its source
+    // repository and the registry it publishes to.
+    const builtManifest = JSON.parse(
+      await readFile(path.join(result.typescript.dir, 'package.json'), 'utf8'),
+    ) as { repository: unknown; publishConfig: unknown };
+    expect(builtManifest.repository).toEqual({
+      type: 'git',
+      url: 'git+https://github.com/speckify-fixtures/e2e.git',
+    });
+    expect(builtManifest.publishConfig).toEqual({ registry: 'https://npm.pkg.github.com' });
 
     // A consumer nested inside the package's own tree resolves the package
     // by name via Node's self-reference resolution, the same way an
