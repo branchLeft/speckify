@@ -54,7 +54,7 @@ describe('resolveToolchainImpactBump', () => {
 describe('getConfigStringValue', () => {
   const config: SpeckifyConfig = {
     contracts: [{ name: 'widgets', spec: './openapi.yaml' }],
-    publish: { githubPackages: { owner: 'acme' } },
+    publish: { githubPackages: { owner: 'acme', access: 'restricted' } },
   };
 
   it('reads a nested string value by dotted path', () => {

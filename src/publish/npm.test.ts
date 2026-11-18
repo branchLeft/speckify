@@ -28,6 +28,41 @@ describe('publishNpm', () => {
     );
   });
 
+  it('publishes a packed tarball as it is, rather than packing the package directory again', async () => {
+    const runProcess = vi.fn().mockResolvedValue({ stdout: '', stderr: '' });
+    await publishNpm({
+      packageDir: '/pkg',
+      tarball: '/packs/acme-orders-1.0.0.tgz',
+      packageName: '@acme/orders-api',
+      registryUrl: 'https://npm.pkg.github.com',
+      token: 'secret-token',
+      owner: 'acme',
+      runProcess,
+    });
+
+    expect(runProcess).toHaveBeenCalledWith(
+      'npm',
+      ['publish', '/packs/acme-orders-1.0.0.tgz', '--registry', 'https://npm.pkg.github.com'],
+      expect.objectContaining({ cwd: '/packs' }),
+    );
+  });
+
+  it('still refuses a foreign scope when publishing a tarball', async () => {
+    const runProcess = vi.fn();
+    await expect(
+      publishNpm({
+        packageDir: '/pkg',
+        tarball: '/packs/other-orders-1.0.0.tgz',
+        packageName: '@other/orders-api',
+        registryUrl: 'https://npm.pkg.github.com',
+        token: 'secret-token',
+        owner: 'acme',
+        runProcess,
+      }),
+    ).rejects.toThrow(PublishError);
+    expect(runProcess).not.toHaveBeenCalled();
+  });
+
   it('rejects a package whose scope does not match the configured owner, without running npm', async () => {
     const runProcess = vi.fn();
     await expect(

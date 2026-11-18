@@ -56,9 +56,10 @@ reference.
   owner (`@your-github-org/…`); Speckify checks this at config load time
   and again immediately before publishing. The generated `package.json`
   already names its `repository` (the repo the run is in, from
-  `GITHUB_REPOSITORY`) and a `publishConfig.registry` of
-  `https://npm.pkg.github.com`, so `speckify publish` needs no hand edits
-  to the package.
+  `GITHUB_REPOSITORY`, with `directory` set to where the contract's spec
+  lives in it) and a `publishConfig` of `https://npm.pkg.github.com` with
+  the `access` from `publish.githubPackages.access`, so `speckify publish`
+  needs no hand edits to the package.
 - A Python wheel and sdist (client, server, or both), published to
   **PyPI** via [trusted publishing](https://docs.pypi.org/trusted-publishers/)
   — Speckify never holds or stores a PyPI token; the workflow's own OIDC
@@ -123,6 +124,63 @@ Scoping it to `@<owner>` rather than setting it as the job's default
 registry keeps a plain `npm install`/`pnpm install` of a public package
 (Speckify's own dependencies, at build time) resolving from the public
 registry as normal.
+
+**Attesting what is published** (TypeScript): the action's `publish`
+command, with `attest` left at its default of `true`, runs in three steps
+so the bytes signed are the bytes published. It packs each unpublished npm
+package into a tarball (`speckify publish --pack-only`), attests those
+tarballs with
+[`actions/attest-build-provenance`](https://github.com/actions/attest-build-provenance)
+(pinned by commit), then publishes the same files
+(`speckify publish --from-pack --require-attestation --attestation <bundle>`).
+Before it publishes anything it re-hashes every tarball against the digest
+recorded when it was packed, checks that digest is one of the
+attestation's subjects, and then runs `gh attestation verify` on each
+tarball. That check verifies the Sigstore signature and that the
+attestation was made by **this repository's workflow, on this ref** (see
+below). The CLI itself refuses any tarball with no attestation, and any
+digest, signature or identity that does not match: with nothing published.
+There is no path through the action that publishes a tarball unattested or
+unverified. The workflow's `publish` job needs, besides `contents: write`
+(for the release), `packages: write` and `id-token: write`,
+**`attestations: write`**: the workflow `speckify init` writes already has
+all four. A job with no `id-token` fails in the first step with a message
+naming both permissions (`attestations: write` cannot be seen from inside
+the job, so it is named, not tested). Set `attest: 'false'` to publish
+without attesting, in which case neither permission is needed.
+
+**Write the identity as literals.** The identity the signature is verified
+against comes from three inputs: `attestation-repo`,
+`attestation-signer-workflow` (`owner/repo/.github/workflows/<file>.yml`,
+without a ref) and `attestation-source-ref`. Left empty, each is read from
+the run that is publishing (its repository, its workflow, its ref), which
+only proves the attestation came from that same run; the action warns for
+each one left empty. A consumer that wants the attestation tied to a fixed
+place, as a hand-rolled attest-and-verify step would be, must write all
+three literals, so a publish from any other workflow or ref fails:
+
+```yaml
+- uses: branchLeft/speckify@<sha>
+  with:
+    command: publish
+    attestation-repo: acme/widgets
+    attestation-signer-workflow: acme/widgets/.github/workflows/speckify.yml
+    attestation-source-ref: refs/heads/main
+```
+
+`speckify init` writes `attestation-source-ref: refs/heads/main` into the
+publish job and leaves the other two as commented placeholders, because it
+does not know the repository's name. In a reusable workflow, set
+`attestation-signer-workflow` to the workflow that contains the attest step.
+`github-token` (default `${{ github.token }}`) is what `gh` reads the
+attestation with.
+
+The same two modes are there for a workflow that wants its own steps
+between them: `--pack-only` builds, packs into `--pack-dir` (default
+`.speckify/pack`), writes `speckify-pack.json` there and prints each
+tarball's path and `sha256`; `--from-pack` publishes from that directory
+without rebuilding or re-planning. The action's `command` takes `check`,
+`plan` (printed as JSON), `build` and `publish`, and nothing else.
 
 **PyPI** (Python): add this repository as a trusted publisher on the PyPI
 project (Settings → Publishing → GitHub), naming **this repo**, its own

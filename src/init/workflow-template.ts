@@ -74,6 +74,7 @@ jobs:
       contents: write
       packages: write
       id-token: write
+      attestations: write
     steps:
       - name: Checkout
         uses: ${CHECKOUT_PIN}
@@ -83,6 +84,14 @@ jobs:
         with:
           command: publish
           config: ${options.configPath}
+          # Each tarball's attestation is verified against these before anything
+          # is published. Left out, they are read from this run, which only proves
+          # the run that publishes made it. Write all three as literals: the
+          # branch below, this repository (owner/repo), and this workflow file
+          # (owner/repo/.github/workflows/<this file>.yml).
+          attestation-source-ref: refs/heads/main
+          # attestation-repo: OWNER/REPO
+          # attestation-signer-workflow: OWNER/REPO/.github/workflows/WORKFLOW_FILE.yml
         env:
           GITHUB_TOKEN: \${{ github.token }}
           NODE_AUTH_TOKEN: \${{ github.token }}

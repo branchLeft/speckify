@@ -56,6 +56,33 @@ describe('publishContract', () => {
     expect(hasFailures(outcomes)).toBe(false);
   });
 
+  it('hands a packed tarball to the npm publisher, and nothing for an unpacked package', async () => {
+    const publishNpmFn = vi.fn().mockResolvedValue(undefined);
+    const common = {
+      registries: { npm: fakeRegistry(null) },
+      builtBundledSpec: '{}',
+      publishNpmFn,
+      npmRegistryUrl: 'https://npm.pkg.github.com',
+      npmToken: 'token',
+      npmOwner: 'acme',
+    };
+
+    await publishContract({
+      ...common,
+      targets: [{ ...npmTarget, tarball: '/packs/acme-orders-api-1.1.0.tgz' }],
+    });
+    await publishContract({ ...common, targets: [npmTarget] });
+
+    expect(publishNpmFn).toHaveBeenNthCalledWith(
+      1,
+      expect.objectContaining({ tarball: '/packs/acme-orders-api-1.1.0.tgz' }),
+    );
+    expect(publishNpmFn).toHaveBeenNthCalledWith(
+      2,
+      expect.objectContaining({ tarball: undefined }),
+    );
+  });
+
   it('skips a target whose version the registry already has with an identical (normalised) spec', async () => {
     const publishNpmFn = vi.fn().mockResolvedValue(undefined);
 

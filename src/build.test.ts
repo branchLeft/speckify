@@ -139,6 +139,11 @@ describe('buildContract (end-to-end: plan through a mocked first-publish registr
       contract,
       speckifyVersion: '0.0.0-test',
       repository: 'speckify-fixtures/e2e',
+      access: 'public',
+      // The contract's spec sits two directories below the repository root,
+      // so that is the package directory the manifest must record.
+      repoRoot: outDir,
+      configDir: path.join(outDir, 'services', 'orders'),
       outDir,
     });
 
@@ -155,8 +160,12 @@ describe('buildContract (end-to-end: plan through a mocked first-publish registr
     expect(builtManifest.repository).toEqual({
       type: 'git',
       url: 'git+https://github.com/speckify-fixtures/e2e.git',
+      directory: 'services/orders',
     });
-    expect(builtManifest.publishConfig).toEqual({ registry: 'https://npm.pkg.github.com' });
+    expect(builtManifest.publishConfig).toEqual({
+      registry: 'https://npm.pkg.github.com',
+      access: 'public',
+    });
 
     // A consumer nested inside the package's own tree resolves the package
     // by name via Node's self-reference resolution, the same way an

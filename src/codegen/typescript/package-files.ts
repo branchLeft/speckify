@@ -1,3 +1,4 @@
+import type { NpmAccess } from '../../config/index.js';
 import { GITHUB_PACKAGES_REGISTRY } from '../../constants.js';
 
 export interface PackageFilesInput {
@@ -12,6 +13,13 @@ export interface PackageFilesInput {
    * Absent on a local run, where there is no repository to name.
    */
   readonly repository?: string;
+  /**
+   * Where the package lives inside `repository`, already validated and
+   * relative to the repository root. Only written alongside `repository`.
+   */
+  readonly repositoryDirectory?: string;
+  /** `publishConfig.access`; `restricted`, npm's own default for a scoped package, when absent. */
+  readonly access?: NpmAccess;
 }
 
 function licenseFromInfo(info: unknown): string | undefined {
@@ -62,7 +70,7 @@ export function buildPackageJson(input: PackageFilesInput): Record<string, unkno
     dependencies: { zod: '^4.6.5' },
     // `npm publish` takes the registry from here, so the package publishes to
     // GitHub Packages with no `--registry` flag and no hand-edited manifest.
-    publishConfig: { registry: GITHUB_PACKAGES_REGISTRY },
+    publishConfig: { registry: GITHUB_PACKAGES_REGISTRY, access: input.access ?? 'restricted' },
     speckify: { speckifyVersion: input.speckifyVersion },
   };
   if (input.license !== undefined) {
@@ -73,6 +81,7 @@ export function buildPackageJson(input: PackageFilesInput): Record<string, unkno
     packageJson.repository = {
       type: 'git',
       url: `git+https://github.com/${input.repository}.git`,
+      ...(input.repositoryDirectory === undefined ? {} : { directory: input.repositoryDirectory }),
     };
   }
   return packageJson;

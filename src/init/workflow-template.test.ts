@@ -36,6 +36,17 @@ describe('renderCallerWorkflow', () => {
     );
   });
 
+  it('writes the ref the attestation must come from as a literal, never as an expression of the run', () => {
+    const publishJob = yamlText.slice(yamlText.indexOf('publish:'));
+    expect(publishJob).toMatch(/^ {10}attestation-source-ref: refs\/heads\/main$/m);
+    expect(publishJob).not.toMatch(/^ {10}attestation-[a-z-]+: .*\$\{\{/m);
+  });
+
+  it('tells the consumer to write the repository and signer workflow as literals too', () => {
+    expect(yamlText).toContain('# attestation-repo: OWNER/REPO');
+    expect(yamlText).toContain('# attestation-signer-workflow: OWNER/REPO/.github/workflows/');
+  });
+
   it('runs the publish job under the release environment with a non-cancelling concurrency group', () => {
     const publishJob = yamlText.slice(yamlText.indexOf('publish:'));
     expect(publishJob).toContain('environment: release');
@@ -43,7 +54,10 @@ describe('renderCallerWorkflow', () => {
     expect(publishJob).toContain('cancel-in-progress: false');
   });
 
-  it('gives the publish job exactly contents: write, packages: write and id-token: write', () => {
+  // The action attests the packed tarballs before publishing them (its
+  // `attest` input defaults on), which needs `id-token: write` to sign and
+  // `attestations: write` to store the attestation.
+  it('gives the publish job exactly contents, packages, id-token and attestations write', () => {
     const publishJob = yamlText.slice(yamlText.indexOf('publish:'));
     const permissionsBlock = /permissions:\n((?:\s+\S+: \S+\n?)+)/.exec(publishJob);
     expect(permissionsBlock).not.toBeNull();
@@ -51,6 +65,7 @@ describe('renderCallerWorkflow', () => {
     expect(permissions).toContain('contents: write');
     expect(permissions).toContain('packages: write');
     expect(permissions).toContain('id-token: write');
+    expect(permissions).toContain('attestations: write');
     expect(permissions).not.toContain('pull-requests');
   });
 

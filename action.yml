@@ -5,16 +5,84 @@ description: >
 author: Speckify
 inputs:
   command:
-    description: 'Which Speckify command to run: "check" (pull request mode) or "publish" (main mode).'
+    description: >
+      Which Speckify command to run: "check" (pull request mode, comments the
+      plan), "plan" (prints the plan as JSON), "build" (generates the packages
+      into .speckify/out, for a drift check against committed generated code)
+      or "publish" (main mode). Anything else is refused.
     required: true
   config:
     description: 'Path to speckify.yaml, relative to the repository root.'
     required: false
     default: speckify.yaml
+  attest:
+    description: >
+      With command "publish": pack each npm package, attest the tarballs with
+      actions/attest-build-provenance, then publish those same tarballs after
+      checking each one's sha-256 digest is one of the attestation's subjects.
+      "true" (the default) or "false". On, the calling job needs
+      `id-token: write` and `attestations: write` as well as `packages: write`.
+      Off, the packages are published as before, with no attestation.
+    required: false
+    default: 'true'
+  attestation-repo:
+    description: >
+      With attest "true": the repository (owner/repo) whose workflow must have
+      signed each tarball's attestation. Empty means this run's repository. A
+      caller that wants no trust in the run's own context writes the literal.
+    required: false
+    default: ''
+  attestation-signer-workflow:
+    description: >
+      With attest "true": the workflow that must have signed, as
+      owner/repo/.github/workflows/<file>.yml, without a ref. Empty means the
+      workflow running now (for a reusable workflow, write the literal of the
+      one that calls the attest step).
+    required: false
+    default: ''
+  attestation-source-ref:
+    description: >
+      With attest "true": the exact ref the signing run must have been on, such
+      as refs/heads/main. Empty means this run's ref. Writing refs/heads/main
+      makes a publish from any other ref fail.
+    required: false
+    default: ''
+  github-token:
+    description: >
+      With attest "true": the token `gh attestation verify` reads the
+      attestation with. The default needs no permission beyond the job's own.
+    required: false
+    default: ${{ github.token }}
 
 runs:
   using: composite
   steps:
+    # First, so a typo fails in a second rather than after an install and a
+    # build. Both values arrive through the environment, never interpolated
+    # into the script.
+    - name: Check the inputs
+      id: inputs
+      shell: bash
+      env:
+        SPECKIFY_COMMAND: ${{ inputs.command }}
+        SPECKIFY_ATTEST: ${{ inputs.attest }}
+      run: |
+        set -eu
+        case "$SPECKIFY_COMMAND" in
+          check|plan|build|publish) ;;
+          *) echo "::error::command must be one of check, plan, build, publish: '$SPECKIFY_COMMAND'" >&2; exit 1 ;;
+        esac
+        case "$SPECKIFY_ATTEST" in
+          true|false) ;;
+          *) echo "::error::attest must be true or false: '$SPECKIFY_ATTEST'" >&2; exit 1 ;;
+        esac
+        # Set by the runner only when the job grants `id-token: write`, which
+        # attesting needs. Said now, not after the install and the build.
+        if [ "$SPECKIFY_COMMAND" = publish ] && [ "$SPECKIFY_ATTEST" = true ] && [ -z "${ACTIONS_ID_TOKEN_REQUEST_URL:-}" ]; then
+          echo "::error::attest is true, so the calling job needs 'id-token: write' and 'attestations: write' (as well as 'packages: write'); the job has no id-token. Grant them, or set attest: false to publish without an attestation." >&2
+          exit 1
+        fi
+
     # Bare, no registry-url/scope: only used to build Speckify itself below,
     # resolving its own public dependencies (zod, commander, ...) from the
     # default registry. The caller's npm scope (read after the build, once
@@ -90,11 +158,111 @@ runs:
         registry-url: https://npm.pkg.github.com
         scope: ${{ steps.npm-owner.outputs.scope }}
 
+    # Every command except a publish that attests. `plan` prints JSON, the one
+    # format it has, so the flag is added here rather than asked of the caller.
     - name: Run Speckify
+      id: run
+      if: inputs.command != 'publish' || inputs.attest != 'true'
       shell: bash
       working-directory: ${{ github.workspace }}
       env:
         SPECKIFY_ACTION_PATH: ${{ github.action_path }}
         SPECKIFY_COMMAND: ${{ inputs.command }}
         SPECKIFY_CONFIG: ${{ inputs.config }}
-      run: node "$SPECKIFY_ACTION_PATH/dist/cli.js" "$SPECKIFY_COMMAND" --config "$SPECKIFY_CONFIG"
+      run: |
+        set -eu
+        args=("$SPECKIFY_COMMAND" --config "$SPECKIFY_CONFIG")
+        if [ "$SPECKIFY_COMMAND" = plan ]; then
+          args+=(--json)
+        fi
+        node "$SPECKIFY_ACTION_PATH/dist/cli.js" "${args[@]}"
+
+    # A publish that attests runs in three steps so the bytes signed are the
+    # bytes published: pack the npm packages into tarballs, attest those
+    # files, then publish those files after re-checking each one's sha-256
+    # digest against the attestation. The pack step also records which
+    # tarballs exist, because attesting an empty set is an error: when every
+    # version is already on the registry there is nothing to attest.
+    - name: Pack the npm packages
+      id: pack
+      if: inputs.command == 'publish' && inputs.attest == 'true'
+      shell: bash
+      working-directory: ${{ github.workspace }}
+      env:
+        SPECKIFY_ACTION_PATH: ${{ github.action_path }}
+        SPECKIFY_CONFIG: ${{ inputs.config }}
+      run: |
+        set -eu
+        pack_dir="$RUNNER_TEMP/speckify-pack"
+        rm -rf "$pack_dir"
+        node "$SPECKIFY_ACTION_PATH/dist/cli.js" publish --config "$SPECKIFY_CONFIG" --pack-only --pack-dir "$pack_dir"
+        {
+          echo "pack-dir=$pack_dir"
+          if compgen -G "$pack_dir/*.tgz" > /dev/null; then
+            echo "has-tarballs=true"
+          else
+            echo "has-tarballs=false"
+          fi
+        } >> "$GITHUB_OUTPUT"
+
+    # Needs `id-token: write` and `attestations: write` on the calling job.
+    # `create-storage-record` stays off: storage records need
+    # `artifact-metadata: write`, which nothing here uses.
+    - name: Attest the packed tarballs
+      id: attest
+      if: steps.pack.outputs.has-tarballs == 'true'
+      uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
+      with:
+        subject-path: ${{ steps.pack.outputs.pack-dir }}/*.tgz
+        create-storage-record: false
+
+    # The publish is the CLI's own refusal, not a shell test: `--require-attestation`
+    # makes it refuse any npm tarball when no attestation was given, and
+    # `--attestation` makes it refuse unless every tarball's digest is a subject
+    # of the attestation just made. The three `--attestation-*` flags then make
+    # it run `gh attestation verify` on each tarball -- the Sigstore signature,
+    # bound to this repository, this signer workflow and this ref -- and refuse
+    # on anything else, before the first publish. The publish itself re-hashes
+    # each tarball against the digest recorded when it was packed. There is no
+    # path that publishes a tarball unattested or unverified.
+    - name: Publish the packed packages
+      id: publish-packed
+      if: inputs.command == 'publish' && inputs.attest == 'true'
+      shell: bash
+      working-directory: ${{ github.workspace }}
+      env:
+        SPECKIFY_ACTION_PATH: ${{ github.action_path }}
+        SPECKIFY_CONFIG: ${{ inputs.config }}
+        SPECKIFY_PACK_DIR: ${{ steps.pack.outputs.pack-dir }}
+        SPECKIFY_ATTESTATION: ${{ steps.attest.outputs.bundle-path }}
+        SPECKIFY_INPUT_REPO: ${{ inputs.attestation-repo }}
+        SPECKIFY_INPUT_SIGNER: ${{ inputs.attestation-signer-workflow }}
+        SPECKIFY_INPUT_REF: ${{ inputs.attestation-source-ref }}
+        SPECKIFY_RUN_REPO: ${{ github.repository }}
+        SPECKIFY_RUN_WORKFLOW_REF: ${{ github.workflow_ref }}
+        SPECKIFY_RUN_REF: ${{ github.ref }}
+        GH_TOKEN: ${{ inputs.github-token }}
+      run: |
+        set -eu
+        # An identity read from the run itself only proves the attestation came
+        # from the run that is publishing. A literal the caller wrote proves it
+        # came from where the caller says it must.
+        for pair in "attestation-repo:$SPECKIFY_INPUT_REPO" \
+          "attestation-signer-workflow:$SPECKIFY_INPUT_SIGNER" \
+          "attestation-source-ref:$SPECKIFY_INPUT_REF"; do
+          if [ -z "${pair#*:}" ]; then
+            echo "::warning::${pair%%:*} is not set, so it is taken from this run; write the literal value in the workflow to bind the attestation to it"
+          fi
+        done
+        repo="${SPECKIFY_INPUT_REPO:-$SPECKIFY_RUN_REPO}"
+        signer="${SPECKIFY_INPUT_SIGNER:-${SPECKIFY_RUN_WORKFLOW_REF%@*}}"
+        source_ref="${SPECKIFY_INPUT_REF:-$SPECKIFY_RUN_REF}"
+        args=(publish --config "$SPECKIFY_CONFIG" --from-pack --pack-dir "$SPECKIFY_PACK_DIR"
+          --require-attestation
+          --attestation-repo "$repo"
+          --attestation-signer-workflow "$signer"
+          --attestation-source-ref "$source_ref")
+        if [ -n "$SPECKIFY_ATTESTATION" ]; then
+          args+=(--attestation "$SPECKIFY_ATTESTATION")
+        fi
+        node "$SPECKIFY_ACTION_PATH/dist/cli.js" "${args[@]}"

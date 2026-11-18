@@ -19,6 +19,7 @@ contracts:
 publish:
   githubPackages:
     owner: acme
+    access: public # optional; restricted if omitted
 ```
 
 ## `contracts[]`
@@ -58,8 +59,18 @@ needs, so nobody edits it before publishing:
   `GITHUB_REPOSITORY` (the repo the run is in). A run with no
   `GITHUB_REPOSITORY`, such as a local `speckify build`, leaves it out; a
   value that is not a plain `owner/repo` fails the build.
+- `repository.directory` — where the contract lives in the repository: the
+  directory holding its `spec`, relative to the repository root (a
+  `spec: ./services/orders/openapi.yaml` gives `services/orders`). It is
+  derived, so there is no key for it; it is left out for a spec at the
+  repository root or outside it, and whenever `repository` is.
 - `publishConfig.registry` — `https://npm.pkg.github.com`, the same
   registry `speckify publish` passes to `npm publish`.
+- `publishConfig.access` — `publish.githubPackages.access`: `public` or
+  `restricted`, `restricted` if the key is omitted (npm's own default for a
+  scoped package, so omitting it changes nothing). GitHub Packages takes a
+  package's visibility from its repository and ignores this value; the key
+  is there so a package can say what it intends, and so `npm` accepts it.
 
 ## Where generated packages are expected to live
 
@@ -76,6 +87,46 @@ contract gets its own subdirectory:
 
 Since `publish` always builds first, the two can never disagree about
 layout.
+
+## Packing, attesting and publishing separately
+
+`speckify publish` plans, builds and publishes in one run. Two flags split
+it so something can happen to the tarballs in between, such as an
+attestation (the composite action does exactly this, by default):
+
+| Flag                   | What it does                                                                                                                                                                                                                        |
+| ---------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `--pack-only`          | Plans and builds as usual, then runs `npm pack` on each npm package whose version the registry does not hold, into `--pack-dir`. Writes `speckify-pack.json` there and prints `tarball: <path> sha256:<digest>`. Publishes nothing. |
+| `--from-pack`          | Reads `speckify-pack.json` from `--pack-dir` and publishes it without rebuilding or re-planning: each npm package from its tarball, each Python dist from where it was built. Creates the release as `publish` does.                |
+| `--pack-dir <dir>`     | Where `--pack-only` writes and `--from-pack` reads, relative to the config directory. Default `.speckify/pack`.                                                                                                                     |
+| `--attestation <file>` | With `--from-pack`, repeatable: an attestation bundle file (the `bundle-path` of `actions/attest-build-provenance`). Publishes only if every tarball's digest is a subject of one of them.                                          |
+
+Three more flags make the publish enforce the attestation, so the check is
+the CLI's, not a caller's shell test:
+
+| Flag                                   | What it does                                                                                                                                                                   |
+| -------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `--require-attestation`                | With `--from-pack`: refuse to publish any npm tarball unless an `--attestation` was given. Without it, no attestation file means no check (for a caller that does not attest). |
+| `--attestation-repo <owner/repo>`      | With `--from-pack`: the repository whose workflow must have signed.                                                                                                            |
+| `--attestation-signer-workflow <path>` | The workflow that must have signed, `owner/repo/.github/workflows/<file>.yml`, with no ref.                                                                                    |
+| `--attestation-source-ref <ref>`       | The exact ref the signing run must have been on, such as `refs/heads/main`.                                                                                                    |
+
+The three identity flags are all given or none, and only with `--from-pack`.
+When given, each npm tarball is checked with `gh attestation verify` (the
+`gh` CLI on the runner, reading with `GH_TOKEN`) before the first publish:
+the Sigstore signature, the GitHub Actions OIDC issuer, the SLSA provenance
+predicate, this repository, signer workflow and ref, and a GitHub-hosted
+runner. Speckify then reads the same facts from the certificate `gh`
+returned and requires the tarball's own digest among the subjects, so a
+`gh` that skipped a flag cannot pass a wrong identity. A lookup that fails
+is retried for about two minutes, since an attestation can take a moment to
+reach the API; a result naming the wrong identity is not. Nothing is
+skipped: any other outcome refuses the publish.
+
+`--from-pack` re-hashes every tarball against the digest `--pack-only`
+recorded, and (with `--attestation`) against the attestation's subjects,
+before it publishes anything. A tarball that is missing, changed, not
+attested or not verified stops the run with nothing published.
 
 ## Environment variables the CLI reads
 

@@ -32,6 +32,46 @@ export const githubRepositorySchema = z
     message: 'must not contain "." or ".." as a name',
   });
 
+/** True for a backslash or any C0 control character or DEL, by code point. */
+function hasBackslashOrControlCharacter(text: string): boolean {
+  for (const character of text) {
+    const code = character.codePointAt(0) ?? 0;
+    if (character === '\\' || code <= 0x1f || code === 0x7f) {
+      return true;
+    }
+  }
+  return false;
+}
+
+/**
+ * A package's directory within its repository, as `package.json`'s
+ * `repository.directory` records it: a relative, forward-slash path whose
+ * every segment is a real name. Nothing that could climb out of the
+ * repository, name the root, or carry a control character is accepted.
+ */
+export const repositoryDirectorySchema = z
+  .string()
+  .min(1, 'must not be empty')
+  .refine((directory) => !hasBackslashOrControlCharacter(directory), {
+    message: 'must not contain a backslash or a control character',
+  })
+  .refine(
+    (directory) =>
+      directory
+        .split('/')
+        .every((segment) => segment !== '' && segment !== '.' && segment !== '..'),
+    { message: 'must be a relative path with no empty, "." or ".." segment' },
+  );
+
+/**
+ * `public` or `restricted`, as `npm publish --access` and
+ * `publishConfig.access` take it. GitHub Packages takes a package's
+ * visibility from its repository and ignores this value, so it only has to
+ * be one npm accepts; `restricted` is npm's own default for a scoped
+ * package, so leaving it out changes nothing.
+ */
+export const npmAccessSchema = z.enum(['public', 'restricted']);
+
 const typescriptTargetSchema = z.object({
   package: z.string().regex(NPM_PACKAGE_NAME, 'must be a valid npm package name'),
   client: z.boolean().default(false),
@@ -58,6 +98,7 @@ const contractSchema = z.object({
 
 const githubPackagesSchema = z.object({
   owner: z.string().min(1, 'must not be empty'),
+  access: npmAccessSchema.default('restricted'),
 });
 
 const publishSchema = z.object({
@@ -91,6 +132,7 @@ export const speckifyConfigSchema = z
     });
   });
 
+export type NpmAccess = z.infer<typeof npmAccessSchema>;
 export type TypescriptTarget = z.infer<typeof typescriptTargetSchema>;
 export type PythonTarget = z.infer<typeof pythonTargetSchema>;
 export type Contract = z.infer<typeof contractSchema>;

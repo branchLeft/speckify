@@ -7,3 +7,6 @@ src/version/fixtures/invalid.json
 # SOURCES.md alongside each — reformatting would break the "unchanged"
 # claim and diverge from the recorded commit's actual bytes.
 test/corpus/
+
+# Real `gh attestation verify` output kept byte for byte as a test fixture.
+src/publish/fixtures/gh-attestation-verify.cli-v2.104.0.json

@@ -1,7 +1,8 @@
-import { join } from 'node:path';
+import { join, resolve } from 'node:path';
 
 import type { BundledSpec } from './bundle/index.js';
-import type { Contract } from './config/index.js';
+import type { Contract, NpmAccess } from './config/index.js';
+import { repositoryDirectoryFor } from './repository-directory.js';
 import { generateTypeScriptPackage } from './codegen/typescript/index.js';
 import { buildPythonPackage } from './codegen/python/index.js';
 import { renderChangelogMarkdown, type ContractPlan } from './plan.js';
@@ -20,6 +21,11 @@ export interface BuildContractOptions {
   outDir?: string;
   /** The GitHub `owner/repo` the packages are published from; written into the TypeScript package's `repository`. Omit it on a local run. */
   repository?: string;
+  /** The repository root and the directory `speckify.yaml` is in: with `repository`, they give the package's `repository.directory` from where the contract's spec lives. */
+  repoRoot?: string;
+  configDir?: string;
+  /** `publishConfig.access` of the TypeScript package, from `publish.githubPackages.access`. */
+  access?: NpmAccess;
 }
 
 export interface BuildContractResult {
@@ -50,6 +56,10 @@ export async function buildContract(
 
   if (contract.typescript !== undefined) {
     const dir = join(outDir, contract.name, 'typescript');
+    const repositoryDirectory =
+      options.repoRoot === undefined || options.configDir === undefined
+        ? undefined
+        : repositoryDirectoryFor(options.repoRoot, resolve(options.configDir, contract.spec));
     await generateTypeScriptPackage({
       bundledSpec: JSON.parse(plan.bundledSpec) as BundledSpec,
       packageName: contract.typescript.package,
@@ -59,6 +69,8 @@ export async function buildContract(
       changelog,
       speckifyVersion: options.speckifyVersion,
       ...(options.repository === undefined ? {} : { repository: options.repository }),
+      ...(repositoryDirectory === undefined ? {} : { repositoryDirectory }),
+      ...(options.access === undefined ? {} : { access: options.access }),
       outDir: dir,
     });
     result.typescript = { dir };

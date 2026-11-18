@@ -151,6 +151,8 @@ describe('generateTypeScriptPackage', () => {
       changelog: '',
       speckifyVersion: '0.1.0',
       repository: 'speckify-fixtures/contracts',
+      repositoryDirectory: 'services/orders',
+      access: 'public',
       outDir,
     });
 
@@ -161,9 +163,55 @@ describe('generateTypeScriptPackage', () => {
     expect(packageJson.repository).toEqual({
       type: 'git',
       url: 'git+https://github.com/speckify-fixtures/contracts.git',
+      directory: 'services/orders',
     });
-    expect(packageJson.publishConfig).toEqual({ registry: 'https://npm.pkg.github.com' });
+    expect(packageJson.publishConfig).toEqual({
+      registry: 'https://npm.pkg.github.com',
+      access: 'public',
+    });
   }, 30_000);
+
+  it.each(['', '/abs', 'a//b', '../up', 'a/..', 'a\\b'])(
+    'rejects the malformed repository directory %j before generating anything',
+    async (repositoryDirectory) => {
+      const outDir = await tempOutDir();
+      const bundledSpec = await loadFixture('e-const.bundled.yaml');
+
+      await expect(
+        generateTypeScriptPackage({
+          bundledSpec,
+          packageName: '@speckify-fixtures/e-const',
+          version: '1.0.0',
+          client: true,
+          server: false,
+          changelog: '',
+          speckifyVersion: '0.1.0',
+          repository: 'speckify-fixtures/contracts',
+          repositoryDirectory,
+          outDir,
+        }),
+      ).rejects.toBeInstanceOf(CodegenInputError);
+    },
+  );
+
+  it('rejects an access value npm does not accept', async () => {
+    const outDir = await tempOutDir();
+    const bundledSpec = await loadFixture('e-const.bundled.yaml');
+
+    await expect(
+      generateTypeScriptPackage({
+        bundledSpec,
+        packageName: '@speckify-fixtures/e-const',
+        version: '1.0.0',
+        client: true,
+        server: false,
+        changelog: '',
+        speckifyVersion: '0.1.0',
+        access: 'private' as 'public',
+        outDir,
+      }),
+    ).rejects.toBeInstanceOf(CodegenInputError);
+  });
 
   it.each(['', 'no-slash', 'a/b/c', '../etc', 'owner/..', 'own er/repo', 'owner/repo\n'])(
     'rejects the malformed repository %j before generating anything',
